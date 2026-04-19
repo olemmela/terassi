@@ -1,0 +1,375 @@
+==============================================================
+  LASITETTU TERASSI – KUORMITUSLASKENTA – ETELÄSUOMI
+  EN 1990 / EN 1991-1-1/3/4 / EN 1995-1-1
+==============================================================
+
+── GEOMETRIA ──────────────────────────────────────────────
+  Terassin leveys            7200 mm  (x-suunta)
+  Syvyys pilareista          3600 mm  (y-suunta, ulospäin)
+  Kaltevuus (y, ulospäin)    7.2°  (2800mm → 2343mm, Δ=457mm / 3600mm)
+  Kaltevuus (x, rakennus)   11.4°  (4550mm → 3100mm / 7200mm)
+  h_seinä (kinostuma)       1.75m (korkea) / 0.30m (matala)
+  Sisäpilari seinästä        1675 mm  (olemassa oleva 250×250)
+  Ulkopilari seinästä        5275 mm  (uusi)
+  Kattotuolijako             1134 mm  (paneelin leveys, tuplat kattotuolit liitoskohdissa)
+  Kattotuoleja               ~7 kpl  (7200mm / 1134mm)
+  Kattotuolin jänneväli      3430 mm  (sisäpalkin kl 1845mm → ulkopilarin kl 5275mm, b_inner=90mm)
+  Ulkoreun. palkki jänneväli 3350 mm  (2 väliä, 3 pilaria)
+
+── PANEELIT ───────────────────────────────────────────────
+  Longi Himo X10 LR7:  1134×1990×30mm, 25kg/kpl
+  Paneeleja:           7×2 = 14 kpl
+  Kokonaispaino:       14×25kg = 350kg = 3.43 kN
+  Paneelien hajakuorma:0.132 kN/m²  +  runko 0.15 kN/m²
+  Pysyvä yhteensä  gk: 0.282 kN/m²
+
+── LUMIKUORMA ─────────────────────────────────────────────
+  sk = 2.0 kN/m²,  μ1 = 0.8 (α=7°)  →  s = 1.60 kN/m²
+
+── TUULIKUORMA ────────────────────────────────────────────
+  qp(z=5m) = 0.532 kN/m²  (vb0=21.0 m/s, maasto II)
+  Tapaus A – LASIT AUKI (EN 1991-1-4 taulukko 7.7, vapaa katos Φ=1):
+    cp,net alaspäin = +0.80  →  w_down = 0.425 kN/m²  (hallitseva lumi+tuuli)
+    cp,net ylöspäin = -0.60  →  w_up   = -0.319 kN/m²
+  Tapaus B – LASIT KIINNI (EN 1991-1-4 taulukko 7.4 + cp,i):
+    cp,e,H (θ=0°)   = -0.54  (tuuli matalan räystään puolelta)
+    cp,e,H (θ=180°) = -0.92  (tuuli rakennuksen yli) ← hallitseva imu
+    cp,i (imu pahin)= +0.20  (paine sisällä, ei dominoivaa aukkoa)
+    cp,net imu      = -1.12  →  w_up   = -0.596 kN/m²  ← PAHEMPI kuin auki!
+    cp,i (alas)     = -0.30  →  cp,net alas = +0.34  →  0.181 kN/m²  (pienempi kuin auki)
+  → Imusuunta: kiinni-tapaus hallitsee (-0.596 vs -0.319 kN/m²)
+  → Alaspäin:  auki-tapaus hallitsee   (0.425 vs 0.181 kN/m²)
+
+  NOSTOKUORMA (ULS, lasit kiinni, tuuli johtava):
+    qk,w,up = 0.675 kN/m  →  qd,nosto = 1.5×0.675 − 0.9×0.320 = 0.725 kN/m
+    Tukireaktio nostoon per kattotuoli: R_uplift = 1.24 kN  ← kiinnitys suunniteltava!
+
+── KATTOTUOLIN KUORMAT ────────────────────────────────────
+  Rafter-väli b = 1.134 m
+  Pysyvä       gk = 0.320 kN/m
+  Lumi         qk = 1.814 kN/m
+  Tuuli (alas) qk = 0.482 kN/m
+  Mitoituskuorma (ULS): qd = 3.588 kN/m
+  Hallitseva tapaus:    lumi+tuuli (lasikatto, ei huoltokuormaa)
+  Mitoitusmomentti Md = 5.28 kNm
+  Huoltokuorma tapaus Md = 4.72 kNm
+  Lumi+tuuli tapaus  Md = 5.28 kNm
+
+── KATTOTUOLIN MATERIAALIVERTAILU  (jänneväli 3430mm) ───
+  Mitoitusmomentti Md: profiilikohtainen (oma-paino + paneeli + kiinnikkeet + lumi + tuuli)
+  Pohjakuorma (ilman kattotuolia): gk_no_rafter = 0.182 kN/m²  (yleislaskelmat: gk_frame = 0.15 kN/m²)
+
+  Profiili        kg/m  W [cm³]       MRd     η_M     δ/lim  OK?
+  ------------- ------ -------- --------- ------- ---------  ----------
+  --- LIIMAPUU GL30c (SC2, kmod=0.8) ---
+  LP180×90         8.3      486     9.33kNm   55.9%   6.7/11.4mm  ✓ ← suositus
+  LP225×90        10.3      759    14.58kNm   36.0%   3.4/11.4mm  ✓
+  LP315x90        14.4     1488    28.58kNm   18.7%   1.3/11.4mm  ✓
+  --- TERÄS S235 ---
+  IPE100           8.1     34.2     8.04kNm   64.8%  10.5/11.4mm  ✓ ← suositus
+  IPE120          10.4     53.0    12.46kNm   42.2%   5.7/11.4mm  ✓
+  IPE140          12.9     77.3    18.17kNm   29.2%   3.4/11.4mm  ✓
+  IPE160          15.8    123.0    28.91kNm   18.5%   2.1/11.4mm  ✓
+  HEA120          19.9    101.0    23.73kNm   22.9%   3.1/11.4mm  ✓
+  HEA140          24.7    155.4    36.52kNm   15.2%   1.9/11.4mm  ✓
+  HEA160          30.4    220.1    51.72kNm   10.9%   1.2/11.4mm  ✓
+  --- SAHATAVARA C24 (SC2, kmod=0.8, fm,d=14.8 N/mm²) ---
+  148×48           3.0      175     2.59kNm  197.4%  25.9/11.4mm  ✗
+  173×48           3.5      239     3.54kNm  144.8%  16.3/11.4mm  ✗
+  198×48           4.0      314     4.63kNm  110.7%  10.9/11.4mm  ✗
+  223×48           4.5      398     5.88kNm   87.5%   7.6/11.4mm  ✓ ← suositus
+  2×148×48         6.0      350     5.18kNm   99.8%  13.1/11.4mm  ✗
+  2×173×48         7.0      479     7.07kNm   73.3%   8.3/11.4mm  ✓
+  2×198×48         8.0      627     9.26kNm   56.2%   5.5/11.4mm  ✓
+
+── LOVETUSTARKISTUS ULKOTUELLA (EN 1995-1-1 §6.5.2) ────────────────
+  Lovennuksen geometria: h=173mm, lovetus=50mm alta
+  → h_ef = 123mm, α = 0.711, i = 0.289
+  Nyrkkisääntö: lovetus ≤ h/3 = 58mm  → 50mm OK ✓
+  Mitoittava leikkausvoima Vd = 6.15 kN/kattotuoli (= R_outer_rafter)
+  Kattotuolin leveys b = 48mm  (muuta notch_rafter_b: 48=yksi, 96=tuplat)
+
+  Materiaali    k_n   k_v    f_v,d    V_Rd     η       Tulos
+  ------------------------------------------------------------
+  C24 sah.    5.0  1.000  2.46N/mm²  9.69kN   63.5%  OK ✓
+  GL30c lp.   6.5  1.000  2.24N/mm²  8.82kN   69.8%  OK ✓
+
+  HUOM: x=0 konservatiivinen (lovennuksen sisäreuna = tukireunan sisäreuna)
+  Jos lovennuksen sisäreuna on LP225 tukipinnan sisäpuolella:
+  x = puolet tukipintaa = ~45mm → k_v kasvaa hieman (epäkonservatiivisempi)
+
+── ULKOREUNANEN PALKKI (2 × 3350mm jännevälit) ────────
+  Kattotuolilta reaktio ulkopäässä: 6.15 kN / 1134mm
+  UDL ulkopalkkiin (ULS):           5.427 kN/m
+  UDL ulkopalkkiin (SLS):           3.666 kN/m
+  Md (pysty) per 3350mm jänneväli:  7.61 kNm
+  Taipumaraja: δ_lim(L/300)=11mm (EN 1990 §A1.4)
+  Sivulasituksen tuulikuorma (EN 1991-1-4, cp,wall=1.0):
+    h_lasitus=2.00m, h_trib=1.00m, qk,h=0.532 kN/m
+    Md,h,A (lumi johtava, ψ0_W=0.6): 0.67 kNm
+    Md,h,B (tuuli johtava):           1.12 kNm,  Md,v,B=4.96 kNm
+  Kaksiakseli: η=Md_v/MRd_v + km×Md_h/MRd_h ≤ 1.0  (km=1.0 teräs, km=0.7 puu)
+
+  Profiili                        W [cm³]       MRd     η_M  η_biax    kg/m    δ/L300  OK?
+  ------------------------------ -------- --------- ------- -------  ------  --------  --------  ----
+  IPE100                             34.2     8.04kNm   94.7%   144.1%    8.1   16.7/11mm  ✗
+  IPE120                             53.0    12.46kNm   61.1%    94.9%   10.4    9.0/11mm  ✓
+  IPE140                             77.3    18.17kNm   41.9%    66.0%   12.9    5.3/11mm  ✓
+  IPE160                            123.0    28.91kNm   26.3%    45.7%   15.8    3.3/11mm  ✓
+  HEA120                            101.0    23.73kNm   32.1%    39.5%   19.9    4.7/11mm  ✓
+  HEA140                            155.4    36.52kNm   20.8%    26.0%   24.7    2.8/11mm  ✓
+  HEA160                            220.1    51.72kNm   14.7%    18.4%   30.4    1.7/11mm  ✓
+  LP180×90                            486     9.33kNm   81.6%    91.7%    8.1   10.6/11mm  ✓
+  LP225×90                            759    14.58kNm   52.2%    60.3%   10.1    5.4/11mm  ✓
+  LP315x90                           1488    28.58kNm   26.6%    32.4%   14.2    2.0/11mm  ✓
+
+  --- RHS teräsputki S235, 90mm korkea (tasainen ulkopinta pilarien kanssa) ---
+  RHS 150×90×5                       69.8    16.39kNm   46.4%    49.5%   18.1    9.1/11mm  ✓
+  RHS 150×90×6                       81.2    19.09kNm   39.9%    42.5%   21.5    7.8/11mm  ✓
+  RHS 180×90×6                       95.4    22.41kNm   34.0%    36.0%   24.3    6.7/11mm  ✓
+  RHS 200×90×5                       89.9    21.12kNm   36.1%    38.1%   22.0    7.1/11mm  ✓
+  RHS 200×90×6                      104.8    24.62kNm   30.9%    32.6%   26.2    6.1/11mm  ✓
+
+  --- Sahatavara C24, 3 kpl vierekkäin (SC2, kmod=0.8, 144mm leveä) ---
+  3×148×48                            526     7.76kNm   98.0%   104.3%    9.0   14.0/11mm  ✗
+  3×173×48                            718    10.61kNm   71.8%    77.1%   10.5    8.8/11mm  ✓
+  3×198×48                            941    13.90kNm   54.8%    59.4%   12.0    5.9/11mm  ✓
+  3×223×48                           1193    17.63kNm   43.2%    47.3%   13.5    4.1/11mm  ✓
+
+── LUMIKINOSTUMA – EN 1991-1-3 §6.3 ─────────────────────
+  Rakennuksen katto 12° seinänsuuntaisesti → h_seinä vaihtelee!
+  *** Rakennuksen katto 12° seinänsuuntaisesti → h_seinä vaihtelee ***
+
+  Parametri                        Korkea pää   Matala pää
+  ------------------------------ ------------ ------------
+  h_seinä [m]                            1.75         0.30
+  b_talon_katto [m]                       5.0          5.0
+  ls_drift [m]                           3.95         1.50
+  μ2 (lask. 1.75/0.30)               1.75         0.80
+  s_drift [kN/m²]                        3.50         1.60
+  Δs (lisäkuorma) [kN/m²]                1.90         0.00
+
+  Konservatiivinen (h_max koko matkalla):
+  s_drift = 3.50 kN/m²  vs tasainen 1.60 kN/m²
+
+  TARKENNETTU ANALYYSI (EC0 §2.1): h(x) vaihtelee lineaarisesti palkin matkalla
+  Seinän korkeus muuttuu 12° kaltevuuden myötä → paikallinen kinostuma pienenee
+  kohti matalaa päätä. Md lasketaan numeerisella integroinnilla (200 segmenttiä).
+  Md,max sijaitsee x = 3350mm palkin alusta (h ≈ 1.02m)
+  q_avg (tarkennettu) = 4.88 kN/m  vs q (konservat.) = 5.84 kN/m
+  Md (konservat.) = 34.2 kNm  →  Md (tarkennettu) = 28.4 kNm  (17% pienempi)
+  *** Kinostuma sijoittuu talon seinän viereen. ***
+
+── UUSI SEINÄ y=1800mm  (kolmiolasi + laudoitus) ──────────────────
+  Uusi vaakapalkki muodostaa sisäseinän kohdalla y=1800mm.
+  Rakennuksen katto viettää 11.4° → kolmio häviää matalassa päässä.
+  Laudoitus:   7200mm × 500mm (täysi leveys, 500mm räystäältä alaspäin)
+  Kolmiolasi:  6207mm × 1250mm  → A=3.879m²
+    korkea pää (x=0):   h = 4550-500-2800 = 1250mm
+    matala pää (x=x₀):  h = 0  @  x₀=6207mm
+  Tuulipaine seinälle: cp,e = 0.8, qp = 0.532 kN/m²
+  Tuulivoima lasille: F = 1.65 kN  (→ uusi palkki)
+  → Ei vaikuta kattotuolien taivutukseen, mutta
+     kantavien palkkien liitokset ja pilarijäykistys tulee tarkistaa.
+
+── PÄÄTYPALKKI – KATTOTUOLIREAKTIOT + KINOSTUMA + KOLMIOLASI ─
+  Jänneväli: 6700mm (pilari-pilari)
+
+  Kuormat:
+    Kattotuolireaktiot (normaali lumi):  q = 5.43 kN/m
+    Kattotuolireaktiot (kinostuma):      q = 5.84 kN/m  (drift 2.02 kN/m² @ 1.68m seinästä)
+    Lasi omapaino (ULS, triangul.):      Md = 1.46 kNm → uusi palkki
+    Laudoitus omapaino (ULS, triangul.): Md = 0.29 kNm → 2×KP350 (ei tähän)
+    Tuuli lasi (vaaka, triangul.):       Md = 2.30 kNm vaaka → uusi palkki
+    Tuuli laudoitus → 2×KP350 (ei tähän)
+
+  Mitoitusmomentit:
+    Pysty Md (normaali):              31.9 kNm
+    Pysty Md (kinostuma konservat.):   34.2 kNm  (h_max koko matkalla)
+    Pysty Md (kinostuma tarkennettu):  28.4 kNm  (h(x) vaihteleva, EC0 §2.1)
+    Vaaka Md (tuuli):                  2.3 kNm
+  → Hallitseva: normaali lumi+tuuli,  Md_gov = 31.9 kNm
+  (h_seinä_korkea=1.75m, h_seinä_matala=0.30m)
+
+  Pystysuuntainen taivutus (Md=31.9 kNm) + vaakataivutus (Md=2.3 kNm)
+  Vuorovaikutusehto: My/MRd_y + Mz/MRd_z ≤ 1.0  (EN 1993-1-1 §6.2.9.1)
+
+  ── 6700mm (ei tukia)  Md_v=34.2 kNm, Md_h=2.30 kNm ─
+  Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
+  Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
+  ---------------- ------ -------- --------- ------ -------  ------  ------- ----
+  IPE220             S235    252.0      59.2    58%     84%   26.2  16.3/22mm ✓
+  IPE240             S235    324.3      76.2    45%     66%   30.7  11.6/22mm ✓
+  HEA160             S235    220.1      50.9    67%     80%   30.4  27.0/22mm ✗
+  HEA180             S235    294.1      68.3    50%     60%   35.5  18.0/22mm ✓
+  HEA200             S235    388.6      90.9    38%     45%   42.3  12.2/22mm ✓
+  L200×100×12      S355J2    112.6      40.0    86%     91%   27.1  31.2/22mm ✗
+  L200×150×15      S355J2    148.5      52.7    65%     69%   39.4  22.2/22mm ✓
+
+  ── 3350mm (1 välituki katolta)  Md_v=8.6 kNm, Md_h=0.57 kNm ─
+  Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
+  Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
+  ---------------- ------ -------- --------- ------ -------  ------  ------- ----
+  IPE140             S235     77.3      17.2    50%     70%   12.9  5.2/11mm ✓
+  IPE160             S235    123.0      25.3    34%     49%   15.8  3.2/11mm ✓
+  IPE180             S235    146.3      34.4    25%     35%   18.8  2.1/11mm ✓
+  IPE200             S235    194.3      45.7    19%     27%   22.4  1.5/11mm ✓
+  IPE220             S235    252.0      59.2    14%     21%   26.2  1.0/11mm ✓
+  IPE240             S235    324.3      76.2    11%     16%   30.7  0.7/11mm ✓
+  HEA120             S235    101.0      23.7    36%     42%   19.9  4.7/11mm ✓
+  HEA140             S235    155.4      35.6    24%     28%   24.7  2.7/11mm ✓
+  HEA160             S235    220.1      50.9    17%     20%   30.4  1.7/11mm ✓
+  HEA180             S235    294.1      68.3    13%     15%   35.5  1.1/11mm ✓
+  HEA200             S235    388.6      90.9     9%     11%   42.3  0.8/11mm ✓
+  L150×100×10      S355J2     55.1      19.6    44%     47%   18.8  5.1/11mm ✓
+  L150×100×12      S355J2     65.2      23.2    37%     39%   22.4  4.3/11mm ✓
+  L180×110×12      S355J2     93.8      33.3    26%     27%   26.2  2.5/11mm ✓
+  L200×100×12      S355J2    112.6      40.0    21%     23%   27.1  1.9/11mm ✓
+  L200×150×15      S355J2    148.5      52.7    16%     17%   39.4  1.4/11mm ✓
+  LP180×90          GL30c      486       9.3    92%     98%    8.1  10.4/11mm ✓
+  LP225×90          GL30c      759      14.6    59%     63%   10.1  5.3/11mm ✓
+  LP315x90          GL30c     1488      28.6    30%     32%   14.2  1.9/11mm ✓
+  3×173×48         C24/SC2      718      10.6    81%     85%   10.5  8.7/11mm ✓
+  3×198×48         C24/SC2      941      13.9    62%     66%   12.0  5.8/11mm ✓
+  3×223×48         C24/SC2     1193      17.6    49%     52%   13.5  4.1/11mm ✓
+
+  ── 2233mm (2 välitukea katolta)  Md_v=3.8 kNm, Md_h=0.26 kNm ─
+  Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
+  Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
+  ---------------- ------ -------- --------- ------ -------  ------  ------- ----
+  IPE100             S235     34.2       7.1    54%     72%    8.1  3.3/7mm ✓
+  IPE120             S235     53.0      11.2    34%     46%   10.4  1.8/7mm ✓
+  IPE140             S235     77.3      17.2    22%     31%   12.9  1.0/7mm ✓
+  IPE160             S235    123.0      25.3    15%     22%   15.8  0.6/7mm ✓
+  IPE180             S235    146.3      34.4    11%     16%   18.8  0.4/7mm ✓
+  IPE200             S235    194.3      45.7     8%     12%   22.4  0.3/7mm ✓
+  IPE220             S235    252.0      59.2     6%      9%   26.2  0.2/7mm ✓
+  IPE240             S235    324.3      76.2     5%      7%   30.7  0.1/7mm ✓
+  HEA120             S235    101.0      23.7    16%     19%   19.9  0.9/7mm ✓
+  HEA140             S235    155.4      35.6    11%     13%   24.7  0.5/7mm ✓
+  HEA160             S235    220.1      50.9     7%      9%   30.4  0.3/7mm ✓
+  HEA180             S235    294.1      68.3     6%      7%   35.5  0.2/7mm ✓
+  HEA200             S235    388.6      90.9     4%      5%   42.3  0.2/7mm ✓
+  L150×100×10      S355J2     55.1      19.6    19%     21%   18.8  1.0/7mm ✓
+  L150×100×12      S355J2     65.2      23.2    16%     18%   22.4  0.9/7mm ✓
+  L180×110×12      S355J2     93.8      33.3    11%     12%   26.2  0.5/7mm ✓
+  L200×100×12      S355J2    112.6      40.0    10%     10%   27.1  0.4/7mm ✓
+  L200×150×15      S355J2    148.5      52.7     7%      8%   39.4  0.3/7mm ✓
+  LP180×90          GL30c      486       9.3    41%     43%    8.1  2.1/7mm ✓
+  LP225×90          GL30c      759      14.6    26%     28%   10.1  1.1/7mm ✓
+  LP315x90          GL30c     1488      28.6    13%     14%   14.2  0.4/7mm ✓
+  3×148×48         C24/SC2      526       7.8    49%     51%    9.0  2.7/7mm ✓
+  3×173×48         C24/SC2      718      10.6    36%     38%   10.5  1.7/7mm ✓
+  3×198×48         C24/SC2      941      13.9    27%     29%   12.0  1.1/7mm ✓
+  3×223×48         C24/SC2     1193      17.6    22%     23%   13.5  0.8/7mm ✓
+
+
+── KIEPAHDUS – PÄÄTYPALKKI (EN 1993-1-1 §6.3.2) ─────────────
+  Yllä olevissa taulukoissa MRd sisältää kiepahdusreduktion χ_LT
+  (sivutuki kattotuoleilta, L_cr = 1134mm).
+  Vertailu: Md = 31.9 kNm (hallitseva, kinostuma)
+
+  Profiili      Ei sivutukea (L_cr=6700mm)    Sivutuella (L_cr=1134mm)
+               χ_LT     Mb,Rd     η        χ_LT     Mb,Rd     η
+  ----------  ----- --------- ----- ---   ----- --------- ----- ---
+  IPE100       0.24      2.2kNm 1445% ✗    0.77      7.1kNm  450% ✗
+  IPE120       0.25      3.5kNm  912% ✗    0.79     11.2kNm  284% ✗
+  IPE140       0.25      5.3kNm  602% ✗    0.80     17.2kNm  186% ✗
+  IPE160       0.27      8.0kNm  401% ✗    0.87     25.3kNm  126% ✗
+  IPE180       0.29     11.2kNm  285% ✗    0.89     34.7kNm   92% ✓
+  IPE200       0.31     16.0kNm  200% ✗    0.90     46.8kNm   68% ✓
+  IPE220       0.33     21.9kNm  145% ✗    0.92     61.6kNm   52% ✓
+  IPE240       0.35     30.5kNm  105% ✗    0.93     80.2kNm   40% ✓
+  HEA120       0.58     14.5kNm  220% ✗    0.96     24.1kNm  133% ✗
+  HEA140       0.60     21.9kNm  146% ✗    0.97     35.6kNm   90% ✓
+  HEA160       0.63     32.6kNm   98% ✓    0.98     50.9kNm   63% ✓
+  HEA180       0.64     44.2kNm   72% ✓    0.99     68.3kNm   47% ✓
+  HEA200       0.67     61.1kNm   52% ✓    1.00     90.9kNm   35% ✓
+
+  *** HUOMIO: Ilman sivutukea IPE-profiilit eivät riitä kiepahduksen vuoksi!
+  Kattotuolien kiinnitys päätypalkin ylälaippaan tulee osoittaa
+  riittäväksi vaakavoiman siirtoon (EN 1993-1-1 §6.3.2). ***
+
+── PILARIKUORMAT (ULS) ────────────────────────────────────
+  Kaikki kattotuolireaktiot menevät uudelle päätypalkille.
+  Päätypalkki siirtää kuorman ulkopilareille (+ välituet 2×KP360×51:lle jos käytetty).
+
+  Ulkopilari (uusi, päätypalkki päällä):
+    Päätypilari (2 kpl):       6.8 kN  (ULS, ulkoreunap.)
+    Keskipilari (1 kpl):       22.7 kN  (ULS, ulkoreunap.)
+    (Hallitseva: keskipilari 22.7 kN)
+  Pilarit: olemassa olevat betonipilaarit 250×250mm
+
+── KUORMAT RAKENNUKSEN RAKENTEILLE (syöttöarvot) ──────────
+  Kuormitustapaus: ULS (γG=1.35, γQ=1.5)  |  Ominais (Gk, Qk)
+  Kaikki kattotuolireaktiot → uusi päätypalkki → ulkopilarit.
+  2×KP360×51 saa pistekuorman VAIN jos päätypalkki tuetaan siihen välituella.
+
+  Päätypalkki: q=3.23 kN/m ominais / 5.43 kN/m ULS (normaali lumi+tuuli)
+  Lasi (triangul.): q_max=0.38 kN/m ominais / 0.51 kN/m ULS
+
+   ── Ei välitukia (jänne 6700mm)
+      Ulkopilari (korkea pää): 11.7 kN ominais  / 19.3 kN ULS
+      Ulkopilari (matala pää): 11.2 kN ominais  / 18.7 kN ULS
+      2×KP360×51:              0 kN pystykuormaa  (ei välitukea)
+
+   ── 1 välituki = 2×KP360×51 (jänne 3350mm)
+      Ulkopilari (korkea pää): 4.9 kN ominais  / 7.9 kN ULS
+      Ulkopilari (matala pää): 4.5 kN ominais  / 7.4 kN ULS
+      2×KP360×51 pistekuorma:  13.5 kN ominais  / 22.7 kN ULS  (× 1 pistettä)
+
+   ── 2 välitukea = 2×KP360×51 (jänne 2233mm)
+      Ulkopilari (korkea pää): 3.7 kN ominais  / 6.0 kN ULS
+      Ulkopilari (matala pää): 3.3 kN ominais  / 5.4 kN ULS
+      2×KP360×51 pistekuorma:  7.9 kN ominais  / 13.3 kN ULS  (× 2 pistettä)
+
+  Vaakavoima (tuuli, päätykolmio → rakennuksen jäykistys):
+     Kokonaisvoima:           1.7 kN (ominais)  /  2.5 kN (ULS)
+     Per tukipiste (~puolet): 0.8 kN (ominais)  /  1.2 kN (ULS)
+     (cp,e=0.8, qp=0.532 kN/m², A_lasi=3.88 m²)
+
+
+── AURINKOPANEELIT – KINOSTUMAKUORMA (EN 1991-1-3 §6.3) ──────
+  Kinostuma alkaa UUDESTA SEINÄSTÄ y=1800mm ja leviää ulospäin.
+  Huippu on paneelien sisäreunassa (y=1800mm), ei talon seinällä.
+
+  h_seinä konservatiivinen (korkea pää, y=0):  1.75m → s_peak=3.50 kN/m²
+  h_seinä tarkka (y=1800mm):                   1.41m → s_peak=2.81 kN/m²
+  Käytetään konservatiivista: s_peak = 3.50 kN/m²,  ls = 3.95m
+  Paneelin kapasiteetti: 5.40 kN/m²
+
+  Etäisyys seinästä               s [kN/m²]   ULS=1.5s      η %  OK?
+  ------------------------------------------------------------
+  y=1800mm (paneelin sisäreuna)        3.50       5.25      97%  ✓
+  y=2000mm                             3.32       4.98      92%  ✓
+  y=2795mm (1. paneelin puoliväli)       2.62       3.93      73%  ✓
+  y=3790mm (1. paneelirivi ulkoreuna)       1.74       2.60      48%  ✓
+  y=3800mm (2. paneelirivin alku)       1.73       2.59      48%  ✓
+  y=5785mm (2. paneelirivi ulkoreuna)       1.60       2.40      44%  ✓
+
+  ✓ Kaikki pisteet OK. Pahimmat paneeli sisäreunan ULS=5.25/5.40 kN/m² η=97%
+  *** HUOM: Käyttöaste 97% – konservatiivisella h:lla niukka,
+      tarkka arvo (h=1.41m): ULS=4.22 kN/m² η=78%
+      Lisätuki tarpeen vain jos konservatiivinen h pitää paikkansa.
+  0.9·Gk + 1.5·Wk,ylös (kattotuoli) = -0.254 kN/m
+  *** NOSTO: 0.44 kN per tukipiste – kiinnitys tarvitaan!
+
+==============================================================
+  YHTEENVETO – SUOSITUKSET
+==============================================================
+
+  Mitoitusmomentti kattotuolille:  5.28 kNm  (lumi+tuuli (lasikatto, ei huoltokuormaa))
+  Ulkoreun. palkki Md:             7.61 kNm  (3350mm vapaa jänne)
+
+  LIIMAPUU GL30c (SC2):   pienin → LP180×90  η=56%  δ=6.7mm
+  TERÄS S235:             pienin → IPE100  η=65%  δ=10.5mm
+  SAHATAVARA C24 (SC2):   pienin → 223×48  η=87%  δ=7.6mm
+
+  HUOMIOT:
+  * Lumikinostuma: s_drift=3.50 kN/m² vs tasainen 1.60 kN/m²  (h_korkea=1.75m, h_matala=0.30m)
+  * Liimapuu GL30c: SC2 (kmod=0.8), kattolasitus ja sivulasitus suojaavat rakenteen.
+  * Sahatavara C24 SC2: kmod=0.8. Kaikki puuprofiilit SC2 – kattolasitus suojaa.
+  * 48mm leveillä kertopuilla h/b > 5 → sivutuki paneelilevyistä tarkistettava.
+  * Päätykolmion tuulivoima vaatii rakenteiden jäykistyssuunnitelman.
+  * Paneelikuorma tasaisena, ei dynaamisia/seismisiä kuormia.
+==============================================================
