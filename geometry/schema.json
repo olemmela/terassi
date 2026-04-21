@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/olemmela/terassi/geometry/schema.json",
+  "title": "Rakennelman geometria",
+  "type": "object",
+  "required": ["project", "profiles", "members", "connections", "surfaces"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "project": { "$ref": "#/$defs/project" },
+    "reference_surfaces": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reference_surface" }
+    },
+    "points": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/named_point" }
+    },
+    "profiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/profile" }
+    },
+    "members": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "columns": { "type": "array", "items": { "$ref": "#/$defs/column" } },
+        "beams":   { "type": "array", "items": { "$ref": "#/$defs/beam" } },
+        "rafters": { "type": "array", "items": { "$ref": "#/$defs/beam" } },
+        "purlins": { "type": "array", "items": { "$ref": "#/$defs/beam" } }
+      }
+    },
+    "connections": { "type": "array", "items": { "$ref": "#/$defs/connection" } },
+    "surfaces":    { "type": "array", "items": { "$ref": "#/$defs/surface" } }
+  },
+
+  "$defs": {
+    "project": {
+      "type": "object",
+      "required": ["id", "name", "units", "coordinate_system"],
+      "additionalProperties": false,
+      "properties": {
+        "id":        { "type": "string" },
+        "name":      { "type": "string" },
+        "site":      { "type": "string" },
+        "standards": { "type": "array", "items": { "type": "string" } },
+        "units": {
+          "type": "object",
+          "required": ["length", "angle", "mass"],
+          "additionalProperties": false,
+          "properties": {
+            "length": { "const": "mm" },
+            "angle":  { "const": "deg" },
+            "mass":   { "const": "kg" }
+          }
+        },
+        "coordinate_system": {
+          "type": "object",
+          "required": ["origin_description", "x_axis", "y_axis", "z_axis"],
+          "additionalProperties": false,
+          "properties": {
+            "origin_description": { "type": "string" },
+            "x_axis":             { "type": "string" },
+            "y_axis":             { "type": "string" },
+            "z_axis":             { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "point": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
+
+    "named_point": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["id", "x", "y", "z"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string" },
+            "x":  { "type": "number" },
+            "y":  { "type": "number" },
+            "z":  { "type": "number" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["id", "ref"],
+          "additionalProperties": false,
+          "properties": {
+            "id":  { "type": "string" },
+            "ref": { "type": "string" },
+            "dx":  { "type": "number", "default": 0 },
+            "dy":  { "type": "number", "default": 0 },
+            "dz":  { "type": "number", "default": 0 }
+          }
+        }
+      ]
+    },
+
+    "profile": {
+      "type": "object",
+      "required": ["id", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "id":       { "type": "string" },
+        "name":     { "type": "string" },
+        "material": { "type": "string" },
+        "b_mm":     { "type": "number" },
+        "h_mm":     { "type": "number" },
+        "count":    { "type": "integer", "minimum": 1 }
+      }
+    },
+
+    "reference_surface": {
+      "type": "object",
+      "required": ["id", "type", "placement", "local_shape"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string" },
+        "type":        { "type": "string", "enum": ["building_wall", "building_roof", "floor", "ground"] },
+        "ref":         { "type": "string" },
+        "placement":   { "$ref": "#/$defs/placement" },
+        "local_shape": { "$ref": "#/$defs/local_shape" },
+        "polygon":     { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } }
+      }
+    },
+
+    "column": {
+      "type": "object",
+      "required": ["id", "profile", "base", "top"],
+      "additionalProperties": false,
+      "properties": {
+        "id":       { "type": "string" },
+        "profile":  { "type": "string" },
+        "ref":      { "type": "string" },
+        "base":     { "$ref": "#/$defs/point" },
+        "top":      { "$ref": "#/$defs/point" },
+        "existing": { "type": "boolean", "default": false }
+      }
+    },
+
+    "beam": {
+      "type": "object",
+      "required": ["id", "profile", "axis_start", "axis_end"],
+      "additionalProperties": false,
+      "properties": {
+        "id":          { "type": "string" },
+        "profile":     { "type": "string" },
+        "ref":         { "type": "string" },
+        "axis_start":  { "$ref": "#/$defs/point" },
+        "axis_end":    { "$ref": "#/$defs/point" },
+        "strong_axis": { "type": "string", "enum": ["vertical", "horizontal"], "default": "vertical" },
+        "existing":    { "type": "boolean", "default": false },
+        "pattern": {
+          "type": "object",
+          "required": ["count", "offset"],
+          "additionalProperties": false,
+          "properties": {
+            "count":       { "type": "integer", "minimum": 2 },
+            "offset":      { "$ref": "#/$defs/point" },
+            "id_template": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "connection": {
+      "type": "object",
+      "required": ["id", "type", "members"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["wall_bolted", "supported_on", "supported_by_pattern", "notched_over", "pinned", "rafter_hanger", "column_base", "lateral_brace", "continuous"]
+        },
+        "members":    { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "at":         { "$ref": "#/$defs/point" },
+        "spacing_mm": { "type": "number" }
+      }
+    },
+
+    "surface": {
+      "type": "object",
+      "required": ["id", "type", "placement", "local_shape"],
+      "additionalProperties": false,
+      "properties": {
+        "id":           { "type": "string" },
+        "type":         { "type": "string", "enum": ["roof_covering", "solar_panel_array", "side_glazing", "triangle_glazing", "gable_glazing", "opening", "boarding", "purlin_layer"] },
+        "ref":          { "type": "string" },
+        "placement":    { "$ref": "#/$defs/placement" },
+        "local_shape":  { "$ref": "#/$defs/local_shape" },
+        "polygon":      { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } },
+        "material":     { "type": "string" },
+        "thickness_mm": { "type": "number" },
+        "mass_kg":      { "type": "number" },
+        "count": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "nx":            { "type": "integer", "minimum": 1 },
+            "ny":            { "type": "integer", "minimum": 1 },
+            "unit_size_mm":  { "$ref": "#/$defs/point" },
+            "unit_mass_kg":  { "type": "number" }
+          }
+        },
+        "supported_by": { "type": "array", "items": { "type": "string" } },
+        "openable":     { "type": "boolean" }
+      }
+    },
+
+    "axis": {
+      "type": "object",
+      "required": ["dir"],
+      "additionalProperties": false,
+      "properties": {
+        "dir":             { "type": "string", "enum": ["+x", "-x", "+y", "-y", "+z", "-z"] },
+        "length_mm":       { "type": "number" },
+        "horizontal_mm":   { "type": "number" },
+        "rise_mm":         { "type": "number" },
+        "slope_deg":       { "type": "number" },
+        "slope_sense":     { "type": "string", "enum": ["+x", "-x", "+y", "-y", "+z", "-z"] },
+        "slope_length_mm": { "type": "number" }
+      }
+    },
+
+    "placement": {
+      "type": "object",
+      "required": ["anchor", "u", "v"],
+      "additionalProperties": false,
+      "properties": {
+        "anchor": { "$ref": "#/$defs/point" },
+        "u":      { "$ref": "#/$defs/axis" },
+        "v":      { "$ref": "#/$defs/axis" }
+      }
+    },
+
+    "local_shape": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type":        { "type": "string", "enum": ["rectangle", "polygon"] },
+        "vertices_uv": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+        }
+      }
+    }
+  }
+}

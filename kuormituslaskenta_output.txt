@@ -7,7 +7,7 @@
   Seinän leveys                  7200 mm
   Pilarin koko                   250×250 mm
   Jänneväli (netto)              6700 mm  (6.700 m)
-  Katon kaltevuus (seinän suunt.)12°
+  Katon kaltevuus (seinän suunt.)13°
   Katto ulkonee seinästä         2200 mm
   KP450×51 sijainti              900 mm seinästä
   2×KP360×51 sijainti            1675 mm seinästä (tolpat)
@@ -18,7 +18,7 @@
 
 ── LUMIKUORMA ─────────────────────────────────────────
   Maanpintaominaiskuorma  sk     2.0 kN/m²  (Eteläsuomi)
-  Muotokerroin μ1 (α=12°)     0.8  (0°–30° katto)
+  Muotokerroin μ1 (α=13°)     0.8  (0°–30° katto)
   Lumikuorma katolla  s          1.60 kN/m²
   KP450×51   q_lumi              1.340 kN/m
   2×KP360×51 q_lumi              1.460 kN/m
@@ -30,12 +30,12 @@
   Iv(5)                        0.217
   Keskinopeus vm                 18.4 m/s
   Huippupainekerroin qp(5)      0.532 kN/m²
-  Nettopainekerroin alaspäin     cp,net = 0.90  (interpoloitu 12°)
-  Nettopainekerroin ylöspäin     cp,net = -0.74
-  Tuulikuorma katolla (alas)     0.479 kN/m²
-  Tuulikuorma katolla (ylös)     -0.394 kN/m²
-  KP450×51   q_tuuli (alas)      0.401 kN/m
-  2×KP360×51 q_tuuli (alas)      0.437 kN/m
+  Nettopainekerroin alaspäin     cp,net = 0.93  (interpoloitu 13°)
+  Nettopainekerroin ylöspäin     cp,net = -0.78
+  Tuulikuorma katolla (alas)     0.493 kN/m²
+  Tuulikuorma katolla (ylös)     -0.414 kN/m²
+  KP450×51   q_tuuli (alas)      0.413 kN/m
+  2×KP360×51 q_tuuli (alas)      0.450 kN/m
 
 ── PYSYVÄT KUORMAT ────────────────────────────────────
   Kate + ruoteet  gk             0.20 kN/m²
@@ -46,13 +46,13 @@
   2×KP360×51 Gk (kate+palkki)    0.355 kN/m
 
 ── MITOITUSKUORMAT ULS  (1.35G + 1.5S + 1.5·0.6·W) ──
-  KP450×51   qd                  2.743 kN/m
-  2×KP360×51 qd                  3.063 kN/m
+  KP450×51   qd                  2.754 kN/m
+  2×KP360×51 qd                  3.075 kN/m
 
 ── TAIVUTUSMOMENTTI  Md = qd·L²/8  (ei kaltevuuskorjausta) ──
   Kaltevuuskorjaus (moment_factor)  1.0000  (kaltevuus jänteen suunnassa → 1.0)
-  KP450×51   Md                  15.39 kNm
-  2×KP360×51 Md                  17.19 kNm
+  KP450×51   Md                  15.45 kNm
+  2×KP360×51 Md                  17.25 kNm
 
 ── PALKIN KANTOKYKY (Kerto-S, taivutus) ───────────────
   fm,k = 44 N/mm²,  kmod = 0.65,  γM = 1.2  →  fm,d = 23.8 N/mm²
@@ -64,20 +64,20 @@
   §6.2.4 biaksiaali EI sovellu. Kriittinen tarkistus: §6.3.3 LTB.
   E_0,05 = 11600 N/mm²  (Kerto-S).  L_eff = 0.9 × L_buckle (UDL, yläreunan kuorma)
 
-  KP450×51 #2 (y=900mm)   h/b = 8.8   σ_m,d = 8.94 N/mm²
-    Ilman sivutukea  L_eff=6030mm: σ_crit=8.67  λ=2.252  k_crit=0.197  η=190.3%  *** YLITTYY – SIVUTUKI PAKOLLINEN ***
-    Ruodesivutuella  L_eff=810mm:  σ_crit=64.56  λ=0.826  k_crit=0.941  η=39.9%  OK ✓
+  KP450×51 #2 (y=900mm)   h/b = 8.8   σ_m,d = 8.98 N/mm²
+    Ilman sivutukea  L_eff=6030mm: σ_crit=8.67  λ=2.252  k_crit=0.197  η=191.1%  *** YLITTYY – SIVUTUKI PAKOLLINEN ***
+    Ruodesivutuella  L_eff=810mm:  σ_crit=64.56  λ=0.826  k_crit=0.941  η=40.0%  OK ✓
 
-  2×KP360×51 (y=1675mm)  h/b = 3.5   σ_m,d = 7.80 N/mm²
-    Ilman sivutukea  L_eff=6030mm: σ_crit=43.36  λ=1.007  k_crit=0.805  η=40.7%  OK ✓
-    Ruodesivutuella  L_eff=810mm:  σ_crit=322.82  λ=0.369  k_crit=1.000  η=32.7%  OK ✓
+  2×KP360×51 (y=1675mm)  h/b = 3.5   σ_m,d = 7.83 N/mm²
+    Ilman sivutukea  L_eff=6030mm: σ_crit=43.36  λ=1.007  k_crit=0.805  η=40.8%  OK ✓
+    Ruodesivutuella  L_eff=810mm:  σ_crit=322.82  λ=0.369  k_crit=1.000  η=32.9%  OK ✓
   *** Ruoteiden kiinnitys palkkeihin on kriittinen LTB-tuelle! ***
-  Sivutukivoima per ruode (arvio): 0.51 kN (ULS) → kiinnitys tarkistettava
+  Sivutukivoima per ruode (arvio): 0.54 kN (ULS) → kiinnitys tarkistettava
 
 ── LEIKKAUSVOIMATARKISTUS ──────────────────────────────
   fv,d = 2.44 N/mm²
-  KP450×51   Vd = 9.19 kN   VRd = 37.29 kN   η = 24.6%
-  2×KP360×51 Vd = 10.26 kN   VRd = 59.67 kN   η = 17.2%
+  KP450×51   Vd = 9.22 kN   VRd = 37.29 kN   η = 24.7%
+  2×KP360×51 Vd = 10.30 kN   VRd = 59.67 kN   η = 17.3%
 
 ── TAIPUMA SLS  (δ_lim = L/300 = 22 mm) ─────────────
   EI  KP450×51   = 5344.48 kN·m²
@@ -87,13 +87,13 @@
 
 ── LP225×90  PÄÄTYKANNAKE (liimapuu GL30c) ────────────
   Jänneväli seinä → pilari       1675 mm
-  KP450×51 pistekuorma P         9.19 kN  @ y=900 mm seinästä
-  Tukireaktio seinäpäässä        4.25 kN
-  Tukireaktio pilaripäässä       4.94 kN
-  Taivutusmomentti Md            3.83 kNm
+  KP450×51 pistekuorma P         9.22 kN  @ y=900 mm seinästä
+  Tukireaktio seinäpäässä        4.27 kN
+  Tukireaktio pilaripäässä       4.96 kN
+  Taivutusmomentti Md            3.84 kNm
   fm,d = 15.6 N/mm²  (GL30c, kmod=0.65, γM=1.25)
-  W  = 759 cm³   MRd = 11.85 kNm   η_M = 32.3%  OK ✓
-  Vd = 4.94 kN   VRd = 24.57 kN          η_V = 20.1%  OK ✓
+  W  = 759 cm³   MRd = 11.85 kNm   η_M = 32.4%  OK ✓
+  Vd = 4.96 kN   VRd = 24.57 kN          η_V = 20.2%  OK ✓
 
 ============================================================
   YHTEENVETO – KÄYTTÖASTEET
@@ -101,18 +101,18 @@
 
   Palkki                   Md/Vd   MRd/VRd   Käyttöaste  Tulos
   -------------------- --------- --------- ------------  --------
-  KP450×51 (taivutus)    15.39kNm   41.02kNm        37.5%  OK ✓
-  KP450×51 (§6.3.3 LTB)                                 39.9%  OK ✓  (ruodesivutuki)
-  KP450×51 (leikkaus)          9.19kN    37.29kN        24.6%  OK ✓
-  2×KP360×51 (taivutus)      17.19kNm   52.51kNm        32.7%  OK ✓
-  2×KP360×51 (§6.3.3 LTB)                               32.7%  OK ✓  (ruodesivutuki)
-  2×KP360×51 (leikkaus)       10.26kN    59.67kN        17.2%  OK ✓
-  LP225×90 (taivutus)     3.83kNm   11.85kNm        32.3%  OK ✓
-  LP225×90 (leikkaus)      4.94kN    24.57kN        20.1%  OK ✓
+  KP450×51 (taivutus)    15.45kNm   41.02kNm        37.7%  OK ✓
+  KP450×51 (§6.3.3 LTB)                                 40.0%  OK ✓  (ruodesivutuki)
+  KP450×51 (leikkaus)          9.22kN    37.29kN        24.7%  OK ✓
+  2×KP360×51 (taivutus)      17.25kNm   52.51kNm        32.9%  OK ✓
+  2×KP360×51 (§6.3.3 LTB)                               32.9%  OK ✓  (ruodesivutuki)
+  2×KP360×51 (leikkaus)       10.30kN    59.67kN        17.3%  OK ✓
+  LP225×90 (taivutus)     3.84kNm   11.85kNm        32.4%  OK ✓
+  LP225×90 (leikkaus)      4.96kN    24.57kN        20.2%  OK ✓
 
   Suurin sallittu mitoitusviivakuorma (taivutus 100%):
-    KP450×51      qd,max = 7.311 kN/m  (nyt 2.743 kN/m)
-    2×KP360×51    qd,max = 9.358 kN/m  (nyt 3.063 kN/m)
+    KP450×51      qd,max = 7.311 kN/m  (nyt 2.754 kN/m)
+    2×KP360×51    qd,max = 9.358 kN/m  (nyt 3.075 kN/m)
 
   HUOMIOT:
   * Lumikuorma sk = 2.0 kN/m² (Tuusula, FI NA vyöhyke II / YM asetus 6/16).
@@ -137,20 +137,20 @@
 
   Palkki              Md,huolto        MRd   Käyttöaste  vs lumi
   ------------------ ---------- ---------- ------------  --------
-  KP450×51              15.31kNm    41.02kNm        37.3%  (lumi: 37.5%)
-  2×KP360×51            16.88kNm    52.51kNm        32.1%  (lumi: 32.7%)
+  KP450×51              15.31kNm    41.02kNm        37.3%  (lumi: 37.7%)
+  2×KP360×51            16.88kNm    52.51kNm        32.1%  (lumi: 32.9%)
 
   KP450×51:   hallitseva kuorma = lumikuorma
   2×KP360×51: hallitseva kuorma = lumikuorma
 
 ── TUULEN NOSTOKUORMA – min. yhdistelmä ────────────────
   0.9·Gk + 1.5·Wk,ylös  (suotuisa pysyvä, tuuli nostosuuntaan)
-  w_wind,ylös = -0.394 kN/m²  (cp,net = -0.74)
+  w_wind,ylös = -0.414 kN/m²  (cp,net = -0.78)
 
   Palkki              qmin [kN/m]   Reaktio/tuki  Tila
   ------------------ ------------ --------------  --------------------
-  KP450×51                 -0.246        -0.83 kN  NOSTO 0.83 kN → KIINNITYS!
-  2×KP360×51               -0.219        -0.73 kN  NOSTO 0.73 kN → KIINNITYS!
+  KP450×51                 -0.272        -0.91 kN  NOSTO 0.91 kN → KIINNITYS!
+  2×KP360×51               -0.246        -0.83 kN  NOSTO 0.83 kN → KIINNITYS!
 
 ── LUMIKUORMAN EPÄTASAINEN JAKAUTUMA ───────────────────
   EN 1991-1-3 §6.2: yksilappinen katto
@@ -163,8 +163,8 @@
 ============================================================
 
   Hallitseva mitoitustapaus per palkki:
-    KP450×51:   LUMI (37.5%)  –  max käyttöaste 37.5%
-    2×KP360×51: LUMI (32.7%)  –  max käyttöaste 32.7%
+    KP450×51:   LUMI (37.7%)  –  max käyttöaste 37.7%
+    2×KP360×51: LUMI (32.9%)  –  max käyttöaste 32.9%
 
   *** TÄRKEÄÄ: Tuulen nostokuorma aiheuttaa negatiiviset tukireaktiot!
   *** Palkkien kiinnitykset (ankkurointi) tulee mitoittaa nostolle.
@@ -174,7 +174,7 @@
   ANALYYSI: 2×KP360×51 VÄLITUEKSI UUDELLE KATOKSELLE
 ============================================================
 
-  Käyttämätön taivutuskapasiteetti: 35.3 kNm  (67.3% jäljellä)
+  Käyttämätön taivutuskapasiteetti: 35.3 kNm  (67.1% jäljellä)
 
   Periaate: poikittaiset rimat/palkit y-suunnassa kiinnittävät
   uuden ulomman palkin 2×KP360×51:een → jänneväli lyhenee.
@@ -182,13 +182,13 @@
   ────────────────────────────────────────────────────────
   VAIHTOEHTO A  –  1 välituki  (x = L/2 = 3350 mm)
   ────────────────────────────────────────────────────────
-    2×KP360×51 ottaa pistekuorman:   P_max = 21.1 kN
+    2×KP360×51 ottaa pistekuorman:   P_max = 21.0 kN
     Uuden palkin jänneväli:           L = 3350 mm
     → 6700mm palkki lyhenee 50%
     Jos uusi palkki = 2×KP360×51:
       Sallittu UDL (taivutus 100%):  q_max = 37.4 kN/m
       ≈ kattokuorma (trib ~0.9m):    41.6 kN/m²
-      (vertailu: lumi+tuuli nyt ≈ 2.08 kN/m²)
+      (vertailu: lumi+tuuli nyt ≈ 2.09 kN/m²)
 
   ────────────────────────────────────────────────────────
   VAIHTOEHTO B  –  2 välitukea  (x = L/3 = 2233 mm)
@@ -206,7 +206,7 @@
     → Vaihtoehto A riittää mainiosti uudelle katokselle.
     → Vaihtoehto B antaa runsaan ylikapasiteetin.
     Poikittaisrimat (y-suunta) mitoitetaan erikseen pistekuormille
-    P = 21.1 kN (A) tai 15.8 kN/tuki (B), jänneväli 1675 mm.
+    P = 21.0 kN (A) tai 15.8 kN/tuki (B), jänneväli 1675 mm.
 ============================================================
 
 ============================================================
@@ -215,8 +215,8 @@
   Päätypalkki UDL (normaali lumi+tuuli, hallitseva): 3.23 kN/m ominais / 5.43 kN/m ULS
   (Arvot: terassilasitus_laskenta.py, hallitseva kuormitustapaus)
 
-  2×KP360×51 nykyinen kuorma: Md=17.2 kNm  Vd=10.3 kN  MRd=52.5 kNm  VRd=59.7 kN
-  Nykyinen käyttöaste: η_M=32.7%  η_V=17.2%  (käyttämätön kapasiteetti: 35.3 kNm)
+  2×KP360×51 nykyinen kuorma: Md=17.3 kNm  Vd=10.3 kN  MRd=52.5 kNm  VRd=59.7 kN
+  Nykyinen käyttöaste: η_M=32.9%  η_V=17.3%  (käyttämätön kapasiteetti: 35.3 kNm)
   Taipumarajat: L/300=22mm  |  L/250=27mm
 
   ── 1 välituki  (x = L/2)
@@ -225,7 +225,7 @@
 
   ── 2 välitukea (x = L/3, 2L/3)
      Pistekuorma (hallitseva): 7.9 kN ominais / 13.3 kN ULS
-     η_M=89%  OK ✓   η_V=40%  OK ✓   δ=23.4mm (+15.5)  OK (L/250) ✓
+     η_M=90%  OK ✓   η_V=40%  OK ✓   δ=23.4mm (+15.5)  OK (L/250) ✓
 
   ── 3 välitukea (x = L/4..3L/4)
      Pistekuorma (hallitseva): 6.2 kN ominais / 10.4 kN ULS
@@ -259,10 +259,10 @@
 
      *** SEINÄKIINNITYS – KP450×51 PAIKALLINEN TARKISTUS ***
      KP450×51 on pultattu seinään useasta kohtaa → efektiivinen jänne = pulttiväli
-     Koko jänteen malli (6700mm) on liian konservatiivinen: η_väärä=130%
+     Koko jänteen malli (6700mm) on liian konservatiivinen: η_väärä=131%
      Paikallinen tarkistus pulttiväli 900mm (M10, mitattu):
-     KP450×51 nykyinen Md=15.4kNm (UDL, koko jänne), MRd=41.0kNm
-     Pulttiväli 900mm: ΔMd=5.1kNm → Md_yht=20.5kNm  η_taiv=50.0%  OK ✓
+     KP450×51 nykyinen Md=15.5kNm (UDL, koko jänne), MRd=41.0kNm
+     Pulttiväli 900mm: ΔMd=5.1kNm → Md_yht=20.6kNm  η_taiv=50.1%  OK ✓
      M10 (8.8) leikkaus: Fv,Rd=22.3kN  kuorma/pultti≈11.4kN  η=51%  OK ✓
      Kerto-S reunapuristus: fh,d=19.2N/mm²  Fv,Rd=9.8kN  η=116%  → tarkista ankkurivalmistajan arvot
 
@@ -270,7 +270,7 @@
      Suositus: lisää kuormanjakolevy (t≥10mm teräs) vinotukin liitokseen
      → levy jakaa kuorman 2 vierekkäiselle M10-pultille, jännemitta puolittuu
      Seinäankkurit: tarkista valmistajan kantavuus (vetämä+leikkaus per pultti ≈11.4kN)
-     2×KP360×51: ei terassikuormia → η_M=32.7% ✓
+     2×KP360×51: ei terassikuormia → η_M=32.9% ✓
 
   B) Yhdistelmä: vinotuki-kolmio + 2×KP360×51 (redundantti järjestelmä):
      Jousijäykkyydet: k_kolmio=19.7kN/mm, k_KP360=0.87kN/mm  →  k_yht=20.6kN/mm
@@ -285,7 +285,7 @@
 
   JOHTOPÄÄTÖS:
     1 välituki (KP360): η_M=105%  η_V=36%  δ=23.4mm/27mm  ✗  taivutus 105%
-    2 välitukea (KP360): η_M=89%  η_V=40%  δ=23.4mm/27mm  ✓  kaikki OK
+    2 välitukea (KP360): η_M=90%  η_V=40%  δ=23.4mm/27mm  ✓  kaikki OK
     3 välitukea (KP360): η_M=93%  η_V=35%  δ=23.4mm/27mm  ✓  kaikki OK
     Vinotuki-kolmio (1 välituki): päätypalkki tuettu, KP360 vapaa ✓
 ============================================================

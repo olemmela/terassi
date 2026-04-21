@@ -59,6 +59,42 @@ Laskee kuormat ja vertailee rakennevaihtoehtoja suunnitteilla olevalle lasitetul
 
 ---
 
+### `geometry/` – Rakennelmien geometria JSON-muodossa
+
+Molempien laskelmien **geometria** (pilarit, palkit, kattotuolit, liitokset ja lasitukset)
+on kuvattu yksiselitteisessä, LLM-ystävällisessä JSON-muodossa:
+
+- `geometry/schema.json` – yhteinen JSON Schema (draft 2020-12)
+- `geometry/katos.json` – nykyisen 12° katoksen geometria
+- `geometry/terassi.json` – lasitetun terassin geometria
+
+**Koordinaatisto:** yhteinen globaali origo talon ulkoseinän nurkassa
+(x = seinän suuntaisesti, y = seinästä ulospäin, z = pystysuoraan ylöspäin),
+yksikkö mm.
+
+**Sisältö:** `project`-metatiedot, `reference_surfaces` (talon seinä/katto),
+`members` (`columns`, `beams`, `rafters`, `purlins`), `connections`
+(liitosten topologia) ja `surfaces` (kate, aurinkopaneelit, sivu- ja
+kolmiolasit, laudoitukset, aukot). Liitosten yksityiskohdat (pultit,
+kannakkeet, ruuvijaot) pysyvät laskelmien proosassa, eivät JSON:issa.
+
+**JSON on totuuden lähde geometrialle:** Python-laskelmat lukevat
+primitiiviset geometria-arvot (leveydet, jännevälit, profiilimitat ym.)
+suoraan JSON-tiedostoista `geometry_loader.py`:n kautta. Johdettu laskenta
+(kaltevuudet, tributary-alueet, kuormat, statiikka) pysyy Pythonissa.
+Jos muutat rakenteen geometriaa, muokkaa JSON-tiedostoa ja aja Python
+uudelleen – tulokset päivittyvät automaattisesti.
+
+**Validointi:**
+```bash
+python -c "import json; from jsonschema import Draft202012Validator as V; \
+  s=json.load(open('geometry/schema.json')); \
+  [V(s).validate(json.load(open(p))) for p in ['geometry/katos.json','geometry/terassi.json']]; \
+  print('OK')"
+```
+
+---
+
 ## Standardit ja viitteet
 
 | Standardi | Käyttötarkoitus |
@@ -80,4 +116,6 @@ python terassilasitus_rakenne_vaihtoehdot.py
 ```
 
 Molemmat skriptit tulostavat laskentatulokset suoraan konsoliin.
-Erillisiä riippuvuuksia ei tarvita – käytetään vain Pythonin standardikirjastoa (`math`).
+Rakenteen geometria luetaan automaattisesti `geometry/`-kansion JSON-tiedostoista.
+Riippuvuudet: Pythonin standardikirjasto (`math`, `json`) sekä valinnaisesti
+`jsonschema` JSON-tiedostojen validointiin.

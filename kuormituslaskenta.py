@@ -17,31 +17,50 @@ Geometria:
 
 import math
 
-# ============================================================
-# GEOMETRIA
-# ============================================================
-wall_width      = 7200    # mm - ulkoseinän leveys (palkkien suunta)
-pillar_size     = 250     # mm - pilarin koko (250 x 250 mm)
-clear_span      = wall_width - 2 * pillar_size  # = 6700 mm
-slope_deg       = 12.0    # ° - katon kaltevuus seinän suuntaisesti
-slope_rad       = math.radians(slope_deg)
+from geometry_loader import load, member, surface, profile_b, profile_h
 
-beam1_y         = 900     # mm - KP450x51 etäisyys seinästä (y-suunta)
-beam2_y         = 1675    # mm - 2xKP360x51 etäisyys seinästä (y-suunta)
-roof_edge_y     = 2200    # mm - katon reuna
+# ============================================================
+# GEOMETRIA  (luetaan geometry/katos.json:ista)
+# ============================================================
+_GEO = load("katos.json")
+
+_wall_poly = _GEO["reference_surfaces"][0]["polygon"]
+wall_width  = int(max(p["x"] for p in _wall_poly) - min(p["x"] for p in _wall_poly))
+pillar_size = int(member(_GEO, "columns", "col.x125")["profile"]["b_mm"])
+clear_span  = wall_width - 2 * pillar_size  # = 6700 mm
+
+_roof = surface(_GEO, "surf.roof")
+_roof_poly = _roof["polygon"]
+_roof_xspan = max(p["x"] for p in _roof_poly) - min(p["x"] for p in _roof_poly)
+_roof_zspan = max(p["z"] for p in _roof_poly) - min(p["z"] for p in _roof_poly)
+slope_deg       = math.degrees(math.atan(_roof_zspan / _roof_xspan))
+slope_rad       = math.radians(slope_deg)
+roof_edge_y     = int(max(p["y"] for p in _roof_poly))  # 2200 mm
+
+beam1_y         = int(member(_GEO, "beams", "beam.kp450.y900")["axis_start"]["y"])  # 900 mm
+beam2_y         = int(member(_GEO, "beams", "beam.kp360x2")["axis_start"]["y"])     # 1675 mm
 
 # Olemassa olevat ruoteet 50×100 mm (KP450 → 2×KP360, y-suunta)
 # Antavat sivutuen KP450×51 #2:lle heikossa akselissa.
-ruode_jako_mm   = 900     # mm – k-jako
-ruode_b, ruode_h = 50.0, 100.0  # mm
+_purlin = member(_GEO, "purlins", "purlin.50x100")
+ruode_jako_mm   = float(_purlin["pattern"]["offset"]["x"])  # 900 mm
+ruode_b         = float(_purlin["profile"]["b_mm"])         # 50 mm
+ruode_h         = float(_purlin["profile"]["h_mm"])         # 100 mm
 
-# Jänneväli (vaakamitta pilarin keskilinjalta keskilinjalle)
-# Pilarin keskilinja = pilarin reuna + puolet pilarista
-# Netto 6700 mm + 2 × (250/2) mm → L_cc = 7200 mm,
-# mutta mitoituksessa käytetään nettoväliä koska tuki on pilari.
-# Käytetään yksinkertaisesti tuettuna: L_design = 6700 mm (nettojänne)
-L_mm  = float(clear_span)   # mm
-L_m   = L_mm / 1000.0       # m
+# Jänneväli (pilarin keskilinjalta keskilinjalle)
+_col_xs = [member(_GEO, "columns", cid)["base"]["x"]
+           for cid in ("col.x125", "col.x7075")]
+L_mm  = float(max(_col_xs) - min(_col_xs))  # mm (c/c pilarikeskiöt)
+L_m   = L_mm / 1000.0                        # m
+
+# Palkin uloke tukien yli ja katon räystäs (x-suunta)
+_beam_ref = member(_GEO, "beams", "beam.kp450.y900")
+_bx0 = float(_beam_ref["axis_start"]["x"])
+_bx1 = float(_beam_ref["axis_end"]["x"])
+a_oh_left_mm  = float(min(_col_xs)) - _bx0                   # mm
+a_oh_right_mm = _bx1 - float(max(_col_xs))                   # mm
+eave_left_mm  = _bx0 - min(p["x"] for p in _roof_poly)       # mm
+eave_right_mm = max(p["x"] for p in _roof_poly) - _bx1       # mm
 
 # Kaltevuus on palkin JÄNTEEN SUUNNASSA (x-suunta), ei kohtisuora.
 # Pystysuorilla kuormilla (q kN/m vaaka-alaa kohti) yksinkertaisesti
@@ -54,10 +73,12 @@ moment_factor = 1.0   # ei korjauskerrointa – kaltevuus jänteen suunnassa
 # PALKKIEN POIKKILEIKKAUKSET  (Kerto-S LVL)
 # ============================================================
 # KP450x51  -> leveys b=51 mm, korkeus h=450 mm  (yksi palkki)
-b1, h1 = 51.0, 450.0
+b1 = profile_b(member(_GEO, "beams", "beam.kp450.wall"))
+h1 = profile_h(member(_GEO, "beams", "beam.kp450.wall"))
 
 # 2xKP360x51 -> kaksi rinnakkaista palkkia: b=2×51=102 mm, h=360 mm
-b2, h2 = 2.0 * 51.0, 360.0
+b2 = profile_b(member(_GEO, "beams", "beam.kp360x2"))
+h2 = profile_h(member(_GEO, "beams", "beam.kp360x2"))
 
 # ============================================================
 # TRIBUTÄÄRIALUEET (y-suunta, kohtisuora palkin akselille)
@@ -116,7 +137,17 @@ rho_air = 1.25    # kg/m³
 # Maastoluokka II (tavanomainen avoin alue):
 z0     = 0.05     # m
 z_min  = 2.0      # m
-z_ref  = 5.0      # m - rakennuksen referenssikorkeus (arvio)
+_all_z_mm = [
+    p["z"] for s in _GEO.get("surfaces", []) for p in s.get("polygon", []) if "z" in p
+] + [
+    m[k]["z"]
+    for grp in _GEO["members"].values() for m in grp
+    for k in ("axis_start", "axis_end", "base", "top")
+    if k in m and isinstance(m[k], dict) and "z" in m[k]
+]
+# Pyöristetään ylöspäin 0.5 m tarkkuudella (EN 1991-1-4 §4.3.2)
+# Pyöristetään ylöspäin 0.5 m tarkkuudella (EN 1991-1-4 §4.3.2)
+z_ref = math.ceil(max(_all_z_mm) / 500.0) * 0.5   # m – korkein kohta geometriasta
 kr     = 0.19 * (z0 / 0.05) ** 0.07    # = 0.19
 
 # Rosoisuuskerroin cr(z)
@@ -159,6 +190,16 @@ psi0_W = 0.6     # tuulikuorman yhdistelmäarvokerroin (lumi hallitsee)
 # ULS - taivuttava kuorma (alaspäin)
 qd1 = gammaG * gk1 + gammaQ * qk_snow1 + gammaQ * psi0_W * qk_wind_down1
 qd2 = gammaG * gk2 + gammaQ * qk_snow2 + gammaQ * psi0_W * qk_wind_down2
+
+# Tukireaktiot (ULS) – palkin uloke ja katon räystäs mukaan
+# Palkin UDL jatkuu ulokkeelle (a_oh), katon räystään kuorma siirtyy
+# räystäsruoteiden kautta palkin päihin (eave).  Räystäälle ei tule
+# palkin omapainoa, vain kattokuorma.
+_a_oh_m  = a_oh_left_mm / 1000.0     # m (symmetrinen)
+_eave_m  = eave_left_mm / 1000.0     # m (symmetrinen)
+q_roof_d = gammaG * gk_roofing + gammaQ * s_roof + gammaQ * psi0_W * w_wind_down  # kN/m²
+R1 = qd1 * (L_m / 2.0 + _a_oh_m) + q_roof_d * trib_w1 * _eave_m   # kN per tuki
+R2 = qd2 * (L_m / 2.0 + _a_oh_m) + q_roof_d * trib_w2 * _eave_m   # kN per tuki
 
 # Taivutusmomentti (yksinkertaisesti tuettu, UDL, kaltevuuskorjaus)
 Md1 = qd1 * L_m**2 / 8.0 * moment_factor   # kNm
@@ -272,9 +313,9 @@ I2     = b2 * h2**3 / 12.0     # mm⁴
 EI1    = E_mean * I1            # N·mm²
 EI2    = E_mean * I2            # N·mm²
 
-# Ominaiskuorma lumesta (SLS, γ=1.0)
-qk_sls1 = qk_snow1 + gk_roofing * trib_w1   # kN/m
-qk_sls2 = qk_snow2 + gk_roofing * trib_w2   # kN/m
+# SLS ominaiskuorma (pysyvä + lumi, γ=1.0)
+qk_sls1 = gk1 + qk_snow1   # kN/m (sis. palkin omapaino)
+qk_sls2 = gk2 + qk_snow2   # kN/m
 L_mm_eff = L_mm   # käytetään nettoväliä
 
 def deflection_mm(q_kNm, L_mm_, EI_Nmm2):
@@ -298,14 +339,16 @@ delta_lim = L_mm_eff / 300.0   # mm  (L/300)
 # koska LP225x90 on vain päädyssä (ei varsinainen runkopalkki).
 # Pistekuorma P = KP450x51 tukireaktio (toinen pää).
 
-b_lp, h_lp    = 90.0, 225.0   # mm – liimapuu LP225x90 (leveys × korkeus)
+_lp_beam = member(_GEO, "beams", "beam.lp225.x125")
+b_lp = profile_b(_lp_beam)   # mm – LP225x90 leveys
+h_lp = profile_h(_lp_beam)   # mm – LP225x90 korkeus
 L_lp_mm       = float(beam2_y)  # mm – jänneväli: seinä → pilari = 1675 mm
 L_lp_m        = L_lp_mm / 1000.0
 a_lp_mm       = float(beam1_y)  # mm – pistekuorman sijainti seinältä = 900 mm
 a_lp_m        = a_lp_mm / 1000.0
 
-# KP450x51 tukireaktio (yksinkertaisesti tuettu, UDL)
-P_kp1 = qd1 * L_m / 2.0        # kN (yksi päätytuki)
+# KP450x51 tukireaktio (sis. palkin uloke ja katon räystäs)
+P_kp1 = R1                         # kN (yksi päätytuki)
 
 # LP225x90 tukireaktiot pistekuormasta P
 R_seinä_lp = P_kp1 * (L_lp_m - a_lp_m) / L_lp_m   # kN
@@ -432,9 +475,11 @@ print(dw)
 print("\n── GEOMETRIA ──────────────────────────────────────────")
 print(f"  Seinän leveys                  {wall_width} mm")
 print(f"  Pilarin koko                   {pillar_size}×{pillar_size} mm")
-print(f"  Jänneväli (netto)              {L_mm:.0f} mm  ({L_m:.3f} m)")
+print(f"  Jänneväli (c/c)                {L_mm:.0f} mm  ({L_m:.3f} m)")
 print(f"  Katon kaltevuus (seinän suunt.){slope_deg:.0f}°")
 print(f"  Katto ulkonee seinästä         {roof_edge_y} mm")
+print(f"  Räystäs (x-suunta)             {eave_left_mm:.0f} + {eave_right_mm:.0f} mm")
+print(f"  Palkin uloke yli tukien         {a_oh_left_mm:.0f} + {a_oh_right_mm:.0f} mm")
 print(f"  KP450×51 sijainti              {beam1_y} mm seinästä")
 print(f"  2×KP360×51 sijainti            {beam2_y} mm seinästä (tolpat)")
 
@@ -513,7 +558,7 @@ print(f"  2×KP360×51 δ = {delta2:.1f} mm   {'OK ✓' if delta2 <= delta_lim e
 
 print("\n── LP225×90  PÄÄTYKANNAKE (liimapuu GL30c) ────────────")
 print(f"  Jänneväli seinä → pilari       {L_lp_mm:.0f} mm")
-print(f"  KP450×51 pistekuorma P         {P_kp1:.2f} kN  @ y={a_lp_mm:.0f} mm seinästä")
+print(f"  KP450×51 tukireaktio P         {P_kp1:.2f} kN  @ y={a_lp_mm:.0f} mm (sis. räystäs)")
 print(f"  Tukireaktio seinäpäässä        {R_seinä_lp:.2f} kN")
 print(f"  Tukireaktio pilaripäässä       {R_pilari_lp:.2f} kN")
 print(f"  Taivutusmomentti Md            {Md_lp:.2f} kNm")
@@ -546,6 +591,7 @@ print("  * Lumikuorma sk = 2.0 kN/m² (Tuusula, FI NA vyöhyke II / YM asetus 6/
 print("  * Vuoden 2005 RakMk B1 -laskennassa käytetty 2.2 kN/m² vastasi silloista normia.")
 print("  * LP225x90 laskennassa vain KP450x51 pistekuorma (päätykannake).")
 print("  * Tributäärileveys perustuu yksinkertaiseen vaikutusaluemenetelmään.")
+print("  * Räystäskuormat (x-suunta) huomioitu tukireaktioissa (LP225, pilarit).")
 print("  * Tuulikuorman nettopainekerroin interpoloitu EC1-1-4 taulukosta 7.7")
 print("    (vapaasti seisova katos – konservatiivinen yksinkertaistus seinään kiinnitetylle).")
 print("  * LTB-tarkistus (§6.3.3) edellyttää ruoteiden riittävää kiinnitystä palkkeihin.")
@@ -656,7 +702,7 @@ print(dw)
 # Hallitseva: normaali lumi+tuuli (sk=2.0 kN/m², terassilasitus_laskenta.py rev. 2026)
 q_paaty_uls  = 5.43   # kN/m  ULS (terassilasitus_laskenta.py: normaali lumi+tuuli, hallitseva)
 q_paaty_char = 3.23   # kN/m  ominais (SLS, ilman tuulen ψ₀-yhdistelmää)
-L_paaty = 6.700       # m
+L_paaty = L_m          # m (sama pilarikeskiöväli)
 
 P1_uls   = 10.0/8.0 * q_paaty_uls  * (L_paaty / 2.0)   # 1 välituki, ULS
 P1_char  = 10.0/8.0 * q_paaty_char * (L_paaty / 2.0)   # 1 välituki, ominais
@@ -801,14 +847,24 @@ kc_gl    = 1.0 / (k_bkl + math.sqrt(k_bkl**2 - lam_rel_tri**2))
 NRd_comp_gl = kc_gl * fc0d_gl * A_tri / 1000.0
 eta_comp_gl = N_horiz_uls / NRd_comp_gl * 100.0
 
-# KP450×51 tarkistus: vinotuen seinäkiinnityspiste on KP450:n midspanissa
-# Lisäpistekuorma P_d_uls vaikuttaa KP450×51-palkin midspanissa
-# LÖYDÖS: KP450×51 EI riitä kantamaan tätä – kiinnitetään läpi seinään
-delta_MRd1  = MRd1 - Md1   # käyttämätön kapasiteetti
-Md_vino_P   = P_d_uls * L_m / 4.0            # lisä-Md pistekuormasta midspanissa
-Md_kp450_comb = Md1 + Md_vino_P
-eta_kp450_comb = Md_kp450_comb / MRd1 * 100.0
-kp450_ok    = eta_kp450_comb <= 100.0
+# KP450×51(seinä) paikallinen tarkistus: vinotuki kiinnittyy seinäpalkkiin
+# beam.kp450.wall on pultattu seinään 900mm välein → jatkuvapalkki
+# Tributäärialue: y=0 ... trib1_start_mm (= 450mm), ERI palkki kuin beam.kp450.y900
+s_mm = int(next(c for c in _GEO["connections"] if c["id"] == "con.kp450wall.to.house")["spacing_mm"])
+s_m  = s_mm / 1000.0
+trib_wall_m = trib1_start_mm / 1000.0   # 0.45 m
+gk_wall     = gk_roofing * trib_wall_m + g_beam1   # kN/m
+qd_wall     = (gammaG * gk_wall
+               + gammaQ * s_roof * trib_wall_m
+               + gammaQ * psi0_W * w_wind_down * trib_wall_m)  # kN/m
+
+# Jatkuvapalkin kenttämomentti (sisäjänne, UDL): M ≈ qd × s² / 14
+Md_wall_udl = qd_wall * s_m**2 / 14.0   # kNm
+
+# Vinotukin pistekuorma paikallisesti: M = P × s / 4 (yksinkert. tuettu, konserv.)
+dMd_wall    = P_d_uls * s_m / 4.0       # kNm
+Md_wall_comb = Md_wall_udl + dMd_wall    # kNm
+eta_wall_comb = Md_wall_comb / MRd1 * 100.0
 
 # Kolmio-vaihtoehto: 2×KP360×51 EI saa terassin kuormia ollenkaan
 print(f"  A) Vinotuki-kolmio seinästä päätypalkkin midspaniin:")
@@ -834,15 +890,13 @@ print(f"     │  Vaakaside (PURISTUS, λ={lam_tri:.0f}, λ_rel={lam_rel_tri:.2f
 print(f"     │    NRd={NRd_comp_gl:.0f}kN  η={eta_comp_gl:.0f}%  {'OK ✓' if eta_comp_gl<=100 else '✗'}")
 print(f"     └───────────────────────────────────────────────────────────────")
 print(f"")
-print(f"     *** SEINÄKIINNITYS – KP450×51 PAIKALLINEN TARKISTUS ***")
-print(f"     KP450×51 on pultattu seinään useasta kohtaa → efektiivinen jänne = pulttiväli")
-print(f"     Koko jänteen malli (6700mm) on liian konservatiivinen: η_väärä={eta_kp450_comb:.0f}%")
-print(f"     Paikallinen tarkistus pulttiväli 900mm (M10, mitattu):")
-print(f"     KP450×51 nykyinen Md={Md1:.1f}kNm (UDL, koko jänne), MRd={MRd1:.1f}kNm")
-s_mm = 900
-dMd_loc = P_d_uls * (s_mm / 1000.0) / 4.0
-Md_loc  = Md1 + dMd_loc
-eta_loc = Md_loc / MRd1 * 100.0
+print(f"     *** SEINÄKIINNITYS – KP450×51(seinä) PAIKALLINEN TARKISTUS ***")
+print(f"     beam.kp450.wall: pulttiväli {s_mm}mm, tribut. {trib_wall_m*1000:.0f}mm, qd_wall={qd_wall:.3f} kN/m")
+print(f"     Jatkuvapalkki (sisäjänne): Md_udl = qd×s²/14 = {Md_wall_udl:.2f} kNm")
+print(f"     Vinotukin pistekuorma:     ΔMd   = P×s/4    = {dMd_wall:.2f} kNm")
+print(f"     Yhdistetty:                Md    = {Md_wall_comb:.2f} kNm  MRd={MRd1:.2f} kNm  η={eta_wall_comb:.1f}%  {'OK ✓' if eta_wall_comb<=100 else '✗'}")
+s_mm = int(next(c for c in _GEO["connections"] if c["id"] == "con.kp450wall.to.house")["spacing_mm"])
+eta_loc = eta_wall_comb
 # M10 pulttikapasiteetti (teräs 8.8, EN 1993-1-8 § 3.6)
 A_s_M10  = 58.0    # mm² – M10 juuripinta-ala
 fub_M10  = 800.0   # N/mm² – 8.8
@@ -855,11 +909,10 @@ fh_k_M10 = 0.082 * (1.0 - 0.01*10.0) * 480.0   # N/mm²
 fh_d_M10 = 0.65 * fh_k_M10 / 1.2                # kmod=0.65, γM=1.2
 Fv_Rd_lvl = fh_d_M10 * 10.0 * 51.0 / 1000.0     # kN, reunapuristus yhdessä puupinnassa
 eta_lvl  = Fv_bolt / Fv_Rd_lvl * 100.0
-print(f"     Pulttiväli {s_mm}mm: ΔMd={dMd_loc:.1f}kNm → Md_yht={Md_loc:.1f}kNm  η_taiv={eta_loc:.1f}%  {'OK ✓' if eta_loc<=100 else '✗'}")
 print(f"     M10 (8.8) leikkaus: Fv,Rd={Fv_Rd_M10:.1f}kN  kuorma/pultti≈{Fv_bolt:.1f}kN  η={eta_bolt:.0f}%  {'OK ✓' if eta_bolt<=100 else '✗'}")
 print(f"     Kerto-S reunapuristus: fh,d={fh_d_M10:.1f}N/mm²  Fv,Rd={Fv_Rd_lvl:.1f}kN  η={eta_lvl:.0f}%  {'OK ✓' if eta_lvl<=100 else '→ tarkista ankkurivalmistajan arvot'}")
 print(f"")
-print(f"     JOHTOPÄÄTÖS: KP450×51 kestää pulttiväli 900mm ✓")
+print(f"     JOHTOPÄÄTÖS: KP450×51(seinä) taivutus η={eta_wall_comb:.1f}% {'OK ✓' if eta_wall_comb<=100 else '✗'}")
 print(f"     Suositus: lisää kuormanjakolevy (t≥10mm teräs) vinotukin liitokseen")
 print(f"     → levy jakaa kuorman 2 vierekkäiselle M10-pultille, jännemitta puolittuu")
 print(f"     Seinäankkurit: tarkista valmistajan kantavuus (vetämä+leikkaus per pultti ≈{P_d_uls/2:.1f}kN)")

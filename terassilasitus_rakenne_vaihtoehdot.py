@@ -22,22 +22,59 @@ Kantavat rakenteet:
 
 import math
 
+from geometry_loader import load, member, surface, reference, profile_b, profile_h
+
 # ============================================================
 # ============================================================
-# GEOMETRIA
+# GEOMETRIA  (luetaan geometry/terassi.json:ista)
 # ============================================================
-terrace_width   = 7200    # mm – leveyssuunta (x)
-terrace_depth   = 3600    # mm – syvyys pilareista ulospäin (y)
-inner_y         = 1675    # mm – sisäpilarin sijainti seinästä (olemassa oleva)
+_GEO = load("terassi.json")
+
+_wall_ref    = reference(_GEO, "ref.house_wall")
+_wall_xs     = [p["x"] for p in _wall_ref["polygon"]]
+terrace_width = int(max(_wall_xs) - min(_wall_xs))   # 7200 mm (x-suunta)
+
+_inner_col   = member(_GEO, "columns", "col.existing.inner.x125")
+_outer_col_0 = member(_GEO, "columns", "col.outer.x0")
+inner_y        = int(_inner_col["base"]["y"])                  # 1675 mm
+terrace_depth  = int(_outer_col_0["base"]["y"] - inner_y)      # 3600 mm
 
 # ── KORKEUDET (terassin lattiasta, mm) ───────────────────────
 # Terassin kate (y-suunta, talosta ulospäin):
-h_katto_inner   = 2800    # mm – katteen yläpinta seinän kohdalla (sisäpää)
-h_katto_outer   = 2000 + 140 + 173 + 30  # mm – ulkopää: pilari+palkki+kattotuoli+paneeli = 2343mm
+_panels = surface(_GEO, "surf.solar_panels")
+# Paneelipolygon kattaa räystäät, joten sen y-ääripäät eivät osu rakennus-
+# palkkien linjoille. Lasketaan paneelitason (y,z) parametrit ja interpoloidaan.
+_panel_ymin = min(p["y"] for p in _panels["polygon"])
+_panel_ymax = max(p["y"] for p in _panels["polygon"])
+_panel_zmin_y = max(p["z"] for p in _panels["polygon"] if p["y"] == _panel_ymin)
+_panel_zmax_y = max(p["z"] for p in _panels["polygon"] if p["y"] == _panel_ymax)
+def _panel_z(y):
+    t = (y - _panel_ymin) / (_panel_ymax - _panel_ymin)
+    return _panel_zmin_y + t * (_panel_zmax_y - _panel_zmin_y)
+h_katto_inner   = int(round(_panel_z(inner_y)))                 # 2800 mm – katteen yläpinta seinän kohdalla (sisäpää)
+h_katto_outer   = int(round(_panel_z(inner_y + terrace_depth))) # 2343 mm – ulkopää: pilari+palkki+kattotuoli+paneeli
 
-# Rakennuksen katto (x-suunta, seinän suuntaisesti):
-h_rakennus_korkea = 4550  # mm – talon katon yläpinta terassin korkeassa päässä (x=0)
-h_rakennus_matala = 3100  # mm – talon katon yläpinta matalassa päässä (x=7200mm)
+# Rakennuksen räystään korkeus (x-suunta) – luetaan ref.house.roof y=0-reunasta.
+# ref.house.roof edustaa talon oman katon alapintaa/räystästä, jolta lumi liukuu
+# terassin päälle. Tämä on korkeampi kuin pelkkä seinän yläpinta (ref.house_wall).
+_house_roof_ref  = reference(_GEO, "ref.house.roof")
+_roof_eave_pts   = sorted([p for p in _house_roof_ref["polygon"] if p["y"] == 0],
+                          key=lambda p: p["x"])   # [(x_min, z_min), (x_max, z_max)]
+_roof_eave_x0    = _roof_eave_pts[0]["x"]
+_roof_eave_x1    = _roof_eave_pts[-1]["x"]
+_roof_eave_z0    = _roof_eave_pts[0]["z"]
+_roof_eave_z1    = _roof_eave_pts[-1]["z"]
+
+def h_rakennus_at_x(x_mm):
+    """Talon räystään korkeus (mm) annetussa x-koordinaatissa (lineaarinen interpolointi)."""
+    t = (x_mm - _roof_eave_x0) / (_roof_eave_x1 - _roof_eave_x0)
+    return _roof_eave_z0 + t * (_roof_eave_z1 - _roof_eave_z0)
+
+_wall_z_x0 = h_rakennus_at_x(0)
+_wall_z_xEnd = h_rakennus_at_x(terrace_width)
+# Korkea/matala pää luetaan geometriasta — ei oleteta kumpi pää on korkeampi
+h_rakennus_korkea = max(_wall_z_x0, _wall_z_xEnd)   # talon räystään ylin kohta (mm)
+h_rakennus_matala = min(_wall_z_x0, _wall_z_xEnd)   # talon räystään matala pää (mm)
 
 # ── LASKETUT KALTEVUUDET ─────────────────────────────────────
 outer_y         = inner_y + terrace_depth   # = 5275mm seinästä
@@ -49,27 +86,32 @@ slope_rakennus_deg = math.degrees(math.atan((h_rakennus_korkea - h_rakennus_mata
 h_seinä_korkea = (h_rakennus_korkea - h_katto_inner) / 1000.0  # m
 h_seinä_matala = (h_rakennus_matala - h_katto_inner) / 1000.0  # m
 # (terassin kate on sama korkeus koko x-suunnassa seinän kohdalla)
-b_talon_katto  = 5.0   # m – lumea luistava pituus talon katolta (b₂)
-# b₁ lasketaan paneeliparametrien jälkeen (panel_d_mm tarvitaan)
+# HUOM: Drift kerääntyy paneelitasolle talon seinää vasten. Lumi liukuu
+# paneelitasoa pitkin seinää kohti (paneelin korkea pää on seinällä).
+# Talon oma katto viettää x-suuntaan, joten siltä ei valu lunta terassin
+# kate seinälinjaa vasten – drift-laskennassa "b_upper" on siksi
+# paneelin itsensä pituus, ei talon katon.
 
 # Paneelit: Longi Himo X10 LR7, 1990×1134mm
-panel_w_mm      = 1134.0   # mm – paneelin leveys (= kattotuolijako)
-panel_d_mm      = 1990.0   # mm – paneelin syvyys
-panel_mass_kg   = 25.0     # kg/kpl
-n_panels_w      = 7        # rinnan (leveyssuunta)
-n_panels_d      = 2        # peräkkäin (syvyyssuunta)
-n_panels_total  = n_panels_w * n_panels_d  # = 14
+_panel_cnt      = _panels["count"]
+panel_w_mm      = float(_panel_cnt["unit_size_mm"]["x"])  # 1134.0 mm – paneelin leveys (= kattotuolijako)
+panel_d_mm      = float(_panel_cnt["unit_size_mm"]["y"])  # 1990.0 mm – paneelin syvyys
+panel_mass_kg   = float(_panel_cnt["unit_mass_kg"])       # 25.0 kg/kpl
+n_panels_w      = int(_panel_cnt["nx"])                   # 7 – rinnan (leveyssuunta)
+n_panels_d      = int(_panel_cnt["ny"])                   # 2 – peräkkäin (syvyyssuunta)
+n_panels_total  = n_panels_w * n_panels_d                 # = 14
 
 # Katteen todellinen syvyys (b₁ kinostumalle): paneelit pitkin kaltevuutta, projisoitu vaakaan
-b_terassi       = 2 * panel_d_mm * math.cos(slope_rad) / 1000.0  # m ≈ 3.95m
+b_terassi       = 2 * panel_d_mm * math.cos(slope_rad) / 1000.0  # m ≈ 3.95m (paneelin horisontaalinen syvyys y-suunnassa)
 
 # Kattotuolien (rafter) jänneväli
-pilari_leveys   = 250     # mm – ulkopilarin leveys (y-suunta ja x-suunta)
-n_outer_pillars = 3       # ulkopilareita (x=0, 3600, 7200mm)
+pilari_leveys   = int(_outer_col_0["profile"]["b_mm"])  # 250 mm – ulkopilarin leveys
+n_outer_pillars = sum(1 for c in _GEO["members"]["columns"] if c["id"].startswith("col.outer."))  # 3
 
 # Sisäpalkin leveys (y-suunnassa): kiinnitetty vanhan pilarin ulkoreunaan
-# Muuta tätä profiilin mukaan (LP: 90mm, IPE120: 120mm jne.)
-b_inner_beam_mm = 90      # mm – sisäpalkin leveys (vähintään 90mm)
+# Kun profiili on TBD (päättämättä), käytetään laskennassa oletusarvoa 90 mm.
+_inner_beam_profile = member(_GEO, "beams", "beam.inner.new")["profile"]
+b_inner_beam_mm = int(_inner_beam_profile.get("b_mm", 90))  # oletus 90 mm jos TBD
 
 # Kattotuolin tarkka jänneväli: sisäpalkin keskilinja → ulkopilarin keskilinja
 # Sisäpalkin keskilinja: 1675 + 125 (pilarin puolikas) + b_inner/2
@@ -82,7 +124,13 @@ rafter_span_m   = rafter_span_mm / 1000.0
 outer_span_cc_mm  = terrace_width / (n_outer_pillars - 1)   # 3600mm c/c
 outer_span_mm     = outer_span_cc_mm - pilari_leveys         # 3350mm vapaa jänne
 outer_span_m      = outer_span_mm / 1000.0
-rafter_spacing  = panel_w_mm / 1000.0   # m = 1.134m 
+rafter_spacing  = panel_w_mm / 1000.0   # m = 1.134m
+
+# Räystään y-suunnan horisontaalinen pituus: paneelit ulottuvat ulkopilarin yli
+eave_y_m = b_terassi - terrace_depth / 1000.0   # m ≈ 0.348m
+# Tukireaktioon vaikuttava efektiivinen vipuvarsi ulkotuella (kattotuoli + uloke):
+# R_outer = q × (L/2 + a + a²/2L)  (yksinkertaisesti tuettu + uloke)
+_eave_rafter_factor = rafter_span_m / 2.0 + eave_y_m + eave_y_m**2 / (2.0 * rafter_span_m)
 
 # ============================================================
 # PYSYVÄT KUORMAT
@@ -116,7 +164,9 @@ s_roof = mu1 * sk   # kN/m² vaakatasolle projisoituna
 vb0     = 21.0
 rho_air = 1.25
 z0      = 0.05
-z_ref   = 5.0
+z_ref   = math.ceil(max(
+    p["z"] for s in _GEO.get("surfaces", []) for p in s.get("polygon", []) if "z" in p
+) / 500.0) * 0.5   # m – korkein kohta geometriasta, pyöristetty ylöspäin 0.5m (EN 1991-1-4 §4.3.2)
 kr      = 0.19
 cr_z    = kr * math.log(max(z_ref, 2.0) / z0)
 Iv_z    = 1.0 / math.log(max(z_ref, 2.0) / z0)
@@ -356,13 +406,14 @@ for (nm, h_mm, b_f, W_el, I_cm4, m_kgm, fy) in steel_options:
 # ============================================================
 # ULKOREUNANEN PALKKI (x-suunta, 2 × 3600mm jänneväli)
 # ============================================================
-# Kantaa kattotuolien ulkopäiden reaktiot (UDL-approksimaatio)
-R_outer_rafter = qd_down * rafter_span_m / 2.0  # kN per kattotuoli
+# Kantaa kattotuolien ulkopäiden reaktiot + räystäskuorman (uloke ~348mm)
+# R = q × (L/2 + a + a²/2L) huomioi kattotuolin ulokekuorman ulkopilarin yli
+R_outer_rafter = qd_down * _eave_rafter_factor  # kN per kattotuoli
 q_outer_beam   = R_outer_rafter / rafter_spacing  # kN/m (UDL ulkopalkkiin)
 Md_outer_beam  = q_outer_beam * outer_span_m**2 / 8.0  # kNm per 3600mm jänneväli
 
 # SLS-kuorma ulkopalkkiin (ilman kuormituskertoimia)
-R_outer_sls    = (gk_line + qk_snow + psi0_W * qk_w_down) * rafter_span_m / 2.0
+R_outer_sls    = (gk_line + qk_snow + psi0_W * qk_w_down) * _eave_rafter_factor
 q_outer_sls    = R_outer_sls / rafter_spacing   # kN/m = N/mm
 
 # ── VAAKATAIVUTUSMOMENTTI ULKOPALKKISSA (sivulasituksen tuulikuorma) ──
@@ -397,9 +448,12 @@ q_inner_add = R_inner_rafter / rafter_spacing   # kN/m lisäkuorma
 # Kolmiokulman kohdalla talon seinä on korkeampi → kinostuma terassin katoille.
 # h_seinä ja kaltevuudet laskettu automaattisesti yllä olevista korkeusmitoista.
 
-def laske_kinostuma(h, b_lower, b_upper, sk_, gamma_s=2.0, mu1_=0.8):
-    """Laskee kinostuma-arvot EN 1991-1-3 §6.3 / Kuva 6.10 mukaan."""
-    ls = min(5.0 * h, b_lower, b_upper, 15.0)
+def laske_kinostuma(h, b_panel, sk_, gamma_s=2.0, mu1_=0.8):
+    """Laskee kinostuma-arvot EN 1991-1-3 §5.3.6 / §6.3 mukaan paneelitasolle,
+    joka rajautuu korkeampaan talon seinään. b_panel = paneelin horisontaalinen
+    pituus seinästä ulospäin (= sekä lower- että upper-roof -pituus, koska
+    drift tapahtuu samalla paneelitasolla)."""
+    ls = min(5.0 * h, b_panel, 15.0)
     ls = max(ls, 0.5 * h)
     mu2_h_  = gamma_s * h / sk_
     mu2_    = min(max(mu2_h_, mu1_), 2.0)
@@ -409,10 +463,10 @@ def laske_kinostuma(h, b_lower, b_upper, sk_, gamma_s=2.0, mu1_=0.8):
 
 # Korkea pää
 ls_korkea, mu2_korkea, mu2_h_korkea, s1, s_drift_korkea = laske_kinostuma(
-    h_seinä_korkea, b_terassi, b_talon_katto, sk, mu1_=mu1)
+    h_seinä_korkea, b_terassi, sk, mu1_=mu1)
 # Matala pää
 ls_matala, mu2_matala, mu2_h_matala, _,  s_drift_matala  = laske_kinostuma(
-    h_seinä_matala, b_terassi, b_talon_katto, sk, mu1_=mu1)
+    h_seinä_matala, b_terassi, sk, mu1_=mu1)
 
 # Hallitseva: käytetään korkean pään arvoja mitoituksessa (max kuorma)
 h_seinä  = h_seinä_korkea   # yhteensopivuus muun koodin kanssa
@@ -431,34 +485,26 @@ q_drift_udl_equiv = 0.5 * delta_s_drift * ls_drift
 # Seinä kulkee x-suunnassa (seinän suuntaisesti) ja täyttää aukon rakennuksen
 # katon ja uuden palkin välillä.
 #
-# GEOMETRIA korkean pään poikkileikkauksessa (x=0):
-#   Rakennuksen räystäs:      h_rakennus_korkea = 4550mm
-#   Laudoituksen alaraja:     4550 - h_laudoitus  = 4050mm
-#   Uuden palkin yläpinta:    h_katto_inner       = 2800mm
-#   → Kolmiolasin korkeus max = 4050 - 2800 = 1250mm  (korkea pää)
+# GEOMETRIA korkean pään poikkileikkauksessa (x=terrace_width):
+#   Rakennuksen räystäs:      h_rakennus_korkea (luetaan geometriasta)
+#   Laudoituksen alaraja:     h_rakennus_korkea - h_laudoitus
+#   Uuden palkin yläpinta:    h_katto_inner
+#   → Kolmiolasin korkeus max = h_rakennus_korkea - h_laudoitus - h_katto_inner
 #
-# Kolmio muodostuu koska rakennuksen katto viettää 12° (laskee x-suunnassa):
-#   matala pää (x=7200mm): räystäs 3100mm, laudoitus alaraja 2600mm < 2800mm
-#   → lasi häviää kohdassa x_zero (laskennallinen).
-#
-# Laudoitus on ylin 500mm rakennuksen seinän alapuolella (koko 7200mm matkalla),
-# kolmiolasi on laudoituksen alapuolella aina kohtaan x_zero saakka.
+# Kolmio muodostuu koska rakennuksen katto viettää x-suunnassa:
+#   matala pää: räystäs lähes katon tasolla → lasi häviää (laskettu x₀)
 #
 # PARAMETRISET LASKUT:
-h_laudoitus_mm = 500.0   # mm – laudoituksen korkeus räystäältä alaspäin
-
-# Kolmiolasin korkeus korkean pään kohdalla:
-h_kolmio_lasi_mm = float(h_rakennus_korkea - h_laudoitus_mm - h_katto_inner)
-# = 4550 - 500 - 2800 = 1250 mm
-
-# Leveys missä kolmiolasin korkeus häviää (h_rak(x) - h_laud = h_katto_inner):
-#   h_rak(x) = h_rak_korkea - (h_rak_korkea - h_rak_matala) × x/terrace_width
-#   Ratkaistaan x: x_zero = h_kolmio_lasi_mm / (h_rak_korkea - h_rak_matala) × terrace_width
-_dh_rak = float(h_rakennus_korkea - h_rakennus_matala)   # = 1450mm
-b_kolmio_lasi_mm = h_kolmio_lasi_mm / _dh_rak * terrace_width
-# = 1250/1450 × 7200 = 6207 mm  (aiemmin kovakoodattu 5500mm → VIRHE -13% pinta-alassa)
-
-b_kolmio_tot_mm = float(terrace_width)   # mm – laudoituksen koko leveys 7200mm
+# Kolmiolasin ja laudoituksen mitat luetaan JSON-geometriasta (surf.triangle_glazing.gable
+# ja surf.boarding.gable placement.u/v). Jos talon katon kaltevuus tai laudoituksen korkeus
+# muuttuu, nämä arvot päivitetään suoraan geometry/terassi.json:iin.
+_triangle = surface(_GEO, "surf.triangle_glazing.gable")
+_boarding = surface(_GEO, "surf.boarding.gable")
+b_kolmio_lasi_mm = float(_triangle["placement"]["u"]["length_mm"])
+h_kolmio_lasi_mm = float(_triangle["placement"]["v"]["length_mm"])
+h_laudoitus_mm   = float(_boarding["placement"]["v"]["length_mm"])
+# h_kolmio_lasi = h_rakennus_korkea − h_laudoitus − h_katto_inner (geometriasta)
+b_kolmio_tot_mm = float(terrace_width)   # mm – laudoituksen koko leveys
 
 # Pinta-alat
 A_lasi      = 0.5 * (b_kolmio_lasi_mm/1000.0) * (h_kolmio_lasi_mm/1000.0)  # m² kolmio
@@ -547,13 +593,13 @@ for i in range(n_seg + 1):
     x_beam = i * dx_beam                          # m, 0 = korkea pää
     x_wall = (x_wall_start + x_beam * 1000.0)     # mm, seinäkoordinaatti
 
-    # Paikallinen h(x) seinällä
-    h_local = h_seinä_korkea - (h_seinä_korkea - h_seinä_matala) * x_wall / terrace_width
+    # Paikallinen h(x) seinällä — suoraan geometriasta
+    h_local = (h_rakennus_at_x(x_wall) - h_katto_inner) / 1000.0
     h_local = max(h_local, 0.0)
 
     # Paikallinen kinostuma
     ls_loc, mu2_loc, _, _, s_drift_loc = laske_kinostuma(
-        h_local, b_terassi, b_talon_katto, sk, mu1_=mu1)
+        h_local, b_terassi, sk, mu1_=mu1)
 
     # Drift-arvo rafteri-sisäpään kohdalla (y = inner_y)
     if ls_loc > y_inner_drift:
@@ -605,7 +651,7 @@ for i in range(n_seg):
 # (Md_beam_drift_refined täydennetään alla)
 
 # Vertailuarvot
-h_at_Mmax = h_seinä_korkea - (h_seinä_korkea - h_seinä_matala) * (x_wall_start + x_Md_refined_max * 1000) / terrace_width
+h_at_Mmax = (h_rakennus_at_x(x_wall_start + x_Md_refined_max * 1000) - h_katto_inner) / 1000.0
 q_beam_drift_refined_avg = sum(q_drift_refined) / len(q_drift_refined)
 
 # --- 3) Kolmiolasi + laudoitus ---
@@ -667,7 +713,7 @@ def angle_props(a_mm, t_mm):
 def unequal_angle_props(a_long_mm, a_short_mm, t_mm):
     """Epätasainen L-profiili: pitkä haara (a_long) pystysuoraan,
     lyhyt haara (a_short) vaakasuoraan (kattotuolien tukipinta).
-    Palauttaa (A, y_bar, Ix, Wy_bot, Wy_top, W_crit, Ix_cm4)."""
+    Palauttaa (A, y_bar, Ix, Wy_bot, Wy_top, W_crit, Iz, Wz_crit)."""
     al = float(a_long_mm); ash = float(a_short_mm); t = float(t_mm)
     A_h  = ash * t
     A_v  = (al - t) * t
@@ -680,7 +726,12 @@ def unequal_angle_props(a_long_mm, a_short_mm, t_mm):
     Wy_bot = Ix / y_bar
     Wy_top = Ix / (al - y_bar)
     W_crit = min(Wy_bot, Wy_top)
-    return A, y_bar, Ix, Wy_bot, Wy_top, W_crit
+    # Iz – taivutus vaaka-akselista (vaakatuuli päätypalkkiin)
+    x_bar = (A_h * ash/2.0 + A_v * t/2.0) / A
+    Iz = (t * ash**3/12 + A_h*(ash/2.0 - x_bar)**2 +
+          (al-t)*t**3/12 + A_v*(t/2.0 - x_bar)**2)
+    Wz_crit = min(Iz / x_bar, Iz / (ash - x_bar))
+    return A, y_bar, Ix, Wy_bot, Wy_top, W_crit, Iz, Wz_crit
 
 fy_S235  = 235.0   # N/mm²
 fy_S355  = 355.0   # N/mm²
@@ -753,6 +804,29 @@ for (nm, h_t, b_t, n_t) in timber_sizes:
         'ok_delta': delta_t <= delta_lim_t,
     })
 
+# ── KATTOTUOLIN KAKSITAIVUTUS α=7.25° (EN 1995-1-1 §6.1.6 / EN 1993-1-1 §6.2.9) ──
+# Kallistettu kattotuoli: pystysuora kuorma → My (vahva) + Mz = My×tan(α) (heikko).
+# Puu suorakaide, km=0.7:  η_biax = My/MRd,y + 0.7 × Mz/MRd,z
+#   = η_M × (1 + 0.7 × tan(α) × h/b)
+_tan_slope = math.tan(slope_rad)
+for r in results_lp + results_timber:
+    h_r, b_r = r['h'], r['b']
+    r['eta_biax'] = r['eta_M'] * (1.0 + 0.7 * _tan_slope * h_r / b_r)
+    r['ok_biax']  = r['eta_biax'] <= 100.0
+
+# Teräs EN 1993-1-1 §6.2.9:  η_biax = My/MRd,y + Mz/MRd,z = η_M × (1 + Wy/Wz × tan(α))
+_Wz_steel_rafter = {
+    "IPE100": 5.79, "IPE120": 8.65, "IPE140": 12.31, "IPE160": 16.66,
+    "HEA120": 38.5, "HEA140": 55.6, "HEA160": 77.0,
+}
+for r in results_steel:
+    Wz = _Wz_steel_rafter.get(r['name'])
+    if Wz:
+        r['eta_biax'] = r['eta_M'] * (1.0 + r['W_cm3'] / Wz * _tan_slope)
+    else:
+        r['eta_biax'] = r['eta_M']
+    r['ok_biax'] = r['eta_biax'] <= 100.0
+
 # ============================================================
 # TULOSTUS
 # ============================================================
@@ -822,29 +896,32 @@ print(f"  Lumi+tuuli tapaus  Md = {Md_rafter:.2f} kNm")
 print(f"\n── KATTOTUOLIN MATERIAALIVERTAILU  (jänneväli {rafter_span_mm:.0f}mm) ───")
 print(f"  Mitoitusmomentti Md: profiilikohtainen (oma-paino + paneeli + kiinnikkeet + lumi + tuuli)")
 print(f"  Pohjakuorma (ilman kattotuolia): gk_no_rafter = {gk_no_rafter:.3f} kN/m²  (yleislaskelmat: gk_frame = {gk_frame:.2f} kN/m²)")
+print(f"  η_biax: kaksitaivutus α={slope_deg:.1f}° (EN 1995-1-1 §6.1.6 / EN 1993-1-1 §6.2.9)")
 print()
-print(f"  {'Profiili':<13} {'kg/m':>6} {'W [cm³]':>8} {'MRd':>9} {'η_M':>7} {'δ/lim':>9}  {'OK?'}")
-print(f"  {'-'*13} {'-'*6} {'-'*8} {'-'*9} {'-'*7} {'-'*9}  {'-'*10}")
+print(f"  {'Profiili':<13} {'kg/m':>6} {'W [cm³]':>8} {'MRd':>9} {'η_M':>7} {'η_biax':>8} {'δ/lim':>9}  {'OK?'}")
+print(f"  {'-'*13} {'-'*6} {'-'*8} {'-'*9} {'-'*7} {'-'*8} {'-'*9}  {'-'*10}")
 print("  --- LIIMAPUU GL30c (SC2, kmod=0.8) ---")
 for r in results_lp:
-    ok = '✓' if (r['ok_M'] and r['ok_V'] and r['ok_delta']) else '✗'
-    tag = ' ← suositus' if (r['ok_M'] and r['ok_V'] and r['ok_delta']) and \
-          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta']) for rr in results_lp[:results_lp.index(r)]) else ''
-    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.0f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}")
+    ok_all = r['ok_M'] and r['ok_V'] and r['ok_delta'] and r['ok_biax']
+    ok = '✓' if ok_all else '✗'
+    tag = ' ← suositus' if ok_all and \
+          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta'] and rr['ok_biax']) for rr in results_lp[:results_lp.index(r)]) else ''
+    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.0f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['eta_biax']:>7.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}")
 print("  --- TERÄS S235 ---")
 for r in results_steel:
-    ok = '✓' if (r['ok_M'] and r['ok_V'] and r['ok_delta']) else '✗'
-    tag = ' ← suositus' if (r['ok_M'] and r['ok_V'] and r['ok_delta']) and \
-          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta']) for rr in results_steel[:results_steel.index(r)]) else ''
-    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.1f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}")
+    ok_all = r['ok_M'] and r['ok_V'] and r['ok_delta'] and r['ok_biax']
+    ok = '✓' if ok_all else '✗'
+    tag = ' ← suositus' if ok_all and \
+          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta'] and rr['ok_biax']) for rr in results_steel[:results_steel.index(r)]) else ''
+    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.1f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['eta_biax']:>7.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}")
 print("  --- SAHATAVARA C24 (SC2, kmod=0.8, fm,d=14.8 N/mm²) ---")
 for r in results_timber:
-    ok_all = r['ok_M'] and r['ok_V'] and r['ok_delta']
+    ok_all = r['ok_M'] and r['ok_V'] and r['ok_delta'] and r['ok_biax']
     ok = '✓' if ok_all else '✗'
     warn = f"  h/b={r['hb']:.1f}" if r['b'] == 48 and r['hb'] > 5 else ''
     tag = ' ← suositus' if ok_all and \
-          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta']) for rr in results_timber[:results_timber.index(r)]) else ''
-    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.0f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}{warn}")
+          all(not (rr['ok_M'] and rr['ok_V'] and rr['ok_delta'] and rr['ok_biax']) for rr in results_timber[:results_timber.index(r)]) else ''
+    print(f"  {r['name']:<13} {r['g_self']*1000/9.81:>6.1f} {r['W_cm3']:>8.0f} {r['MRd']:>8.2f}kNm {r['eta_M']:>6.1f}% {r['eta_biax']:>7.1f}% {r['delta']:>5.1f}/{r['delta_lim']:.1f}mm  {ok}{tag}{warn}")
 
 # ── LOVETUSTARKISTUS ULKOTUELLA (EN 1995-1-1 §6.5.2) ────────────────────────
 # Kattotuoli jatkaa ulkopalkin yli räystääksi → pääpalkki lovetettu alapinnasta
@@ -1009,7 +1086,7 @@ print()
 print(f"  {'Parametri':<30} {'Korkea pää':>12} {'Matala pää':>12}")
 print(f"  {'-'*30} {'-'*12} {'-'*12}")
 print(f"  {'h_seinä [m]':<30} {h_seinä_korkea:>12.2f} {h_seinä_matala:>12.2f}")
-print(f"  {'b_talon_katto [m]':<30} {b_talon_katto:>12.1f} {b_talon_katto:>12.1f}")
+print(f"  {'b_panel [m]':<30} {b_terassi:>12.2f} {b_terassi:>12.2f}")
 print(f"  {'ls_drift [m]':<30} {ls_korkea:>12.2f} {ls_matala:>12.2f}")
 print(f"  {'μ2 (lask. {:.2f}/{:.2f})':<30} {mu2_korkea:>12.2f} {mu2_matala:>12.2f}".format(
       mu2_h_korkea, mu2_h_matala))
@@ -1032,7 +1109,7 @@ print(f"  Uusi vaakapalkki muodostaa sisäseinän kohdalla y={inner_y + pilari_l
 print(f"  Rakennuksen katto viettää {slope_rakennus_deg:.1f}° → kolmio häviää matalassa päässä.")
 print(f"  Laudoitus:   {b_kolmio_tot_mm:.0f}mm × {h_laudoitus_mm:.0f}mm (täysi leveys, 500mm räystäältä alaspäin)")
 print(f"  Kolmiolasi:  {b_kolmio_lasi_mm:.0f}mm × {h_kolmio_lasi_mm:.0f}mm  → A={A_lasi:.3f}m²")
-print(f"    korkea pää (x=0):   h = {h_rakennus_korkea:.0f}-{h_laudoitus_mm:.0f}-{h_katto_inner:.0f} = {h_kolmio_lasi_mm:.0f}mm")
+print(f"    korkea pää (x={terrace_width:.0f}mm): h = {h_rakennus_korkea:.0f}-{h_laudoitus_mm:.0f}-{h_katto_inner:.0f} = {h_kolmio_lasi_mm:.0f}mm")
 print(f"    matala pää (x=x₀):  h = 0  @  x₀={b_kolmio_lasi_mm:.0f}mm")
 print(f"  Tuulipaine seinälle: cp,e = {cp_end_wall:.1f}, qp = {qp_z:.3f} kN/m²")
 print(f"  Tuulivoima lasille: F = {F_wind_triangle:.2f} kN  (→ uusi palkki)")
@@ -1158,10 +1235,11 @@ for span_label, L_eff in [
             print(f"  {nm:<16} {'S235':>6} {W_cm3:>8.1f} {MRd:>9.1f} {eta_v:>5.0f}% {eta_i:>6.0f}%  {m_kgm:>5.1f}  {delta:.1f}/{dlim:.0f}mm {d_ok}")
     # Epätasaiset L-profiilit S355J2
     for nm, al, ash, t_ in unequal_l_profiles_S355:
-        A_l, yb, Ix_, _, _, W_c = unequal_angle_props(al, ash, t_)
-        MRd = fy_S355 * W_c / 1e6
+        A_l, yb, Ix_, _, _, W_c, Iz_, Wz_c = unequal_angle_props(al, ash, t_)
+        MRd   = fy_S355 * W_c   / 1e6
+        MRd_z = fy_S355 * Wz_c  / 1e6
         eta_v = Md_v / MRd * 100
-        eta_i = eta_v + Md_h / MRd * 100
+        eta_i = eta_v + Md_h / MRd_z * 100  # EN 1993-1-1 §6.2.9, oikea heikko akseli
         EI = 210000.0 * Ix_
         delta = 5 * (q_rafter_beam/gammaQ) * (L_eff*1000)**4 / (384 * EI)
         dlim = L_eff*1000/300
@@ -1169,14 +1247,16 @@ for span_label, L_eff in [
         m_kgm_l = A_l * 7.85e-3  # mm² × 7850 kg/m³ / 1e6 → kg/m
         if eta_i <= 100:
             print(f"  {nm:<16} {'S355J2':>6} {W_c/1e3:>8.1f} {MRd:>9.1f} {eta_v:>5.0f}% {eta_i:>6.0f}%  {m_kgm_l:>5.1f}  {delta:.1f}/{dlim:.0f}mm {d_ok}")
-    # Liimapuu GL30c (SC3, kmod=0.65)
+    # Liimapuu GL30c (SC2, kmod=0.8)
     for (nm_lp, b_lp, h_lp, fm_k_lp, fv_k_lp, E_lp, gM_lp, kmod_lp) in lp_options:
-        fm_d_lp = kmod_lp * fm_k_lp / gM_lp
-        W_lp = b_lp * h_lp**2 / 6.0
-        I_lp = b_lp * h_lp**3 / 12.0
-        MRd_lp = fm_d_lp * W_lp / 1e6
+        fm_d_lp  = kmod_lp * fm_k_lp / gM_lp
+        W_lp     = b_lp * h_lp**2 / 6.0    # vahva akseli (pysty)
+        W_z_lp   = h_lp * b_lp**2 / 6.0    # heikko akseli (vaaka)
+        I_lp     = b_lp * h_lp**3 / 12.0
+        MRd_lp   = fm_d_lp * W_lp   / 1e6
+        MRd_z_lp = fm_d_lp * W_z_lp / 1e6
         eta_v = Md_v / MRd_lp * 100
-        eta_i = eta_v + Md_h / MRd_lp * 100
+        eta_i = (Md_v / MRd_lp + 0.7 * Md_h / MRd_z_lp) * 100  # EN 1995-1-1 §6.1.6, km=0.7
         EI_lp = E_lp * I_lp
         delta = 5 * (q_rafter_beam/gammaQ) * (L_eff*1000)**4 / (384 * EI_lp)
         dlim = L_eff*1000/300
@@ -1324,14 +1404,15 @@ h_katto_at_y1800 = (h_katto_inner - (h_katto_inner - h_katto_outer)
                     * (inner_y + pilari_leveys/2) / (inner_y + terrace_depth))  # mm
 h_seinä_y1800 = (h_rakennus_korkea - h_laudoitus_mm - h_katto_at_y1800) / 1000.0  # m
 ls_panel, mu2_panel, mu2h_panel, _, s_peak_panel = laske_kinostuma(
-    h_seinä_korkea, b_terassi, b_talon_katto, sk, mu1_=mu1)   # konservatiivinen (h_max)
+    h_seinä_korkea, b_terassi, sk, mu1_=mu1)   # konservatiivinen (h_max)
 ls_panel_exact, mu2_panel_exact, _, _, s_peak_panel_exact = laske_kinostuma(
-    h_seinä_y1800, b_terassi, b_talon_katto, sk, mu1_=mu1)    # tarkka y=1800mm kohdalla
+    h_seinä_y1800, b_terassi, sk, mu1_=mu1)    # tarkka y=1800mm kohdalla
 
 panel_snow_cap = 5.40  # kN/m² (Longi Hi-MO X10 LR7, etupuoli)
 print(f"  h_seinä konservatiivinen (korkea pää, y=0):  {h_seinä_korkea:.2f}m → s_peak={s_peak_panel:.2f} kN/m²")
 print(f"  h_seinä tarkka (y=1800mm):                   {h_seinä_y1800:.2f}m → s_peak={s_peak_panel_exact:.2f} kN/m²")
-print(f"  Käytetään konservatiivista: s_peak = {s_peak_panel:.2f} kN/m²,  ls = {ls_panel:.2f}m")
+print(f"  Käytetään tarkkaa: s_peak = {s_peak_panel_exact:.2f} kN/m²,  ls = {ls_panel_exact:.2f}m")
+print(f"  (Konservatiivisella h={h_seinä_korkea:.2f}m: s_peak={s_peak_panel:.2f} kN/m², ULS={gammaQ*s_peak_panel:.2f} kN/m²)")
 print(f"  Paneelin kapasiteetti: {panel_snow_cap:.2f} kN/m²")
 print()
 print(f"  {'Etäisyys seinästä':<30} {'s [kN/m²]':>10} {'ULS=1.5s':>10} {'η %':>8}  OK?")
@@ -1347,7 +1428,8 @@ check_points = [
 panel_ok = True
 for dy_mm, label in check_points:
     dy_m = dy_mm / 1000.0
-    s_loc = max(s1, s_peak_panel * (1.0 - dy_m / ls_panel)) if dy_m < ls_panel else s1
+    # Kinostuma alkaa y=1800mm (uusi sisäseinä) ja leviää ulospäin → dy mitataan seinästä
+    s_loc = max(s1, s_peak_panel_exact * (1.0 - dy_m / ls_panel_exact)) if dy_m < ls_panel_exact else s1
     uls_loc = gammaQ * s_loc
     eta_loc = uls_loc / panel_snow_cap * 100.0
     ok_str = "✓" if uls_loc <= panel_snow_cap else "✗ YLITTYY"
@@ -1355,13 +1437,13 @@ for dy_mm, label in check_points:
         panel_ok = False
     print(f"  {label:<30} {s_loc:>10.2f} {uls_loc:>10.2f} {eta_loc:>7.0f}%  {ok_str}")
 print()
-uls_max_panel = gammaQ * s_peak_panel
+uls_max_panel = gammaQ * s_peak_panel_exact
+uls_max_panel_cons = gammaQ * s_peak_panel
 if panel_ok:
-    print(f"  ✓ Kaikki pisteet OK. Pahimmat paneeli sisäreunan ULS={uls_max_panel:.2f}/{panel_snow_cap:.2f} kN/m² η={uls_max_panel/panel_snow_cap*100:.0f}%")
-    if uls_max_panel / panel_snow_cap > 0.90:
-        print(f"  *** HUOM: Käyttöaste {uls_max_panel/panel_snow_cap*100:.0f}% – konservatiivisella h:lla niukka,")
-        print(f"      tarkka arvo (h={h_seinä_y1800:.2f}m): ULS={gammaQ*s_peak_panel_exact:.2f} kN/m² η={gammaQ*s_peak_panel_exact/panel_snow_cap*100:.0f}%")
-        print(f"      Lisätuki tarpeen vain jos konservatiivinen h pitää paikkansa.")
+    print(f"  ✓ Kaikki pisteet OK. Tarkka arvo sisäreunan ULS={uls_max_panel:.2f}/{panel_snow_cap:.2f} kN/m² η={uls_max_panel/panel_snow_cap*100:.0f}%")
+    if uls_max_panel_cons > panel_snow_cap:
+        print(f"  *** HUOM: Konservatiivisella h={h_seinä_korkea:.2f}m: ULS={uls_max_panel_cons:.2f} kN/m² ({uls_max_panel_cons/panel_snow_cap*100:.0f}%) ylittyisi,")
+        print(f"      mutta tarkka h={h_seinä_y1800:.2f}m @ y=1800mm on mitoittava.")
 else:
     print(f"  ✗ Kapasiteetti ylittyy – paneelit tarvitsevat lisätukea tai kinostuma on rajattava!")
 
