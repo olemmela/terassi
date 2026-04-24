@@ -15,7 +15,11 @@ Geometria:
   - Katon reuna 2200mm seinästä
 """
 
+import contextlib
+import importlib.util
+import io
 import math
+from pathlib import Path
 
 from geometry_loader import load, member, surface, profile_b, profile_h
 
@@ -68,6 +72,113 @@ eave_right_mm = max(p["x"] for p in _roof_poly) - _bx1       # mm
 #   R = q × L_h / 2  (riippumatta α)  →  M_max = q × L_h² / 8
 # Kaltevuuskorjausta momenttiin EI tarvita.
 moment_factor = 1.0   # ei korjauskerrointa – kaltevuus jänteen suunnassa
+
+
+def symmetric_support_reaction(span_line_load, span_m, beam_overhang_m,
+                               roof_area_load, tributary_width_m, roof_eave_m):
+    """Tukireaktio per tuki symmetriselle palkille, jossa on uloke ja räystäs."""
+    return (
+        span_line_load * (span_m / 2.0 + beam_overhang_m)
+        + roof_area_load * tributary_width_m * roof_eave_m
+    )
+
+
+def load_script_module_quietly(script_name, module_name):
+    """Lataa laskentaskriptin moduulina ilman konsolitulostetta."""
+    script_path = Path(__file__).with_name(script_name)
+    spec = importlib.util.spec_from_file_location(module_name, script_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Cannot load script module: {script_name}")
+    module = importlib.util.module_from_spec(spec)
+    with contextlib.redirect_stdout(io.StringIO()):
+        spec.loader.exec_module(module)
+    return module
+
+
+def aggregate_point_loads(point_loads):
+    """Yhdistää samaan kohtaan osuvat pistekuormat."""
+    aggregated = {}
+    for x_m, p_kN in point_loads:
+        key = round(float(x_m), 9)
+        aggregated[key] = aggregated.get(key, 0.0) + float(p_kN)
+    return sorted(aggregated.items())
+
+
+def simple_span_point_reactions(span_m, point_loads):
+    """Pistekuormien lisäreaktiot yksinkertaisesti tuetulle jänteelle."""
+    point_loads = aggregate_point_loads(point_loads)
+    r_left = sum(p_kN * (span_m - x_m) / span_m for x_m, p_kN in point_loads)
+    r_right = sum(p_kN * x_m / span_m for x_m, p_kN in point_loads)
+    return r_left, r_right
+
+
+def simple_span_combined_moment_max(span_m, udl_kNm, point_loads):
+    """Maksimitaivutusmomentti UDL + pistekuormat, notko +."""
+    point_loads = aggregate_point_loads(point_loads)
+    point_load_map = dict(point_loads)
+    r_left_points, _ = simple_span_point_reactions(span_m, point_loads)
+
+    def moment_at(x_m):
+        moment_udl = udl_kNm * x_m * (span_m - x_m) / 2.0
+        moment_points = r_left_points * x_m
+        for a_m, p_kN in point_loads:
+            if a_m <= x_m + 1e-12:
+                moment_points -= p_kN * (x_m - a_m)
+        return moment_udl + moment_points
+
+    candidates = {0.0, span_m}
+    segment_points = [0.0] + [x_m for x_m, _ in point_loads] + [span_m]
+    running_point_load = 0.0
+
+    for x0_m, x1_m in zip(segment_points, segment_points[1:]):
+        candidates.add(x0_m)
+        candidates.add(x1_m)
+        if abs(udl_kNm) > 1e-12:
+            x_zero_m = (udl_kNm * span_m / 2.0 + r_left_points - running_point_load) / udl_kNm
+            if x0_m - 1e-12 <= x_zero_m <= x1_m + 1e-12:
+                candidates.add(max(x0_m, min(x1_m, x_zero_m)))
+        if x1_m in point_load_map:
+            running_point_load += point_load_map[x1_m]
+
+    moment_candidates = [(x_m, moment_at(x_m)) for x_m in sorted(candidates)]
+    return max(moment_candidates, key=lambda item: item[1])
+
+
+def simple_span_max_deflection_mm(span_mm, EI_Nmm2, udl_kNm=0.0, point_loads=None, sample_count=2001):
+    """Maksimitaipuma UDL + pistekuormat yksinkertaisesti tuetulla jänteellä."""
+    if point_loads is None:
+        point_loads = []
+    point_loads = aggregate_point_loads(point_loads)
+    q_Nmm = udl_kNm  # 1 kN/m = 1 N/mm
+    point_loads_mm = [(x_m * 1000.0, p_kN * 1000.0) for x_m, p_kN in point_loads]
+
+    max_delta_mm = 0.0
+    x_at_max_mm = 0.0
+    for i in range(sample_count):
+        x_mm = span_mm * i / (sample_count - 1)
+        delta_mm = q_Nmm * x_mm * (span_mm**3 - 2.0 * span_mm * x_mm**2 + x_mm**3) / (24.0 * EI_Nmm2)
+        for a_mm, p_N in point_loads_mm:
+            b_mm = span_mm - a_mm
+            if x_mm <= a_mm + 1e-9:
+                delta_mm += p_N * b_mm * x_mm * (span_mm**2 - b_mm**2 - x_mm**2) / (6.0 * span_mm * EI_Nmm2)
+            else:
+                delta_mm += p_N * a_mm * (span_mm - x_mm) * (
+                    span_mm**2 - a_mm**2 - (span_mm - x_mm)**2
+                ) / (6.0 * span_mm * EI_Nmm2)
+        if delta_mm > max_delta_mm:
+            max_delta_mm = delta_mm
+            x_at_max_mm = x_mm
+    return max_delta_mm, x_at_max_mm
+
+
+def format_point_loads(point_loads):
+    """Muotoilee pistekuormat tulostusta varten."""
+    if not point_loads:
+        return "ei pistekuormia"
+    return ", ".join(
+        f"{p_kN:.1f} kN @ x={x_m * 1000.0:.0f} mm"
+        for x_m, p_kN in point_loads
+    )
 
 # ============================================================
 # PALKKIEN POIKKILEIKKAUKSET  (Kerto-S LVL)
@@ -198,8 +309,8 @@ qd2 = gammaG * gk2 + gammaQ * qk_snow2 + gammaQ * psi0_W * qk_wind_down2
 _a_oh_m  = a_oh_left_mm / 1000.0     # m (symmetrinen)
 _eave_m  = eave_left_mm / 1000.0     # m (symmetrinen)
 q_roof_d = gammaG * gk_roofing + gammaQ * s_roof + gammaQ * psi0_W * w_wind_down  # kN/m²
-R1 = qd1 * (L_m / 2.0 + _a_oh_m) + q_roof_d * trib_w1 * _eave_m   # kN per tuki
-R2 = qd2 * (L_m / 2.0 + _a_oh_m) + q_roof_d * trib_w2 * _eave_m   # kN per tuki
+R1 = symmetric_support_reaction(qd1, L_m, _a_oh_m, q_roof_d, trib_w1, _eave_m)   # kN per tuki
+R2 = symmetric_support_reaction(qd2, L_m, _a_oh_m, q_roof_d, trib_w2, _eave_m)   # kN per tuki
 
 # Taivutusmomentti (yksinkertaisesti tuettu, UDL, kaltevuuskorjaus)
 Md1 = qd1 * L_m**2 / 8.0 * moment_factor   # kNm
@@ -299,7 +410,7 @@ fv_d  = kmod * fv_k / gammaM   # N/mm²
 # Leikkauskestävyys (suorakulmainen poikkileikkaus)
 VRd1 = fv_d * (b1 * h1) / 1.5e3   # kN  (3/2 kerroin parabooliselle jakaumalle)
 VRd2 = fv_d * (b2 * h2) / 1.5e3   # kN
-Vd1  = qd1 * L_m / 2.0            # kN (tukireaktio)
+Vd1  = qd1 * L_m / 2.0            # kN (palkin sisäinen päätyleikkaus jänteen puolella)
 Vd2  = qd2 * L_m / 2.0            # kN
 eta_V1 = Vd1 / VRd1 * 100.0
 eta_V2 = Vd2 / VRd2 * 100.0
@@ -450,10 +561,11 @@ eta_huolto2 = M_huolto2 / MRd2 * 100.0
 gammaG_min = 0.9   # suotuisa pysyvä
 qmin1 = gammaG_min * gk1 + 1.5 * qk_wind_up1   # kN/m (neg = nosto)
 qmin2 = gammaG_min * gk2 + 1.5 * qk_wind_up2
+q_roof_min = gammaG_min * gk_roofing + 1.5 * w_wind_up   # kN/m² (räystäsalue, ei palkin omapainoa)
 
-# Nostoreaktio tukipisteessä (yksinkertaisesti tuettu UDL)
-R_uplift1 = qmin1 * L_m / 2.0   # kN (neg = nosto)
-R_uplift2 = qmin2 * L_m / 2.0   # kN
+# Nostoreaktio tukipisteessä (sis. uloke + räystäs)
+R_uplift1 = symmetric_support_reaction(qmin1, L_m, _a_oh_m, q_roof_min, trib_w1, _eave_m)   # kN (neg = nosto)
+R_uplift2 = symmetric_support_reaction(qmin2, L_m, _a_oh_m, q_roof_min, trib_w2, _eave_m)   # kN
 
 # ── 3) Lumikuorman epätasainen jakautuma (EN 1991-1-3 §6.2) ──
 # Yksilappinen katto: epätasaiset tapaukset eivät pääsääntöisesti koske
@@ -520,6 +632,10 @@ print("\n── MITOITUSKUORMAT ULS  (1.35G + 1.5S + 1.5·0.6·W) ──")
 print(f"  KP450×51   qd                  {qd1:.3f} kN/m")
 print(f"  2×KP360×51 qd                  {qd2:.3f} kN/m")
 
+print("\n── TUKIREAKTIOT ULS  (sis. uloke + räystäs) ───────────")
+print(f"  KP450×51   Rd,tuki             {R1:.2f} kN")
+print(f"  2×KP360×51 Rd,tuki             {R2:.2f} kN")
+
 print("\n── TAIVUTUSMOMENTTI  Md = qd·L²/8  (ei kaltevuuskorjausta) ──")
 print(f"  Kaltevuuskorjaus (moment_factor)  {moment_factor:.4f}  (kaltevuus jänteen suunnassa → 1.0)")
 print(f"  KP450×51   Md                  {Md1:.2f} kNm")
@@ -545,10 +661,10 @@ print(f"    Ruodesivutuella  L_eff={ltb_L_ruode:.0f}mm:  σ_crit={sc2_r:.2f}  λ
 print(f"  *** Ruoteiden kiinnitys palkkeihin on kriittinen LTB-tuelle! ***")
 print(f"  Sivutukivoima per ruode (arvio): {F_sivutuki:.2f} kN (ULS) → kiinnitys tarkistettava")
 
-print("\n── LEIKKAUSVOIMATARKISTUS ──────────────────────────────")
+print("\n── LEIKKAUSVOIMATARKISTUS  (Vd = palkin sisäinen leikkaus) ──")
 print(f"  fv,d = {fv_d:.2f} N/mm²")
-print(f"  KP450×51   Vd = {Vd1:.2f} kN   VRd = {VRd1:.2f} kN   η = {eta_V1:.1f}%")
-print(f"  2×KP360×51 Vd = {Vd2:.2f} kN   VRd = {VRd2:.2f} kN   η = {eta_V2:.1f}%")
+print(f"  KP450×51   Vd,span = {Vd1:.2f} kN   VRd = {VRd1:.2f} kN   η = {eta_V1:.1f}%")
+print(f"  2×KP360×51 Vd,span = {Vd2:.2f} kN   VRd = {VRd2:.2f} kN   η = {eta_V2:.1f}%")
 
 print("\n── TAIPUMA SLS  (δ_lim = L/300 = {:.0f} mm) ─────────────".format(delta_lim))
 print(f"  EI  KP450×51   = {EI1/1e9:.2f} kN·m²")
@@ -592,6 +708,7 @@ print("  * Vuoden 2005 RakMk B1 -laskennassa käytetty 2.2 kN/m² vastasi silloi
 print("  * LP225x90 laskennassa vain KP450x51 pistekuorma (päätykannake).")
 print("  * Tributäärileveys perustuu yksinkertaiseen vaikutusaluemenetelmään.")
 print("  * Räystäskuormat (x-suunta) huomioitu tukireaktioissa (LP225, pilarit).")
+print("  * Leikkaustarkistuksen Vd = qd·L/2 on palkin sisäinen leikkaus, ei koko tukireaktio.")
 print("  * Tuulikuorman nettopainekerroin interpoloitu EC1-1-4 taulukosta 7.7")
 print("    (vapaasti seisova katos – konservatiivinen yksinkertaistus seinään kiinnitetylle).")
 print("  * LTB-tarkistus (§6.3.3) edellyttää ruoteiden riittävää kiinnitystä palkkeihin.")
@@ -622,8 +739,9 @@ print(f"  2×KP360×51: hallitseva kuorma = {'lumikuorma' if lumi_governs_2 else
 print("\n── TUULEN NOSTOKUORMA – min. yhdistelmä ────────────────")
 print(f"  0.9·Gk + 1.5·Wk,ylös  (suotuisa pysyvä, tuuli nostosuuntaan)")
 print(f"  w_wind,ylös = {w_wind_up:.3f} kN/m²  (cp,net = {cp_net_up:.2f})")
+print("  Reaktio sisältää myös palkin ulokkeen ja katon räystään.")
 print()
-print(f"  {'Palkki':<18} {'qmin [kN/m]':>12} {'Reaktio/tuki':>14}  {'Tila'}")
+print(f"  {'Palkki':<18} {'qmin [kN/m]':>12} {'Rmin/tuki':>14}  {'Tila'}")
 print(f"  {'-'*18} {'-'*12} {'-'*14}  {'-'*20}")
 def uplift_status(R):
     if R < 0:
@@ -696,57 +814,99 @@ print(dw)
 # ============================================================
 # TERASSIN PÄÄTYPALKKI → 2×KP360×51 VÄLITUKI TARKISTUS
 # ============================================================
-# Päätypalkki välituki pistekuormat (terassilasitus_laskenta.py):
-# Jatkuvapalkki 2-jänne: R_mid = 10/8 * q * L_span (L_span=3350mm)
-# Jatkuvapalkki 3-jänne: R_inner = 1.1 * q * L_span (L_span=2233mm)
-# Hallitseva: normaali lumi+tuuli (sk=2.0 kN/m², terassilasitus_laskenta.py rev. 2026)
-q_paaty_uls  = 5.43   # kN/m  ULS (terassilasitus_laskenta.py: normaali lumi+tuuli, hallitseva)
-q_paaty_char = 3.23   # kN/m  ominais (SLS, ilman tuulen ψ₀-yhdistelmää)
-L_paaty = L_m          # m (sama pilarikeskiöväli)
+_TERRACE = load_script_module_quietly("terassilasitus_rakenne_vaihtoehdot.py", "terrace_transfer_loads")
+_terrace_base_support_xs_mm = list(_TERRACE.inner_support_xs_mm)
+_terrace_case_defs = [
+    ("1 välituki  (x = L/2)", [
+        _terrace_base_support_xs_mm[0],
+        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 2.0,
+        _terrace_base_support_xs_mm[-1],
+    ]),
+    ("2 välitukea (x = L/3, 2L/3)", [
+        _terrace_base_support_xs_mm[0],
+        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 3.0,
+        _terrace_base_support_xs_mm[0] + 2.0 * _TERRACE.L_paaty_mm / 3.0,
+        _terrace_base_support_xs_mm[-1],
+    ]),
+    ("3 välitukea (x = L/4..3L/4)", [
+        _terrace_base_support_xs_mm[0],
+        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 4.0,
+        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 2.0,
+        _terrace_base_support_xs_mm[0] + 3.0 * _TERRACE.L_paaty_mm / 4.0,
+        _terrace_base_support_xs_mm[-1],
+    ]),
+]
+_kp360_left_support_x_mm = float(min(_col_xs))
 
-P1_uls   = 10.0/8.0 * q_paaty_uls  * (L_paaty / 2.0)   # 1 välituki, ULS
-P1_char  = 10.0/8.0 * q_paaty_char * (L_paaty / 2.0)   # 1 välituki, ominais
-P2_uls   = 1.1       * q_paaty_uls  * (L_paaty / 3.0)   # 2 välitukea, per piste ULS
-P2_char  = 1.1       * q_paaty_char * (L_paaty / 3.0)   # 2 välitukea, per piste ominais
+terrace_transfer_cases = []
+for case_label, support_case_xs_mm in _terrace_case_defs:
+    case_reactions_uls = _TERRACE.beam_support_reactions(
+        _TERRACE.inner_beam_start_x_mm,
+        _TERRACE.inner_beam_end_x_mm,
+        support_case_xs_mm,
+        _TERRACE.gov_inner_point_loads_uls,
+    )
+    case_reactions_char = _TERRACE.beam_support_reactions(
+        _TERRACE.inner_beam_start_x_mm,
+        _TERRACE.inner_beam_end_x_mm,
+        support_case_xs_mm,
+        _TERRACE.gov_inner_point_loads_char,
+    )
+    point_loads_uls = [
+        ((x_mm - _kp360_left_support_x_mm) / 1000.0, case_reactions_uls[x_mm])
+        for x_mm in support_case_xs_mm[1:-1]
+    ]
+    point_loads_char = [
+        ((x_mm - _kp360_left_support_x_mm) / 1000.0, case_reactions_char[x_mm])
+        for x_mm in support_case_xs_mm[1:-1]
+    ]
+    added_reactions_uls = simple_span_point_reactions(L_m, point_loads_uls)
+    x_md_comb_m, Md_comb = simple_span_combined_moment_max(L_m, qd2, point_loads_uls)
+    Vd_comb = max(Vd2 + added_reactions_uls[0], Vd2 + added_reactions_uls[1])
+    delta_comb, x_delta_comb_mm = simple_span_max_deflection_mm(L_mm, EI2, qk_sls2, point_loads_char)
+    terrace_transfer_cases.append({
+        "label": case_label,
+        "point_loads_char": point_loads_char,
+        "point_loads_uls": point_loads_uls,
+        "added_reactions_uls": added_reactions_uls,
+        "support_totals_uls": (R2 + added_reactions_uls[0], R2 + added_reactions_uls[1]),
+        "Md_comb": Md_comb,
+        "x_md_comb_m": x_md_comb_m,
+        "Vd_comb": Vd_comb,
+        "delta_comb": delta_comb,
+        "delta_added": delta_comb - delta2,
+        "x_delta_comb_mm": x_delta_comb_mm,
+        "eta_M": Md_comb / MRd2 * 100.0,
+        "eta_V": Vd_comb / VRd2 * 100.0,
+    })
 
-# Superposiitio: 2×KP360×51 nykyinen UDL + pistekuorma
-# 1 välituki (P midspanissa x=L/2): ΔMd = P*L/4,  ΔVd = P/2
-Md_P1        = P1_uls * L_m / 4.0
-Vd_P1        = P1_uls / 2.0
-Md_comb1     = Md2 + Md_P1
-Vd_comb1     = Vd2 + Vd_P1
-eta_M_comb1  = Md_comb1 / MRd2 * 100
-eta_V_comb1  = Vd_comb1 / VRd2 * 100
+case_1 = terrace_transfer_cases[0]
+case_2 = terrace_transfer_cases[1]
+case_3 = terrace_transfer_cases[2]
 
-# 2 välitukea (P pisteet x=L/3 ja 2L/3): ΔMd = P*L/3,  ΔVd = P per tuki
-Md_P2        = P2_uls * L_m / 3.0
-Vd_P2        = P2_uls          # kumpikin pistekuorma lisää P tukireaktioon
-Md_comb2     = Md2 + Md_P2
-Vd_comb2     = Vd2 + Vd_P2
-eta_M_comb2  = Md_comb2 / MRd2 * 100
-eta_V_comb2  = Vd_comb2 / VRd2 * 100
+P1_uls = case_1["point_loads_uls"][0][1]
+P1_char = case_1["point_loads_char"][0][1]
 
-# SLS taipumat ominaisarvoilla
-delta_P1     = P1_char * 1000.0 * L_mm**3 / (48.0 * EI2)         # 1 välituki midspan
-delta_P2     = (23.0/648.0) * P2_char * 1000.0 * L_mm**3 / EI2   # 2 välitukea
-delta_comb1  = delta2 + delta_P1
-delta_comb2  = delta2 + delta_P2
-# 3 välitukea: pistekuormat
-P3a_uls  = 1.143 * q_paaty_uls  * (L_paaty / 4.0)   # 1. ja 3. välituki
-P3a_char = 1.143 * q_paaty_char * (L_paaty / 4.0)
-P3b_uls  = 0.928 * q_paaty_uls  * (L_paaty / 4.0)   # 2. välituki (keski)
-P3b_char = 0.928 * q_paaty_char * (L_paaty / 4.0)
-Md_P3     = P3a_uls * L_m / 4.0 + P3b_uls * L_m / 4.0  # M(L/2) = ΣP_i·a_i·b_i/L
-Md_comb3  = Md2 + Md_P3
-Vd_comb3  = Vd2 + P3a_uls   # hallitseva tukireaktio (1. välituki saa eniten)
-eta_M_comb3 = Md_comb3 / MRd2 * 100
-eta_V_comb3 = Vd_comb3 / VRd2 * 100
-# Taipuma: P at L/4 ja 3L/4: δ(L/2) = 11*P*L³/(768*EI) per kuorma (symmetrinen pari yhdessä)
-# P at L/2: δ = P*L³/(48*EI)
-delta_P3a = 11.0/768.0 * 2 * P3a_char * 1000.0 * L_mm**3 / EI2  # pari L/4 ja 3L/4
-delta_P3b = P3b_char * 1000.0 * L_mm**3 / (48.0 * EI2)
-delta_P3  = delta_P3a + delta_P3b
-delta_comb3 = delta2 + delta_P3
+Md_comb1 = case_1["Md_comb"]
+Vd_comb1 = case_1["Vd_comb"]
+eta_M_comb1 = case_1["eta_M"]
+eta_V_comb1 = case_1["eta_V"]
+delta_comb1 = case_1["delta_comb"]
+delta_P1 = case_1["delta_added"]
+
+Md_comb2 = case_2["Md_comb"]
+Vd_comb2 = case_2["Vd_comb"]
+eta_M_comb2 = case_2["eta_M"]
+eta_V_comb2 = case_2["eta_V"]
+delta_comb2 = case_2["delta_comb"]
+delta_P2 = case_2["delta_added"]
+
+Md_comb3 = case_3["Md_comb"]
+Vd_comb3 = case_3["Vd_comb"]
+eta_M_comb3 = case_3["eta_M"]
+eta_V_comb3 = case_3["eta_V"]
+delta_comb3 = case_3["delta_comb"]
+delta_P3 = case_3["delta_added"]
 
 # Varmuusmarginaali L/250 (löysempi kriteeri, rakennusteknisesti hyväksyttävä
 # ei-kriittiselle rakenteelle)
@@ -756,32 +916,37 @@ print()
 print(dw)
 print("  TERASSIN PÄÄTYPALKKI – VÄLITUKI 2×KP360×51 TARKISTUS")
 print(dw)
-print(f"  Päätypalkki UDL (normaali lumi+tuuli, hallitseva): {q_paaty_char:.2f} kN/m ominais / {q_paaty_uls:.2f} kN/m ULS")
-print(f"  (Arvot: terassilasitus_laskenta.py, hallitseva kuormitustapaus)")
+print(f"  Päätypalkki q_eq (hall. tapaus): {_TERRACE.q_beam_gov_char:.2f} kN/m ominais / {_TERRACE.q_beam_gov_uls:.2f} kN/m ULS")
+print(f"  Terassin välitukikuormat luetaan suoraan korjatusta terassilaskelmasta ({_TERRACE.gov_beam_case}).")
 print()
-print(f"  2×KP360×51 nykyinen kuorma: Md={Md2:.1f} kNm  Vd={Vd2:.1f} kN  MRd={MRd2:.1f} kNm  VRd={VRd2:.1f} kN")
+print(f"  2×KP360×51 nykyinen kuorma: Md={Md2:.1f} kNm  Vd,span={Vd2:.1f} kN  Rd,tuki={R2:.1f} kN  MRd={MRd2:.1f} kNm  VRd={VRd2:.1f} kN")
 print(f"  Nykyinen käyttöaste: η_M={eta2:.1f}%  η_V={eta_V2:.1f}%  (käyttämätön kapasiteetti: {delta_MRd2:.1f} kNm)")
 print(f"  Taipumarajat: L/300={delta_lim:.0f}mm  |  L/250={delta_lim_250:.0f}mm")
 print()
 
-cases = [
-    ("1 välituki  (x = L/2)",           P1_char,  P1_uls,  Md_comb1, Vd_comb1, eta_M_comb1, eta_V_comb1, delta_comb1,  delta_P1),
-    ("2 välitukea (x = L/3, 2L/3)",     P2_char,  P2_uls,  Md_comb2, Vd_comb2, eta_M_comb2, eta_V_comb2, delta_comb2,  delta_P2),
-    ("3 välitukea (x = L/4..3L/4)",  P3a_char, P3a_uls, Md_comb3, Vd_comb3, eta_M_comb3, eta_V_comb3, delta_comb3, delta_P3),
-]
-for case_lbl, P_c, P_u, Md_c, Vd_c, etaM, etaV, delta, dP in cases:
-    ok_M  = etaM <= 100
-    ok_V  = etaV <= 100
-    ok_d  = delta <= delta_lim
-    ok_d2 = delta <= delta_lim_250
+for case in terrace_transfer_cases:
+    ok_M = case["eta_M"] <= 100
+    ok_V = case["eta_V"] <= 100
+    ok_d = case["delta_comb"] <= delta_lim
+    ok_d2 = case["delta_comb"] <= delta_lim_250
     d_str = f"{'OK ✓' if ok_d else ('OK (L/250) ✓' if ok_d2 else '*** YLITTYY ***')}"
-    print(f"  ── {case_lbl}")
-    print(f"     Pistekuorma (hallitseva): {P_c:.1f} kN ominais / {P_u:.1f} kN ULS")
-    print(f"     η_M={etaM:.0f}%  {'OK ✓' if ok_M else '✗'}   η_V={etaV:.0f}%  {'OK ✓' if ok_V else '✗'}   δ={delta:.1f}mm (+{dP:.1f})  {d_str}")
+    left_total, right_total = case["support_totals_uls"]
+    left_add, right_add = case["added_reactions_uls"]
+    print(f"  ── {case['label']}")
+    print(f"     Terassilta siirtyvät pistekuormat:")
+    print(f"       ominais  {format_point_loads(case['point_loads_char'])}")
+    print(f"       ULS      {format_point_loads(case['point_loads_uls'])}")
+    print(f"     Lisäreaktio 2×KP360-tuilla (ULS): vasen {left_add:.1f} kN, oikea {right_add:.1f} kN")
+    print(f"     Kokonaisreaktio 2×KP360-tuilla (ULS, katos+terassi): vasen {left_total:.1f} kN, oikea {right_total:.1f} kN")
+    print(
+        f"     η_M={case['eta_M']:.0f}%  {'OK ✓' if ok_M else '✗'}   "
+        f"η_V={case['eta_V']:.0f}%  {'OK ✓' if ok_V else '✗'}   "
+        f"δ={case['delta_comb']:.1f}mm (+{case['delta_added']:.1f})  {d_str}"
+    )
     print()
 
-print(f"  Huomio: δ-lisä pysyy ~22mm riippumatta välitukimäärästä,")
-print(f"  koska kokonaiskuorma 2×KP360×51:lle on aina ~{q_paaty_char*L_paaty:.0f} kN (q×L).")
+print("  Huomio: tarkat siirtokuormat eivät jakaudu täysin symmetrisesti,")
+print("  koska terassin päätypalkin tukipisteet tulevat suoraan korjatusta geometriasta.")
 print()
 
 # ── D) Vinotuki-kolmio seinästä päätypalkkin midspaniin ──────────────────
@@ -796,7 +961,7 @@ h_d_vert  = 1.080   # m  (mitattu: 3850mm − LP225 yläpinta ~2770mm = 1080mm)
 L_diag    = math.sqrt(L_d_horiz**2 + h_d_vert**2)
 alpha_d   = math.atan(h_d_vert / L_d_horiz)
 
-# Tukivoima midspanissa = samat kuin 1 välituki -tapauksessa
+# Tukivoima kolmioon = 1 välituen tarkka pistekuorma terassilaskelmasta
 P_d_uls  = P1_uls
 P_d_char = P1_char
 
@@ -930,8 +1095,10 @@ L_h_mm   = L_d_horiz * 1000.0
 dv_unit  = (f_d**2 * L_d_mm)/(E_tri_mat * A_tri) + (f_h**2 * L_h_mm)/(E_tri_mat * A_tri)
 k_tri    = 1.0 / dv_unit / 1000.0   # kN/mm
 
-# 2×KP360×51 jousijäykkyys (taivutus, midspan)
-k_kp360  = 48.0 * EI2 / L_mm**3 / 1000.0    # kN/mm
+# 2×KP360×51 jousijäykkyys kuormituspisteessä (1 välituen tarkka sijainti)
+_kp360_load_x_mm = case_1["point_loads_char"][0][0] * 1000.0
+_kp360_load_b_mm = L_mm - _kp360_load_x_mm
+k_kp360 = 3.0 * EI2 * L_mm / (1000.0 * _kp360_load_x_mm**2 * _kp360_load_b_mm**2)   # kN/mm
 
 k_comb   = k_tri + k_kp360
 r_tri    = k_tri   / k_comb
@@ -946,13 +1113,16 @@ N_E_horiz_uls = P_E_tri_uls  * L_d_horiz / h_d_vert
 eta_gl_tens_E = F_E_diag_uls  / NRd_tens_gl * 100.0
 eta_gl_comp_E = N_E_horiz_uls / NRd_comp_gl * 100.0
 
-# KP360 yhdistetty kuorma
-Md_comb_E   = Md2 + P_E_kp_uls * L_m / 4.0
-Vd_comb_E   = Vd2 + P_E_kp_uls / 2.0
-eta_M_E     = Md_comb_E / MRd2 * 100.0
-eta_V_E     = Vd_comb_E / VRd2 * 100.0
-delta_PE    = P_E_kp_char * 1000.0 * L_mm**3 / (48.0 * EI2)
-delta_E     = delta2 + delta_PE
+# KP360 yhdistetty kuorma (tarkka kuormituspiste terassilaskelmasta)
+point_load_E_uls = [(case_1["point_loads_uls"][0][0], P_E_kp_uls)]
+point_load_E_char = [(case_1["point_loads_char"][0][0], P_E_kp_char)]
+_added_reactions_E = simple_span_point_reactions(L_m, point_load_E_uls)
+_x_md_comb_E_m, Md_comb_E = simple_span_combined_moment_max(L_m, qd2, point_load_E_uls)
+Vd_comb_E = max(Vd2 + _added_reactions_E[0], Vd2 + _added_reactions_E[1])
+eta_M_E   = Md_comb_E / MRd2 * 100.0
+eta_V_E   = Vd_comb_E / VRd2 * 100.0
+delta_E, _x_delta_E_mm = simple_span_max_deflection_mm(L_mm, EI2, qk_sls2, point_load_E_char)
+delta_PE  = delta_E - delta2
 
 print(f"  B) Yhdistelmä: vinotuki-kolmio + 2×KP360×51 (redundantti järjestelmä):")
 print(f"     Jousijäykkyydet: k_kolmio={k_tri:.1f}kN/mm, k_KP360={k_kp360:.2f}kN/mm  →  k_yht={k_comb:.1f}kN/mm")

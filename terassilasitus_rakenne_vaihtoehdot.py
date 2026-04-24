@@ -24,6 +24,130 @@ import math
 
 from geometry_loader import load, member, surface, reference, profile_b, profile_h
 
+
+def clamp_mm(x_mm, x_min_mm, x_max_mm):
+    return max(x_min_mm, min(x_mm, x_max_mm))
+
+
+def pattern_x_positions_mm(m):
+    """Palauttaa pattern-jäsenen x-sijainnit axis_start-pisteestä."""
+    x0 = float(m["axis_start"]["x"])
+    pattern = m.get("pattern")
+    if not pattern:
+        return [x0]
+    count = int(pattern["count"])
+    dx = float(pattern["offset"].get("x", 0.0))
+    return [x0 + i * dx for i in range(count)]
+
+
+def tributary_widths_m(x_positions_mm, edge_start_mm, edge_end_mm):
+    """Laskee kattotuolien tributäärileveydet x-suunnassa."""
+    widths = []
+    for i, x_mm in enumerate(x_positions_mm):
+        left_mm = edge_start_mm if i == 0 else 0.5 * (x_positions_mm[i - 1] + x_mm)
+        right_mm = edge_end_mm if i == len(x_positions_mm) - 1 else 0.5 * (x_mm + x_positions_mm[i + 1])
+        widths.append((right_mm - left_mm) / 1000.0)
+    return widths
+
+
+def solve_linear_system(A, b):
+    """Ratkaisee pienen tiheän lineaarisen yhtälöryhmän Gaussin eliminaatiolla."""
+    A = [row[:] for row in A]
+    b = b[:]
+    n = len(b)
+    for i in range(n):
+        pivot = max(range(i, n), key=lambda r: abs(A[r][i]))
+        if abs(A[pivot][i]) < 1e-12:
+            raise ValueError("Singular matrix in beam analysis")
+        if pivot != i:
+            A[i], A[pivot] = A[pivot], A[i]
+            b[i], b[pivot] = b[pivot], b[i]
+        pivot_val = A[i][i]
+        for j in range(i, n):
+            A[i][j] /= pivot_val
+        b[i] /= pivot_val
+        for r in range(n):
+            if r == i:
+                continue
+            factor = A[r][i]
+            if abs(factor) < 1e-18:
+                continue
+            for j in range(i, n):
+                A[r][j] -= factor * A[i][j]
+            b[r] -= factor * b[i]
+    return b
+
+
+def beam_support_reactions(beam_start_mm, beam_end_mm, support_xs_mm, point_loads):
+    """Yksinkertaisesti tuettu palkki pistekuormilla; reaktiot ylöspäin [kN]."""
+    nodes = sorted(set([beam_start_mm, beam_end_mm] + list(support_xs_mm) + [x_mm for x_mm, _ in point_loads]))
+    n_nodes = len(nodes)
+    n_dof = 2 * n_nodes
+    K = [[0.0] * n_dof for _ in range(n_dof)]
+    F = [0.0] * n_dof
+
+    for x_mm, p_kN in point_loads:
+        node_i = nodes.index(x_mm)
+        F[2 * node_i] -= p_kN * 1000.0  # N, alaspäin negatiivinen
+
+    for elem_i in range(n_nodes - 1):
+        L_mm = nodes[elem_i + 1] - nodes[elem_i]
+        k = [
+            [12.0 / L_mm**3,   6.0 / L_mm**2,  -12.0 / L_mm**3,   6.0 / L_mm**2],
+            [ 6.0 / L_mm**2,   4.0 / L_mm,      -6.0 / L_mm**2,   2.0 / L_mm],
+            [-12.0 / L_mm**3, -6.0 / L_mm**2,   12.0 / L_mm**3,  -6.0 / L_mm**2],
+            [ 6.0 / L_mm**2,   2.0 / L_mm,      -6.0 / L_mm**2,   4.0 / L_mm],
+        ]
+        idx = [2 * elem_i, 2 * elem_i + 1, 2 * (elem_i + 1), 2 * (elem_i + 1) + 1]
+        for a_i, I in enumerate(idx):
+            for b_i, J in enumerate(idx):
+                K[I][J] += k[a_i][b_i]
+
+    fixed = [2 * nodes.index(x_mm) for x_mm in support_xs_mm]
+    free = [i for i in range(n_dof) if i not in fixed]
+    Kff = [[K[i][j] for j in free] for i in free]
+    Ff = [F[i] for i in free]
+    uf = solve_linear_system(Kff, Ff)
+
+    u = [0.0] * n_dof
+    for dof_i, val in zip(free, uf):
+        u[dof_i] = val
+
+    Ku = [sum(K[i][j] * u[j] for j in range(n_dof)) for i in range(n_dof)]
+    R = [Ku[i] - F[i] for i in range(n_dof)]
+    return {x_mm: R[2 * nodes.index(x_mm)] / 1000.0 for x_mm in support_xs_mm}
+
+
+def beam_point_moments(beam_start_mm, beam_end_mm, reactions_kN, point_loads):
+    """Palauttaa pistekuormitetun palkin momentit solmukohdissa [kNm], notko +."""
+    force_at = {}
+    for x_mm, p_kN in point_loads:
+        force_at[x_mm] = force_at.get(x_mm, 0.0) - p_kN
+    for x_mm, r_kN in reactions_kN.items():
+        force_at[x_mm] = force_at.get(x_mm, 0.0) + r_kN
+
+    positions = sorted(set([beam_start_mm, beam_end_mm] + list(force_at.keys())))
+    moments = {positions[0]: 0.0}
+    shear_kN = force_at.get(positions[0], 0.0)
+    for x_prev, x_cur in zip(positions, positions[1:]):
+        moments[x_cur] = moments[x_prev] + shear_kN * ((x_cur - x_prev) / 1000.0)
+        shear_kN += force_at.get(x_cur, 0.0)
+    return moments
+
+
+def build_rafter_support_loads(x_positions_mm, trib_widths_m, area_loads_kNm2, reaction_factor_m):
+    """Muuntaa kattokuorman kattotuolilta tukipistekuormiksi palkille."""
+    if isinstance(area_loads_kNm2, (int, float)):
+        area_loads = [float(area_loads_kNm2)] * len(x_positions_mm)
+    else:
+        area_loads = list(area_loads_kNm2)
+    if len(area_loads) != len(x_positions_mm):
+        raise ValueError("area_loads_kNm2 length mismatch")
+    return [
+        (x_mm, area_kNm2 * trib_w_m * reaction_factor_m)
+        for x_mm, trib_w_m, area_kNm2 in zip(x_positions_mm, trib_widths_m, area_loads)
+    ]
+
 # ============================================================
 # ============================================================
 # GEOMETRIA  (luetaan geometry/terassi.json:ista)
@@ -44,6 +168,8 @@ terrace_depth  = int(_outer_col_0["base"]["y"] - inner_y)      # 3600 mm
 _panels = surface(_GEO, "surf.solar_panels")
 # Paneelipolygon kattaa räystäät, joten sen y-ääripäät eivät osu rakennus-
 # palkkien linjoille. Lasketaan paneelitason (y,z) parametrit ja interpoloidaan.
+_panel_xmin = min(p["x"] for p in _panels["polygon"])
+_panel_xmax = max(p["x"] for p in _panels["polygon"])
 _panel_ymin = min(p["y"] for p in _panels["polygon"])
 _panel_ymax = max(p["y"] for p in _panels["polygon"])
 _panel_zmin_y = max(p["z"] for p in _panels["polygon"] if p["y"] == _panel_ymin)
@@ -101,16 +227,32 @@ n_panels_w      = int(_panel_cnt["nx"])                   # 7 – rinnan (leveys
 n_panels_d      = int(_panel_cnt["ny"])                   # 2 – peräkkäin (syvyyssuunta)
 n_panels_total  = n_panels_w * n_panels_d                 # = 14
 
-# Katteen todellinen syvyys (b₁ kinostumalle): paneelit pitkin kaltevuutta, projisoitu vaakaan
-b_terassi       = 2 * panel_d_mm * math.cos(slope_rad) / 1000.0  # m ≈ 3.95m (paneelin horisontaalinen syvyys y-suunnassa)
+# Katteen todellinen vaakaprojektio luetaan suoraan geometriasta.
+roof_loaded_width_m = (_panel_xmax - _panel_xmin) / 1000.0
+b_terassi = (_panel_ymax - _panel_ymin) / 1000.0  # m – paneelikentän vaakaprojektio seinästä ulospäin
+
+_rafter_member = member(_GEO, "rafters", "rafter.0")
+rafter_x_raw_mm = pattern_x_positions_mm(_rafter_member)
+n_rafters = len(rafter_x_raw_mm)
+rafter_trib_widths_m = tributary_widths_m(rafter_x_raw_mm, _panel_xmin, _panel_xmax)
 
 # Kattotuolien (rafter) jänneväli
 pilari_leveys   = int(_outer_col_0["profile"]["b_mm"])  # 250 mm – ulkopilarin leveys
-n_outer_pillars = sum(1 for c in _GEO["members"]["columns"] if c["id"].startswith("col.outer."))  # 3
+outer_support_xs_mm = sorted(
+    float(member(_GEO, "columns", cid)["base"]["x"])
+    for cid in ("col.outer.x0", "col.outer.x3600", "col.outer.x7200")
+)
+inner_support_xs_mm = sorted(
+    float(member(_GEO, "columns", cid)["base"]["x"])
+    for cid in ("col.existing.inner.x125", "col.existing.inner.x7075")
+)
+n_outer_pillars = len(outer_support_xs_mm)
 
 # Sisäpalkin leveys (y-suunnassa): kiinnitetty vanhan pilarin ulkoreunaan
 # Kun profiili on TBD (päättämättä), käytetään laskennassa oletusarvoa 90 mm.
-_inner_beam_profile = member(_GEO, "beams", "beam.inner.new")["profile"]
+_inner_beam = member(_GEO, "beams", "beam.inner.new")
+_outer_beam = member(_GEO, "beams", "beam.outer")
+_inner_beam_profile = _inner_beam["profile"]
 b_inner_beam_mm = int(_inner_beam_profile.get("b_mm", 90))  # oletus 90 mm jos TBD
 
 # Kattotuolin tarkka jänneväli: sisäpalkin keskilinja → ulkopilarin keskilinja
@@ -126,19 +268,27 @@ outer_span_mm     = outer_span_cc_mm - pilari_leveys         # 3350mm vapaa jän
 outer_span_m      = outer_span_mm / 1000.0
 rafter_spacing  = panel_w_mm / 1000.0   # m = 1.134m
 
-# Räystään y-suunnan horisontaalinen pituus: paneelit ulottuvat ulkopilarin yli
-eave_y_m = b_terassi - terrace_depth / 1000.0   # m ≈ 0.348m
-# Tukireaktioon vaikuttava efektiivinen vipuvarsi ulkotuella (kattotuoli + uloke):
-# R_outer = q × (L/2 + a + a²/2L)  (yksinkertaisesti tuettu + uloke)
-_eave_rafter_factor = rafter_span_m / 2.0 + eave_y_m + eave_y_m**2 / (2.0 * rafter_span_m)
+inner_beam_start_x_mm = float(_inner_beam["axis_start"]["x"])
+inner_beam_end_x_mm = float(_inner_beam["axis_end"]["x"])
+outer_beam_start_x_mm = float(_outer_beam["axis_start"]["x"])
+outer_beam_end_x_mm = float(_outer_beam["axis_end"]["x"])
+rafter_beam_load_xs_mm = [
+    clamp_mm(x_mm, inner_beam_start_x_mm, inner_beam_end_x_mm)
+    for x_mm in rafter_x_raw_mm
+]
+
+# Kattotuoli kantaa koko paneelikentän syvyyden, mukaan lukien sisä- ja ulkoräystäät.
+rafter_load_centroid_from_inner_support_m = ((_panel_ymin + _panel_ymax) / 2.0 - rafter_inner_y) / 1000.0
+rafter_outer_reaction_factor = b_terassi * rafter_load_centroid_from_inner_support_m / rafter_span_m
+rafter_inner_reaction_factor = b_terassi - rafter_outer_reaction_factor
 
 # ============================================================
 # PYSYVÄT KUORMAT
 # ============================================================
 g_panels = (n_panels_total * panel_mass_kg * 9.81 / 1000.0)  # kN, yhteensä
 
-# Paneelien pinta-ala (vaakaprojisoitu)
-panel_area_horiz = (terrace_width / 1000.0) * (terrace_depth / 1000.0)  # m²
+# Paneelien pinta-ala (vaakaprojisoitu, sisältää räystäät)
+panel_area_horiz = roof_loaded_width_m * b_terassi   # m²
 gk_panels = g_panels / panel_area_horiz    # kN/m² (vaakaprojisoitu)
 
 # Kiinnitystarvikkeet ja oheisrakenteet (ei kantavaa profiilia)
@@ -225,6 +375,7 @@ q_outer_wind_h_char = qp_z * cp_wall_net * h_trib_lasit
 gammaG  = 1.35
 gammaQ  = 1.50
 psi0_W  = 0.6
+psi0_snow = 0.7
 
 # UDL kattotuolille [kN/m] (kuorma × rafter-väli)
 b = rafter_spacing   # m
@@ -241,6 +392,10 @@ qd_uplift_closed = 1.5 * qk_w_up_closed - 0.9 * gk_line  # kN/m net (+ = ylösp�
 R_uplift_closed  = qd_uplift_closed * rafter_span_m / 2.0  # kN per tuki (+ = veto tukikiinnityksessä)
 
 qd_down = gammaG * gk_line + gammaQ * qk_snow + gammaQ * psi0_W * qk_w_down
+roof_load_area_uls = qd_down / rafter_spacing
+roof_load_area_char = (gk_line + qk_snow) / rafter_spacing
+roof_load_area_outer_sls = (gk_line + qk_snow + psi0_W * qk_w_down) / rafter_spacing
+roof_load_area_outer_B = (gammaG * gk_line + gammaQ * psi0_snow * qk_snow) / rafter_spacing
 
 # Taivutusmomentti (yksinkertaisesti tuettu, kuorma vaakaprojisoitu → ei 1/cos-kerrointa)
 # Kattotuoli on kallistettu α=7.25° y-suunnassa (sama kuin jännevälisuunta).
@@ -257,7 +412,6 @@ Md_rafter = qd_down * rafter_span_m**2 / 8.0 * moment_factor_rafter
 lasikatto = True   # True = ei huoltokuormaa kantaville rakenteille
 
 Qk_huolto = 1.0   # kN (tiedoksi)
-psi0_snow = 0.7
 qd_huolto_line = gammaG * gk_line + gammaQ * (qk_snow * psi0_snow)
 M_huolto_Q = gammaQ * Qk_huolto * rafter_span_m / 4.0
 Md_rafter_huolto = qd_huolto_line * rafter_span_m**2 / 8.0 * moment_factor_rafter + M_huolto_Q
@@ -270,9 +424,10 @@ else:
     Md_rafter_gov = max(Md_rafter, Md_rafter_huolto)
     gov_case = "lumi+tuuli" if Md_rafter >= Md_rafter_huolto else "huolto"
 
-# Tukireaktio kattotuolilta sisäpalkkiin
-R_inner_rafter = qd_down * rafter_span_m / 2.0   # kN (ULS, per kattotuoli)
-R_inner_rafter_char = (gk_line + qk_snow) * rafter_span_m / 2.0  # kN (ominais)
+# Tukireaktiot kattotuolilta sisä- ja ulkopalkille (tyypillinen 1134 mm tributääri)
+R_inner_rafter = qd_down * rafter_inner_reaction_factor   # kN (ULS, per kattotuoli)
+R_outer_rafter = qd_down * rafter_outer_reaction_factor   # kN (ULS, per kattotuoli)
+R_inner_rafter_char = (gk_line + qk_snow) * rafter_inner_reaction_factor  # kN (ominais)
 
 # ============================================================
 # MATERIAALIVERTAILU – KATTOTUOLI (3600mm jänneväli, b=1134mm)
@@ -406,22 +561,42 @@ for (nm, h_mm, b_f, W_el, I_cm4, m_kgm, fy) in steel_options:
 # ============================================================
 # ULKOREUNANEN PALKKI (x-suunta, 2 × 3600mm jänneväli)
 # ============================================================
-# Kantaa kattotuolien ulkopäiden reaktiot + räystäskuorman (uloke ~348mm)
-# R = q × (L/2 + a + a²/2L) huomioi kattotuolin ulokekuorman ulkopilarin yli
-R_outer_rafter = qd_down * _eave_rafter_factor  # kN per kattotuoli
-q_outer_beam   = R_outer_rafter / rafter_spacing  # kN/m (UDL ulkopalkkiin)
-Md_outer_beam  = q_outer_beam * outer_span_m**2 / 8.0  # kNm per 3600mm jänneväli
+# Ulkoreunapalkki mallinnetaan jatkuvana 3-tukisena palkkina.
+# Kattotuolikuormat siirretään siihen pistekuormina todellisilla tributäärileveyksillä.
+outer_rafter_point_loads_uls = build_rafter_support_loads(
+    rafter_beam_load_xs_mm, rafter_trib_widths_m, roof_load_area_uls, rafter_outer_reaction_factor)
+outer_rafter_point_loads_sls = build_rafter_support_loads(
+    rafter_beam_load_xs_mm, rafter_trib_widths_m, roof_load_area_outer_sls, rafter_outer_reaction_factor)
+outer_rafter_point_loads_B = build_rafter_support_loads(
+    rafter_beam_load_xs_mm, rafter_trib_widths_m, roof_load_area_outer_B, rafter_outer_reaction_factor)
 
-# SLS-kuorma ulkopalkkiin (ilman kuormituskertoimia)
-R_outer_sls    = (gk_line + qk_snow + psi0_W * qk_w_down) * _eave_rafter_factor
-q_outer_sls    = R_outer_sls / rafter_spacing   # kN/m = N/mm
+outer_beam_reactions_uls = beam_support_reactions(
+    outer_beam_start_x_mm, outer_beam_end_x_mm, outer_support_xs_mm, outer_rafter_point_loads_uls)
+outer_beam_moments_uls = beam_point_moments(
+    outer_beam_start_x_mm, outer_beam_end_x_mm, outer_beam_reactions_uls, outer_rafter_point_loads_uls)
+Md_outer_beam_pos = max(outer_beam_moments_uls.values())
+Md_outer_beam_neg = min(outer_beam_moments_uls.values())
+Md_outer_beam = max(Md_outer_beam_pos, -Md_outer_beam_neg)
+
+outer_beam_reactions_B = beam_support_reactions(
+    outer_beam_start_x_mm, outer_beam_end_x_mm, outer_support_xs_mm, outer_rafter_point_loads_B)
+outer_beam_moments_B = beam_point_moments(
+    outer_beam_start_x_mm, outer_beam_end_x_mm, outer_beam_reactions_B, outer_rafter_point_loads_B)
+Md_outer_v_B = max(max(outer_beam_moments_B.values()), -min(outer_beam_moments_B.values()))
+
+q_outer_beam = sum(load_kN for _, load_kN in outer_rafter_point_loads_uls) / roof_loaded_width_m
+q_outer_sls = sum(load_kN for _, load_kN in outer_rafter_point_loads_sls) / roof_loaded_width_m
+
+inner_rafter_point_loads_normal = build_rafter_support_loads(
+    rafter_beam_load_xs_mm, rafter_trib_widths_m, roof_load_area_uls, rafter_inner_reaction_factor)
+inner_rafter_point_loads_char = build_rafter_support_loads(
+    rafter_beam_load_xs_mm, rafter_trib_widths_m, roof_load_area_char, rafter_inner_reaction_factor)
+q_inner_add = sum(load_kN for _, load_kN in inner_rafter_point_loads_normal) / roof_loaded_width_m
 
 # ── VAAKATAIVUTUSMOMENTTI ULKOPALKKISSA (sivulasituksen tuulikuorma) ──
 # Yhdistelmä A – lumi johtava, tuuli toissijainen (ψ0_W = 0.6):
 Md_outer_h_A = gammaQ * psi0_W * q_outer_wind_h_char * outer_span_m**2 / 8.0
 # Yhdistelmä B – tuuli johtava, lumi toissijainen (ψ0_snow = 0.7):
-qd_outer_v_B  = (gammaG * gk_line + gammaQ * psi0_snow * qk_snow) * rafter_span_m / 2.0 / rafter_spacing
-Md_outer_v_B  = qd_outer_v_B * outer_span_m**2 / 8.0
 Md_outer_h_B  = gammaQ * q_outer_wind_h_char * outer_span_m**2 / 8.0
 
 # RHS-profiilit ulkoreunapalkkiin (S235, 90mm korkea)
@@ -438,8 +613,7 @@ rhs_outer = [
 # LISÄKUORMA OLEMASSA OLEVAAN 2×KP360×51
 # ============================================================
 # Kattotuolien sisäpäiden reaktiot siirtyvät 2×KP360×51-palkkiin pistekkuormina
-# Pistekuormat 1134mm välein → approksimoitu UDL
-q_inner_add = R_inner_rafter / rafter_spacing   # kN/m lisäkuorma
+# Pistekuormat 1134mm välein → ekvivalentti q lasketaan todellisista tributäärileveyksistä.
 
 # ============================================================
 # LUMIKINOSTUMA – EN 1991-1-3 §6.3 (talon seinä viereinen drift)
@@ -534,11 +708,10 @@ F_wind_laudoitus = w_end_wall * A_laudoitus  # kN (olemassa oleva 2×KP350)
 
 # Sisäpilari (olemassa oleva 250×250mm):
 
-# Ulkopilari (uusi): ulkopalkin reaktiot (2-aukkoinen jatkuva palkki, 2×3600mm)
-# Päätypilari: 3qL/8, Keskipilari: 10qL/8
-L_outer_span_m = outer_span_m  # 3.6m
-R_outer_per_pillar_end    = 3.0/8.0 * q_outer_beam * L_outer_span_m   # kN
-R_outer_per_pillar_middle = 10.0/8.0 * q_outer_beam * L_outer_span_m  # kN
+# Ulkopilari (uusi): jatkuvan ulkoreunapalkin tarkat reaktiot
+R_outer_per_pillar_left = outer_beam_reactions_uls[outer_support_xs_mm[0]]
+R_outer_per_pillar_middle = outer_beam_reactions_uls[outer_support_xs_mm[1]]
+R_outer_per_pillar_right = outer_beam_reactions_uls[outer_support_xs_mm[-1]]
 
 # ============================================================
 # PÄÄTYPALKKI – KATTOTUOLIREAKTIOT + KINOSTUMA + KOLMIOLASI
@@ -553,8 +726,15 @@ L_paaty_mm   = 6700.0
 L_paaty_m    = L_paaty_mm / 1000.0
 
 # --- 1) Kattotuolireaktiot ---
-# q_inner_add on laskettu normaalilumi+tuulitapaukselle
+# q_inner_add on ekvivalentti kuorma geometrian mukaisista kattotuolipistekuormista.
 q_rafter_beam = q_inner_add   # kN/m (rafter-reaktiot palkille)
+inner_beam_reactions_normal = beam_support_reactions(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_support_xs_mm, inner_rafter_point_loads_normal)
+inner_beam_reactions_normal_char = beam_support_reactions(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_support_xs_mm, inner_rafter_point_loads_char)
+inner_beam_moments_normal = beam_point_moments(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_beam_reactions_normal, inner_rafter_point_loads_normal)
+Md_rafter_beam_normal = max(inner_beam_moments_normal.values())
 
 # --- 2) Lumikinostuma lisäkuorma ---
 # Kinostuma kasvattaa rafter-reaktioita terassin sisäpäässä.
@@ -570,36 +750,38 @@ q_drift_rafter = rafter_spacing * s_drift_inner   # kN/m (char drift-snow per ka
 
 # Yksinkertaisemmin: lasketaan drift-tapaus kokonaan
 qd_rafter_drift = gammaG * gk_line + gammaQ * (rafter_spacing * s_drift_inner)
-R_inner_drift   = qd_rafter_drift * rafter_span_m / 2.0
+R_inner_drift   = qd_rafter_drift * rafter_inner_reaction_factor
 q_inner_drift   = R_inner_drift / rafter_spacing
+inner_rafter_point_loads_drift = build_rafter_support_loads(
+    rafter_beam_load_xs_mm,
+    rafter_trib_widths_m,
+    gammaG * gk_total + gammaQ * s_drift_inner,
+    rafter_inner_reaction_factor,
+)
+inner_beam_reactions_drift = beam_support_reactions(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_support_xs_mm, inner_rafter_point_loads_drift)
+inner_beam_moments_drift = beam_point_moments(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_beam_reactions_drift, inner_rafter_point_loads_drift)
+Md_rafter_beam_drift = max(inner_beam_moments_drift.values())
 
 # --- 2b) TARKENNETTU KINOSTUMA: paikallinen h(x) palkin matkalla ---
 # EN 1991-1-3 §6.3 + EC0 §2.1: tarkempi analyysi on perusteltu kun h
 # vaihtelee merkittävästi palkin matkalla. Seinä viettää 12° → h(x) lineaarinen.
-# Pilari x=0 on korkea pää, pilari x=6700 on matala pää.
-# Palkin pää x_beam=0 vastaa seinäpositiota x_wall=250mm (pilarin reuna).
+# Kattotuolien pistekuormat lasketaan yksitellen paikallisesta h(x)-arvosta.
 
 pillar_size_mm = 250.0
 x_wall_start   = pillar_size_mm            # palkin alku seinäkoordinaatissa (mm)
 
-n_seg = 200  # integrointisegmentit
-dx_beam = L_paaty_m / n_seg
-
-# Palkin kuorma q(x) sisältää kattotuolireaktiot + lasi-omapaino
-# Lasi-kolmion viivakuorma on triangulaarinen (max korkeassa päässä)
-q_drift_refined = []  # kN/m per segmentti
-
-for i in range(n_seg + 1):
-    x_beam = i * dx_beam                          # m, 0 = korkea pää
-    x_wall = (x_wall_start + x_beam * 1000.0)     # mm, seinäkoordinaatti
+refined_snow_loads = []
+for x_beam_mm in rafter_beam_load_xs_mm:
+    x_wall = x_beam_mm - inner_beam_start_x_mm + x_wall_start
 
     # Paikallinen h(x) seinällä — suoraan geometriasta
     h_local = (h_rakennus_at_x(x_wall) - h_katto_inner) / 1000.0
     h_local = max(h_local, 0.0)
 
     # Paikallinen kinostuma
-    ls_loc, mu2_loc, _, _, s_drift_loc = laske_kinostuma(
-        h_local, b_terassi, sk, mu1_=mu1)
+    ls_loc, _, _, _, s_drift_loc = laske_kinostuma(h_local, b_terassi, sk, mu1_=mu1)
 
     # Drift-arvo rafteri-sisäpään kohdalla (y = inner_y)
     if ls_loc > y_inner_drift:
@@ -607,52 +789,37 @@ for i in range(n_seg + 1):
     else:
         s_drift_inner_loc = 0.0
 
-    # Käytetään suurempaa: normaali lumi tai paikallinen kinostuma
-    s_snow_loc = max(mu1 * sk, s_drift_inner_loc)
+    refined_snow_loads.append(max(mu1 * sk, s_drift_inner_loc))
 
-    # Rafter-reaktio ja palkkikuorma tässä pisteessä
-    qd_rafter_loc = gammaG * gk_line + gammaQ * (rafter_spacing * s_snow_loc)
-    R_loc = qd_rafter_loc * rafter_span_m / 2.0
-    q_loc = R_loc / rafter_spacing
-    q_drift_refined.append(q_loc)
+inner_rafter_point_loads_refined = build_rafter_support_loads(
+    rafter_beam_load_xs_mm,
+    rafter_trib_widths_m,
+    [gammaG * gk_total + gammaQ * s_loc for s_loc in refined_snow_loads],
+    rafter_inner_reaction_factor,
+)
+inner_rafter_point_loads_refined_char = build_rafter_support_loads(
+    rafter_beam_load_xs_mm,
+    rafter_trib_widths_m,
+    [gk_total + s_loc for s_loc in refined_snow_loads],
+    rafter_inner_reaction_factor,
+)
+inner_beam_reactions_refined = beam_support_reactions(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_support_xs_mm, inner_rafter_point_loads_refined)
+inner_beam_reactions_refined_char = beam_support_reactions(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_support_xs_mm, inner_rafter_point_loads_refined_char)
+inner_beam_moments_refined = beam_point_moments(
+    inner_beam_start_x_mm, inner_beam_end_x_mm, inner_beam_reactions_refined, inner_rafter_point_loads_refined)
 
-# Numeerinen integrointi: Md,max vapaasti tuetulle palkille
-# R_A = ∫₀ᴸ q(x)(L-x)/L dx,  M(x) = R_A·x - ∫₀ˣ q(t)(x-t)dt
-R_A_refined = 0.0
-for i in range(n_seg):
-    x_mid = (i + 0.5) * dx_beam
-    q_mid = 0.5 * (q_drift_refined[i] + q_drift_refined[i + 1])
-    R_A_refined += q_mid * (L_paaty_m - x_mid) * dx_beam / L_paaty_m
-
-Md_refined_max = 0.0
-x_Md_refined_max = 0.0
-integral_qx = 0.0
-for i in range(n_seg):
-    x_i = i * dx_beam
-    x_mid = (i + 0.5) * dx_beam
-    q_mid = 0.5 * (q_drift_refined[i] + q_drift_refined[i + 1])
-    # Momentti pisteessä x_{i+1}
-    x_next = (i + 1) * dx_beam
-    integral_qx += q_mid * dx_beam  # kumulatiivinen leikkausvoima-integraali
-    # M(x) = R_A·x - ∫₀ˣ q(t)(x-t)dt  (numeerinen)
-    M_x = R_A_refined * x_next
-    # Vähennä kuormien momenttivaikutus
-    cum_moment = 0.0
-    for j in range(i + 1):
-        x_j_mid = (j + 0.5) * dx_beam
-        q_j = 0.5 * (q_drift_refined[j] + q_drift_refined[j + 1])
-        cum_moment += q_j * (x_next - x_j_mid) * dx_beam
-    M_x = R_A_refined * x_next - cum_moment
-    if M_x > Md_refined_max:
-        Md_refined_max = M_x
-        x_Md_refined_max = x_next
-
-# Lisää lasin omapaino (triangulaarinen) – lasketaan myöhemmin kun Md_lasi_vert tiedetään
-# (Md_beam_drift_refined täydennetään alla)
-
-# Vertailuarvot
-h_at_Mmax = (h_rakennus_at_x(x_wall_start + x_Md_refined_max * 1000) - h_katto_inner) / 1000.0
-q_beam_drift_refined_avg = sum(q_drift_refined) / len(q_drift_refined)
+Md_refined_max = max(inner_beam_moments_refined.values())
+x_Md_refined_max_abs_mm = max(inner_beam_moments_refined, key=inner_beam_moments_refined.get)
+x_Md_refined_max = (x_Md_refined_max_abs_mm - inner_beam_start_x_mm) / 1000.0
+h_at_Mmax = (
+    h_rakennus_at_x(x_Md_refined_max_abs_mm - inner_beam_start_x_mm + x_wall_start) - h_katto_inner
+) / 1000.0
+q_beam_drift_refined_avg = sum(load_kN for _, load_kN in inner_rafter_point_loads_refined) / roof_loaded_width_m
+q_beam_drift_refined_avg_char = (
+    sum(load_kN for _, load_kN in inner_rafter_point_loads_refined_char) / roof_loaded_width_m
+)
 
 # --- 3) Kolmiolasi + laudoitus ---
 # Lasi: vain lasitettu osa (5500×1250mm) → paino + tuuli lasille
@@ -681,10 +848,10 @@ Md_laud_vert   = 0.0642 * q_laud_max * L_paaty_m**2
 Md_lasi_horiz  = 0.0642 * (gammaQ * cp_paaty * qp_z * h_kolmio_max) * L_paaty_m**2  # vaaka, vain lasi
 
 # Normaali lumi+tuuli + lasi (laudoitus → olemassa oleville 2×KP350, ei tähän palkkiin)
-Md_beam_normal = q_beam_normal * L_paaty_m**2 / 8.0 + Md_lasi_vert
+Md_beam_normal = Md_rafter_beam_normal + Md_lasi_vert
 
 # Drift-tapaus (konservatiivinen: h_max koko matkalla)
-Md_beam_drift  = q_beam_drift * L_paaty_m**2 / 8.0 + Md_lasi_vert
+Md_beam_drift  = Md_rafter_beam_drift + Md_lasi_vert
 Md_beam_horiz  = Md_lasi_horiz
 
 # Drift-tapaus (tarkennettu: paikallinen h(x), EC0 §2.1)
@@ -847,7 +1014,7 @@ print(f"  h_seinä (kinostuma)       {h_seinä_korkea:.2f}m (korkea) / {h_seinä
 print(f"  Sisäpilari seinästä        {inner_y} mm  (olemassa oleva 250×250)")
 print(f"  Ulkopilari seinästä        {outer_y} mm  (uusi)")
 print(f"  Kattotuolijako             {rafter_spacing*1000:.0f} mm  (paneelin leveys, tuplat kattotuolit liitoskohdissa)")
-print(f"  Kattotuoleja               ~{int(terrace_width/rafter_spacing/1000)+1} kpl  ({terrace_width}mm / {rafter_spacing*1000:.0f}mm)")
+print(f"  Kattotuoleja               {n_rafters} kpl  (geometriasta)")
 print(f"  Kattotuolin jänneväli      {rafter_span_mm:.0f} mm  (sisäpalkin kl {rafter_inner_y:.0f}mm → ulkopilarin kl {rafter_outer_y:.0f}mm, b_inner={b_inner_beam_mm}mm)")
 print(f"  Ulkoreun. palkki jänneväli {outer_span_mm:.0f} mm  (2 väliä, 3 pilaria)")
 
@@ -994,10 +1161,10 @@ Wz_steel_outer = {
 }
 
 print(f"\n── ULKOREUNANEN PALKKI (2 × {outer_span_mm:.0f}mm jännevälit) ────────")
-print(f"  Kattotuolilta reaktio ulkopäässä: {R_outer_rafter:.2f} kN / {rafter_spacing*1000:.0f}mm")
-print(f"  UDL ulkopalkkiin (ULS):           {q_outer_beam:.3f} kN/m")
-print(f"  UDL ulkopalkkiin (SLS):           {q_outer_sls:.3f} kN/m")
-print(f"  Md (pysty) per {outer_span_mm:.0f}mm jänneväli:  {Md_outer_beam:.2f} kNm")
+print(f"  Tyypillinen kattotuolireaktio ulkopäässä: {R_outer_rafter:.2f} kN / {rafter_spacing*1000:.0f}mm")
+print(f"  Ekv. q ulkopalkkiin (ULS):        {q_outer_beam:.3f} kN/m")
+print(f"  Ekv. q ulkopalkkiin (SLS):        {q_outer_sls:.3f} kN/m")
+print(f"  Md (pysty, maks.abs.):            {Md_outer_beam:.2f} kNm  (kenttä +{Md_outer_beam_pos:.2f} / keskituella {Md_outer_beam_neg:.2f} kNm)")
 print(f"  Taipumaraja: δ_lim(L/300)={outer_span_mm/300:.0f}mm (EN 1990 §A1.4)")
 print(f"  Sivulasituksen tuulikuorma (EN 1991-1-4, cp,wall={cp_wall_net:.1f}):")
 print(f"    h_lasitus={h_lasitus_m:.2f}m, h_trib={h_trib_lasit:.2f}m, qk,h={q_outer_wind_h_char:.3f} kN/m")
@@ -1098,9 +1265,9 @@ print(f"  s_drift = {s_drift:.2f} kN/m²  vs tasainen {s1:.2f} kN/m²")
 print()
 print(f"  TARKENNETTU ANALYYSI (EC0 §2.1): h(x) vaihtelee lineaarisesti palkin matkalla")
 print(f"  Seinän korkeus muuttuu 12° kaltevuuden myötä → paikallinen kinostuma pienenee")
-print(f"  kohti matalaa päätä. Md lasketaan numeerisella integroinnilla ({n_seg} segmenttiä).")
+print(f"  kohti matalaa päätä. Kattotuolien pistekuormat lasketaan yksitellen paikallisella h(x)-arvolla.")
 print(f"  Md,max sijaitsee x = {x_Md_refined_max*1000:.0f}mm palkin alusta (h ≈ {h_at_Mmax:.2f}m)")
-print(f"  q_avg (tarkennettu) = {q_beam_drift_refined_avg:.2f} kN/m  vs q (konservat.) = {q_inner_drift:.2f} kN/m")
+print(f"  q_eq (tarkennettu) = {q_beam_drift_refined_avg:.2f} kN/m  vs q_eq (konservat.) = {q_inner_drift:.2f} kN/m")
 print(f"  Md (konservat.) = {Md_beam_drift:.1f} kNm  →  Md (tarkennettu) = {Md_beam_drift_refined:.1f} kNm  ({(1-Md_beam_drift_refined/Md_beam_drift)*100:.0f}% pienempi)")
 print(f"  *** Kinostuma sijoittuu talon seinän viereen. ***")
 
@@ -1120,8 +1287,8 @@ print(f"\n── PÄÄTYPALKKI – KATTOTUOLIREAKTIOT + KINOSTUMA + KOLMIOLASI �
 print(f"  Jänneväli: {L_paaty_mm:.0f}mm (pilari-pilari)")
 print()
 print(f"  Kuormat:")
-print(f"    Kattotuolireaktiot (normaali lumi):  q = {q_rafter_beam:.2f} kN/m")
-print(f"    Kattotuolireaktiot (kinostuma):      q = {q_inner_drift:.2f} kN/m  (drift {s_drift_inner:.2f} kN/m² @ {y_inner_drift:.2f}m seinästä)")
+print(f"    Kattotuolireaktiot (normaali lumi):  q_eq = {q_rafter_beam:.2f} kN/m")
+print(f"    Kattotuolireaktiot (kinostuma):      q_eq = {q_inner_drift:.2f} kN/m  (drift {s_drift_inner:.2f} kN/m² @ {y_inner_drift:.2f}m seinästä)")
 print(f"    Lasi omapaino (ULS, triangul.):      Md = {Md_lasi_vert:.2f} kNm → uusi palkki")
 print(f"    Laudoitus omapaino (ULS, triangul.): Md = {Md_laud_vert:.2f} kNm → 2×KP350 (ei tähän)")
 print(f"    Tuuli lasi (vaaka, triangul.):       Md = {Md_lasi_horiz:.2f} kNm vaaka → uusi palkki")
@@ -1311,30 +1478,42 @@ print(f"  Kaikki kattotuolireaktiot menevät uudelle päätypalkille.")
 print(f"  Päätypalkki siirtää kuorman ulkopilareille (+ välituet 2×KP360×51:lle jos käytetty).")
 print()
 print(f"  Ulkopilari (uusi, päätypalkki päällä):")
-print(f"    Päätypilari (2 kpl):       {R_outer_per_pillar_end:.1f} kN  (ULS, ulkoreunap.)")
+print(f"    Päätypilarit (vas/oik):    {R_outer_per_pillar_left:.1f} / {R_outer_per_pillar_right:.1f} kN  (ULS, ulkoreunap.)")
 print(f"    Keskipilari (1 kpl):       {R_outer_per_pillar_middle:.1f} kN  (ULS, ulkoreunap.)")
 print(f"    (Hallitseva: keskipilari {R_outer_per_pillar_middle:.1f} kN)")
 print(f"  Pilarit: olemassa olevat betonipilaarit 250×250mm")
 
 # ── Rakennuksen rakenteille siirtyvät kuormat ─────────────────
 # Ominaisarvot päätypalkille (toiseen laskuriin)
-q_inner_char      = R_inner_rafter_char / rafter_spacing          # kN/m (norm. lumi, ominais)
-q_inner_drift_char = (gk_line + q_drift_rafter) * rafter_span_m / 2.0 / rafter_spacing  # drift, ominais
+q_inner_char = sum(load_kN for _, load_kN in inner_rafter_point_loads_char) / roof_loaded_width_m
 
 # Päätypalkki tukireaktiot (täysi jänne 6700mm)
 # Hallitseva kuorma valitaan: normaali tai tarkennettu kinostuma
-q_beam_gov_uls = q_beam_normal if Md_beam_normal >= Md_beam_drift_refined else q_beam_drift_refined_avg
-# Kattotuolireaktiot UDL → symmetriset tuet
-R_paaty_v_rafter   = q_beam_gov_uls * L_paaty_m / 2.0              # kN ULS (per tuki, rafter-osuus)
+if Md_beam_normal >= Md_beam_drift_refined:
+    q_beam_gov_uls = q_beam_normal
+    q_beam_gov_char = q_inner_char
+    gov_inner_point_loads_uls = inner_rafter_point_loads_normal
+    gov_inner_point_loads_char = inner_rafter_point_loads_char
+    gov_inner_beam_reactions_uls = inner_beam_reactions_normal
+    gov_inner_beam_reactions_char = inner_beam_reactions_normal_char
+else:
+    q_beam_gov_uls = q_beam_drift_refined_avg
+    q_beam_gov_char = q_beam_drift_refined_avg_char
+    gov_inner_point_loads_uls = inner_rafter_point_loads_refined
+    gov_inner_point_loads_char = inner_rafter_point_loads_refined_char
+    gov_inner_beam_reactions_uls = inner_beam_reactions_refined
+    gov_inner_beam_reactions_char = inner_beam_reactions_refined_char
+
+R_paaty_v_rafter_left_u = gov_inner_beam_reactions_uls[inner_support_xs_mm[0]]
+R_paaty_v_rafter_right_u = gov_inner_beam_reactions_uls[inner_support_xs_mm[-1]]
+R_paaty_v_rafter_left_c = gov_inner_beam_reactions_char[inner_support_xs_mm[0]]
+R_paaty_v_rafter_right_c = gov_inner_beam_reactions_char[inner_support_xs_mm[-1]]
+
 # Kolmiolasi triangulaarinen: max korkea päässä → R_korkea = q_max*L/3, R_matala = q_max*L/6
 R_paaty_glass_max  = q_lasi_max * L_paaty_m / 3.0                # kN ULS (korkea pää)
 R_paaty_glass_min  = q_lasi_max * L_paaty_m / 6.0                # kN ULS (matala pää)
-# Ominaisarvot päätypalkille
-q_beam_gov_char  = q_inner_char if Md_beam_normal >= Md_beam_drift_refined else q_beam_drift_refined_avg / gammaQ  # approx
-R_paaty_v_rafter_char = q_beam_gov_char * L_paaty_m / 2.0
 q_lasi_max_char    = gk_lasi * h_kolmio_max
 R_paaty_glass_max_char = q_lasi_max_char * L_paaty_m / 3.0
-R_paaty_v_max_char = R_paaty_v_rafter_char + R_paaty_glass_max_char
 # Vaakavoima ominais
 F_wind_triangle_char = (cp_end_wall * qp_z) * A_lasi  # kN (ilman gammaQ)
 R_paaty_h_char     = F_wind_triangle_char / 2.0        # kN per tuki ominais
@@ -1344,7 +1523,7 @@ print(f"  Kuormitustapaus: ULS (γG={gammaG}, γQ={gammaQ})  |  Ominais (Gk, Qk)
 print(f"  Kaikki kattotuolireaktiot → uusi päätypalkki → ulkopilarit.")
 print(f"  2×KP360×51 saa pistekuorman VAIN jos päätypalkki tuetaan siihen välituella.")
 print()
-print(f"  Päätypalkki: q={q_beam_gov_char:.2f} kN/m ominais / {q_beam_gov_uls:.2f} kN/m ULS ({gov_beam_case})")
+print(f"  Päätypalkki: q_eq={q_beam_gov_char:.2f} kN/m ominais / {q_beam_gov_uls:.2f} kN/m ULS ({gov_beam_case})")
 print(f"  Lasi (triangul.): q_max={q_lasi_max_char:.2f} kN/m ominais / {q_lasi_max:.2f} kN/m ULS")
 print()
 # Lasi-osuudet (triangulaarinen, approksimaatio)
@@ -1353,37 +1532,34 @@ R_lasi_matala_c = q_lasi_max_char * L_paaty_m / 6.0
 R_lasi_korkea_u = q_lasi_max * L_paaty_m / 3.0
 R_lasi_matala_u = q_lasi_max * L_paaty_m / 6.0
 
-for case_label, n_spans, L_span_m in [
-    ("Ei välitukia (jänne 6700mm)",              1, L_paaty_m),
-    ("1 välituki = 2×KP360×51 (jänne 3350mm)", 2, L_paaty_m / 2.0),
-    ("2 välitukea = 2×KP360×51 (jänne 2233mm)", 3, L_paaty_m / 3.0),
+for case_label, support_case_xs_mm in [
+    ("Ei välitukia (jänne 6700mm)", list(inner_support_xs_mm)),
+    ("1 välituki = 2×KP360×51 (jänne 3350mm)", [inner_support_xs_mm[0], inner_support_xs_mm[0] + L_paaty_mm / 2.0, inner_support_xs_mm[-1]]),
+    ("2 välitukea = 2×KP360×51 (jänne 2233mm)", [inner_support_xs_mm[0], inner_support_xs_mm[0] + L_paaty_mm / 3.0, inner_support_xs_mm[0] + 2.0 * L_paaty_mm / 3.0, inner_support_xs_mm[-1]]),
 ]:
-    q_u = q_beam_gov_uls
-    q_c = q_beam_gov_char
-    if n_spans == 1:
-        R_ulkopilari_u = q_u * L_span_m / 2.0
-        R_kp360_u      = 0.0
-        R_ulkopilari_c = q_c * L_span_m / 2.0
-        R_kp360_c      = 0.0
-        n_kp360_pts    = 0
-    elif n_spans == 2:
-        R_ulkopilari_u = 3.0/8.0 * q_u * L_span_m
-        R_kp360_u      = 10.0/8.0 * q_u * L_span_m
-        R_ulkopilari_c = 3.0/8.0 * q_c * L_span_m
-        R_kp360_c      = 10.0/8.0 * q_c * L_span_m
-        n_kp360_pts    = 1
+    if support_case_xs_mm == list(inner_support_xs_mm):
+        case_reactions_u = gov_inner_beam_reactions_uls
+        case_reactions_c = gov_inner_beam_reactions_char
     else:
-        R_ulkopilari_u = 0.4 * q_u * L_span_m
-        R_kp360_u      = 1.1 * q_u * L_span_m
-        R_ulkopilari_c = 0.4 * q_c * L_span_m
-        R_kp360_c      = 1.1 * q_c * L_span_m
-        n_kp360_pts    = 2
+        case_reactions_u = beam_support_reactions(
+            inner_beam_start_x_mm, inner_beam_end_x_mm, support_case_xs_mm, gov_inner_point_loads_uls)
+        case_reactions_c = beam_support_reactions(
+            inner_beam_start_x_mm, inner_beam_end_x_mm, support_case_xs_mm, gov_inner_point_loads_char)
+
+    R_ulkopilari_left_u = case_reactions_u[support_case_xs_mm[0]]
+    R_ulkopilari_right_u = case_reactions_u[support_case_xs_mm[-1]]
+    R_ulkopilari_left_c = case_reactions_c[support_case_xs_mm[0]]
+    R_ulkopilari_right_c = case_reactions_c[support_case_xs_mm[-1]]
+    kp360_reactions_u = [case_reactions_u[x_mm] for x_mm in support_case_xs_mm[1:-1]]
+    kp360_reactions_c = [case_reactions_c[x_mm] for x_mm in support_case_xs_mm[1:-1]]
 
     print(f"   ── {case_label}")
-    print(f"      Ulkopilari (korkea pää): {R_ulkopilari_c + R_lasi_korkea_c:.1f} kN ominais  / {R_ulkopilari_u + R_lasi_korkea_u:.1f} kN ULS")
-    print(f"      Ulkopilari (matala pää): {R_ulkopilari_c + R_lasi_matala_c:.1f} kN ominais  / {R_ulkopilari_u + R_lasi_matala_u:.1f} kN ULS")
-    if n_kp360_pts > 0:
-        print(f"      2×KP360×51 pistekuorma:  {R_kp360_c:.1f} kN ominais  / {R_kp360_u:.1f} kN ULS  (× {n_kp360_pts} pistettä)")
+    print(f"      Ulkopilari (korkea pää): {R_ulkopilari_right_c + R_lasi_korkea_c:.1f} kN ominais  / {R_ulkopilari_right_u + R_lasi_korkea_u:.1f} kN ULS")
+    print(f"      Ulkopilari (matala pää): {R_ulkopilari_left_c + R_lasi_matala_c:.1f} kN ominais  / {R_ulkopilari_left_u + R_lasi_matala_u:.1f} kN ULS")
+    if kp360_reactions_u:
+        avg_kp360_c = sum(kp360_reactions_c) / len(kp360_reactions_c)
+        avg_kp360_u = sum(kp360_reactions_u) / len(kp360_reactions_u)
+        print(f"      2×KP360×51 pistekuorma:  {avg_kp360_c:.1f} kN ominais  / {avg_kp360_u:.1f} kN ULS  (× {len(kp360_reactions_u)} pistettä)")
     else:
         print(f"      2×KP360×51:              0 kN pystykuormaa  (ei välitukea)")
     print()
@@ -1464,7 +1640,7 @@ ok_steel  = [r for r in results_steel  if r['ok_M'] and r['ok_V'] and r['ok_delt
 ok_timber = [r for r in results_timber if r['ok_M'] and r['ok_V'] and r['ok_delta']]
 print()
 print(f"  Mitoitusmomentti kattotuolille:  {Md_rafter_gov:.2f} kNm  ({gov_case})")
-print(f"  Ulkoreun. palkki Md:             {Md_outer_beam:.2f} kNm  ({outer_span_mm:.0f}mm vapaa jänne)")
+print(f"  Ulkoreun. palkki Md:             {Md_outer_beam:.2f} kNm  (maks.abs., jatkuva palkki)")
 print()
 if ok_lp:
     r = ok_lp[0]
