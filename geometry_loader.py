@@ -12,6 +12,7 @@ Skeema: geometry/schema.json (JSON Schema 2020-12).
 import json
 import math
 import os
+import copy
 
 _GEO_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "geometry")
 
@@ -238,6 +239,30 @@ def reference(geo, rid):
         if r["id"] == rid:
             return r
     raise KeyError(rid)
+
+
+def expanded_members(geo, group):
+    """Palauttaa ryhmän jäsenet pattern-laajennettuna ilman geo-olion muokkausta."""
+    expanded = []
+    for member_obj in geo.get("members", {}).get(group, []):
+        pattern = member_obj.get("pattern")
+        if not pattern:
+            expanded.append(member_obj)
+            continue
+
+        offset = pattern["offset"]
+        id_template = pattern.get("id_template", member_obj["id"] + ".{i}")
+        for i in range(int(pattern["count"])):
+            clone = copy.deepcopy(member_obj)
+            clone.pop("pattern", None)
+            clone["id"] = id_template.replace("{i}", str(i))
+            for key in ("axis_start", "axis_end"):
+                if key in clone:
+                    clone[key]["x"] += offset["x"] * i
+                    clone[key]["y"] += offset["y"] * i
+                    clone[key]["z"] += offset["z"] * i
+            expanded.append(clone)
+    return expanded
 
 
 def profile_b(m):

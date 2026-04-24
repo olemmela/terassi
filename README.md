@@ -59,14 +59,43 @@ Laskee kuormat ja vertailee rakennevaihtoehtoja suunnitteilla olevalle lasitetul
 
 ---
 
+### `portaikko_kuormituslaskenta.py` – Portaikon katoksen kuormituslaskenta
+
+Laskee portaikon yläpuolisen olemassa olevan katoksen kuormat ja mitoitustarkistukset
+geometriasta `geometry/portaikko.json` (leveys 6 100 mm, kaltevuus 12° y-suuntaan,
+7 kpl sahatavarakattotuoleja ja jatkuva `LP225×90`-palkki neljällä tuella).
+
+**Rakennejärjestelmä:**
+- Kattotuolit `175×50` C24 y-suunnassa
+  - Sisätuki: talon seinä / sisäänkäynnin seinä, mallinnettu kiertymäjäykkänä
+  - Ulkotuki: olemassa oleva `LP225×90`-palkki, mallinnettu nivellettyenä
+  - Puu-uloke palkin yli 225 mm
+- `LP225×90` (liimapuu GL30c) x-suunnassa, tuettu `250×250` betonipilarille
+  ja kolmelle `LP90×90` puupilarille
+
+**Laskenta sisältää:**
+- Pysyvät kuormat (kate + kattotuolien/palkin omapainot)
+- Lumikuorma (EN 1991-1-3, FI NA, vyöhyke II, `sk = 2,0 kN/m²`)
+- Rafterikohtainen lumikinostuma korkeamman talorakenteen kohdalta
+- Huoltokuorma (`Qk = 1,0 kN`, `qk,H = 0,4 kN/m²`)
+- Rakennukseen kiinnittyvän avoimen pulpettikatoksen tuulikuorma
+- Geometriasta johdetut epäsymmetriset tributäärileveydet kattotuoleille
+- Kattotuolien taivutus-, leikkaus- ja taipumatarkistukset (C24)
+- LP225-tuella olevan loven nettoleikkaus- ja nettotaivutustarkistuksen geometriasta
+- Jatkuvan `LP225×90`-palkin pistekuormatodellisuus, momentit, leikkaus ja taipuma (GL30c)
+- Seinä- ja pilarireaktiot sekä nostokuorma
+
+---
+
 ### `geometry/` – Rakennelmien geometria JSON-muodossa
 
-Molempien laskelmien **geometria** (pilarit, palkit, kattotuolit, liitokset ja lasitukset)
+Laskelmien **geometria** (pilarit, palkit, kattotuolit, liitokset ja lasitukset)
 on kuvattu yksiselitteisessä, LLM-ystävällisessä JSON-muodossa:
 
 - `geometry/schema.json` – yhteinen JSON Schema (draft 2020-12)
 - `geometry/katos.json` – nykyisen 12° katoksen geometria
 - `geometry/terassi.json` – lasitetun terassin geometria
+- `geometry/portaikko.json` – portaikon katoksen geometria
 
 **Koordinaatisto:** yhteinen globaali origo talon ulkoseinän nurkassa
 (x = seinän suuntaisesti, y = seinästä ulospäin, z = pystysuoraan ylöspäin),
@@ -103,7 +132,7 @@ uudelleen – tulokset päivittyvät automaattisesti.
 ```bash
 python -c "import json; from jsonschema import Draft202012Validator as V; \
   s=json.load(open('geometry/schema.json')); \
-  [V(s).validate(json.load(open(p))) for p in ['geometry/katos.json','geometry/terassi.json']]; \
+  [V(s).validate(json.load(open(p))) for p in ['geometry/katos.json','geometry/terassi.json','geometry/portaikko.json']]; \
   print('OK')"
 ```
 
@@ -127,9 +156,10 @@ python -c "import json; from jsonschema import Draft202012Validator as V; \
 ```bash
 python kuormituslaskenta.py
 python terassilasitus_rakenne_vaihtoehdot.py
+python portaikko_kuormituslaskenta.py
 ```
 
-Molemmat skriptit tulostavat laskentatulokset suoraan konsoliin.
+Skriptit tulostavat laskentatulokset suoraan konsoliin.
 Rakenteen geometria luetaan automaattisesti `geometry/`-kansion JSON-tiedostoista.
 Riippuvuudet: Pythonin standardikirjasto (`math`, `json`) sekä valinnaisesti
 `jsonschema` JSON-tiedostojen validointiin.

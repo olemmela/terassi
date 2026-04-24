@@ -1,0 +1,339 @@
+{
+  "$schema": "./schema.json",
+  "project": {
+    "id": "portaikko-existing",
+    "name": "Portaikko",
+    "site": "04330 Lahela, Tuusula",
+    "standards": [
+      "EN 1990",
+      "EN 1991-1-3 + FI NA",
+      "EN 1991-1-4 + FI NA",
+      "EN 1995-1-1"
+    ],
+    "units": {
+      "length": "mm",
+      "angle": "deg",
+      "mass": "kg"
+    },
+    "coordinate_system": {
+      "origin_description": "Talon ulkoseinän nurkka, terassin lattiataso z=0",
+      "x_axis": "seinän suuntaisesti",
+      "y_axis": "seinästä ulospäin",
+      "z_axis": "pystysuoraan ylöspäin"
+    }
+  },
+  "reference_surfaces": [
+    {
+      "id": "ref.house_wall",
+      "type": "building_wall",
+      "placement": {
+        "anchor": {"x": 0, "y": 0, "z": 0},
+        "u": {
+          "dir": "+x",
+          "length_mm": 7200
+        },
+        "v": {
+          "dir": "+z",
+          "length_mm": 4400
+        }
+      },
+      "local_shape": {
+        "type": "polygon",
+        "vertices_uv": [
+          [0, 0],
+          [7200, 0],
+          [7200, 4400],
+          [0, 2700]
+        ]
+      }
+    },
+    { 
+      "id": "ref.house_wall_corner",
+      "type": "building_wall",
+      "placement": {
+        "anchor": {"x": 7200, "y": 0, "z": 0},
+        "u": {
+          "dir": "-y",
+          "length_mm": 1000
+        },
+        "v": { 
+          "dir": "+z",
+          "length_mm": 4400
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },  
+    {
+      "id": "ref.house_wall_entrance",
+      "type": "building_wall",
+      "placement": {
+        "anchor": {"x": 7200, "y": -1000, "z": 0},
+        "u": {
+          "dir": "+x",
+          "length_mm": 8000
+        },
+        "v": {  
+          "dir": "+z",
+          "length_mm": 3000
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "ref.house.roof",
+      "type": "building_roof",
+      "placement": {
+        "anchor": {"x": -400, "y": -10000, "z": 2950},
+        "u": {
+          "dir": "+x",
+          "horizontal_mm": 8000,
+          "rise_mm": 1780
+        },
+        "v": {
+          "dir": "+y",
+          "length_mm": 12200
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    }
+  ],
+  "profiles": [
+    {
+      "id": "250x250",
+      "name": "250x250",
+      "material": "Betoni",
+      "b_mm": 250,
+      "h_mm": 250
+    },
+    {
+      "id": "LP225x90",
+      "name": "LP225x90",
+      "material": "Liimapuu GL30c",
+      "b_mm": 90,
+      "h_mm": 225,
+      "count": 1
+    },
+    {
+      "id": "LP90x90",
+      "name": "LP90x90",
+      "material": "Liimapuu GL30c",
+      "b_mm": 90,
+      "h_mm": 90,
+      "count": 1
+    },
+    {
+      "id": "175x50",
+      "name": "175x50",
+      "material": "Sahatavara C24",
+      "b_mm": 50,
+      "h_mm": 175,
+      "count": 1
+    }
+  ],
+  "members": {
+    "columns": [
+      {
+        "id": "col.x7075",
+        "profile": "250x250",
+        "base": {"x": 7075, "y": 1675, "z": 0},
+        "top": {"x": 7075, "y": 1675, "z": 3900},
+        "existing": true
+      },
+      {
+        "id": "col.lp1",
+        "profile": "LP90x90",
+        "base": {"x": 9100, "y": 1675, "z": 0},
+        "top": {"x": 9100, "y": 1675, "z": 1858},
+        "existing": true
+      },
+      {
+        "id": "col.lp2",
+        "profile": "LP90x90",
+        "base": {"x": 11900, "y": 1675, "z": -1442},
+        "top": {"x": 11900, "y": 1675, "z": 1858},
+        "existing": true
+      },
+      {
+        "id": "col.lp3",
+        "profile": "LP90x90",
+        "base": {"x": 13200, "y": 1675, "z": -1442},
+        "top": {"x": 13200, "y": 1675, "z": 1858},
+        "existing": true
+      }
+    ],
+    "beams": [
+      {
+        "id": "beam.lp225",
+        "profile": "LP225x90",
+        "axis_start": {"x": 7200, "y": 1675, "z": 1970},
+        "axis_end": {"x": 13300, "y": 1675, "z": 1970},
+        "strong_axis": "vertical",
+        "existing": true
+      }
+    ],
+    "rafters": [
+      {
+        "id": "rafter.wall",
+        "profile": "175x50",
+        "axis_start": {"x": 7320, "y": -1000, "z": 2730},
+        "axis_end": {"x": 7320, "y": 1900, "z": 2060},
+        "strong_axis": "vertical",
+        "existing": false
+      },
+      {
+        "id": "rafter.0",
+        "profile": "175x50",
+        "axis_start": {"x": 8300, "y": -1000, "z": 2730},
+        "axis_end": {"x": 8300, "y": 1900, "z": 2060},
+        "strong_axis": "vertical",
+        "existing": false,
+        "pattern": {
+          "count": 6,
+          "offset": {"x": 900, "y": 0, "z": 0},
+          "id_template": "rafter.{i}"
+        }
+      }
+    ],
+    "purlins": [
+    ]
+  },
+  "connections": [
+    {
+      "id": "con.rafter.to.house_wall_entrance",
+      "type": "supported_by_pattern",
+      "members": [
+        "rafter.0",
+        "ref.house_wall_entrance"
+      ],
+      "at": {"x": 8300, "y": -1000, "z": 2690},
+      "spacing_mm": 900
+    },
+    {
+      "id": "con.rafter.on.beam.lp225",
+      "type": "notched_over",
+      "members": [
+        "rafter.wall",
+        "beam.lp225"
+      ],
+      "at": {"x": 7320, "y": 1675, "z": 2108},
+      "cuts": [
+        {
+          "kind": "bevel_bottom_notch",
+          "member_end": "axis_end",
+          "reference": "member_end",
+          "offset_mm": 0,
+          "depth_mm": 125,
+          "length_mm": 430
+        }
+      ]
+    },
+    {
+      "id": "con.rafter.on.beam.lp225",
+      "type": "notched_over",
+      "members": [
+        "rafter.0",
+        "beam.lp225"
+      ],
+      "at": {"x": 8300, "y": 1675, "z": 2108},
+      "cuts": [
+        {
+          "kind": "bevel_bottom_notch",
+          "member_end": "axis_end",
+          "reference": "member_end",
+          "offset_mm": 0,
+          "depth_mm": 125,
+          "length_mm": 430
+        }
+      ],
+      "spacing_mm": 900
+    },
+    {
+      "id": "con.beam.lp225.on.col.x7075",
+      "type": "supported_on",
+      "members": [
+        "beam.lp225",
+        "col.x7075"
+      ],
+      "at": {"x": 7200, "y": 1675, "z": 1958}
+    },
+    {
+      "id": "con.beam.lp225.on.col.lp1",
+      "type": "supported_on",
+      "members": [
+        "beam.lp225",
+        "col.lp1"
+      ],
+      "at": {"x": 9100, "y": 1675, "z": 1858}
+    },
+    {
+      "id": "con.beam.lp225.on.col.lp2",
+      "type": "supported_on",
+      "members": [
+        "beam.lp225",
+        "col.lp2"
+      ],
+      "at": {"x": 11900, "y": 1675, "z": 1858}
+    },
+    {
+      "id": "con.beam.lp225.on.col.lp3",
+      "type": "supported_on",
+      "members": [
+        "beam.lp225",
+        "col.lp3"
+      ],
+      "at": {"x": 13200, "y": 1675, "z": 1858}
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "surf.roof",
+      "type": "roof_covering",
+      "material": "teräspeltikate + alusrakenne",
+      "supported_by": [
+        "rafter.0"
+      ],
+      "placement": {
+        "anchor": {"x": 7200, "y": -1000, "z": 2850},
+        "u": {
+          "dir": "+x",
+          "horizontal_mm": 6100
+        },
+        "v": {
+          "dir": "+y",
+          "slope_deg": 12.5,
+          "slope_sense": "-z",
+          "slope_length_mm": 3000
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "kaide.lasitus",
+      "type": "side_glazing",
+      "material": "lasi", 
+      "openable": false,
+      "placement": {
+        "anchor": {"x": 7250, "y": 1700, "z": 20},
+        "u": {
+          "dir": "+x",
+          "length_mm": 1720
+        },
+        "v": {
+          "dir": "+z",
+          "length_mm": 970
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    }
+  ]
+}
