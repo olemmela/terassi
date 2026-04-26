@@ -46,6 +46,25 @@
           [0, 2700]
         ]
       }
+    },
+    {
+      "id": "ref.terrace_floor",
+      "type": "floor",
+      "placement": {
+        "anchor": {"x": 0, "y": 0, "z": 0},
+        "u": {
+          "dir": "+x",
+          "length_mm": 7200
+        },
+        "v": {
+          "dir": "+y",
+          "horizontal_mm": 5400,
+          "rise_mm": -68
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
     }
   ],
   "profiles": [
@@ -55,6 +74,20 @@
       "material": "Betoni",
       "b_mm": 250,
       "h_mm": 250
+    },
+    {
+      "id": "350x300",
+      "name": "350x300",
+      "material": "Betoni",
+      "b_mm": 350,
+      "h_mm": 350
+    },
+    {
+      "id": "1200x150",
+      "name": "1200x150",
+      "material": "Betoni",
+      "b_mm": 1200,
+      "h_mm": 150
     },
     {
       "id": "KP450x51",
@@ -99,10 +132,45 @@
         "existing": true
       },
       {
+        "id": "col.x125.bottom",
+        "profile": "250x250",
+        "base": {"x": 125, "y": 1675, "z": -2990},
+        "top": {"x": 125, "y": 1675, "z": -250},
+        "existing": true
+      },
+      {
         "id": "col.x7075",
         "profile": "250x250",
         "base": {"x": 7075, "y": 1675, "z": 0},
         "top": {"x": 7075, "y": 1675, "z": 3900},
+        "existing": true
+      },
+      {
+        "id": "col.x7075.bottom",
+        "profile": "250x250",
+        "base": {"x": 7075, "y": 1675, "z": -2990},
+        "top": {"x": 7075, "y": 1675, "z": -250},
+        "existing": true
+      },
+      {
+        "id": "col.x125.outer.bottom",
+        "profile": "250x250",
+        "base": {"x": 125, "y": 5275, "z": -3090},
+        "top": {"x": 125, "y": 5275, "z": -550},
+        "existing": true
+      },
+      {
+        "id": "col.x3600.outer.bottom",
+        "profile": "250x250",
+        "base": {"x": 3600, "y": 5275, "z": -3090},
+        "top": {"x": 3600, "y": 5275, "z": -550},
+        "existing": true
+      },
+      {
+        "id": "col.x7075.outer.bottom",
+        "profile": "250x250",
+        "base": {"x": 7075, "y": 5275, "z": -3090},
+        "top": {"x": 7075, "y": 5275, "z": -550},
         "existing": true
       }
     ],
@@ -144,6 +212,62 @@
         "profile": "LP225x90",
         "axis_start": {"x": 7075, "y": 0, "z": 4020},
         "axis_end": {"x": 7075, "y": 1750, "z": 4020},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.bottom.conreate",
+        "profile": "350x300",
+        "axis_start": {"x": 0, "y": 5225, "z": -370},
+        "axis_end": {"x": 7200, "y": 5225, "z": -370},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.0",
+        "profile": "1200x150",
+        "axis_start": {"x": 600, "y": -50, "z": -140},
+        "axis_end": {"x": 600, "y": 5150, "z": -200},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.1",
+        "profile": "1200x150",
+        "axis_start": {"x": 1800, "y": -50, "z": -140},
+        "axis_end": {"x": 1800, "y": 5150, "z": -200},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.2",
+        "profile": "1200x150",
+        "axis_start": {"x": 3000, "y": -50, "z": -140},
+        "axis_end": {"x": 3000, "y": 5150, "z": -200},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.3",
+        "profile": "1200x150",
+        "axis_start": {"x": 4200, "y": -50, "z": -140},
+        "axis_end": {"x": 4200, "y": 5150, "z": -200},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.4",
+        "profile": "1200x150",
+        "axis_start": {"x": 5400, "y": -50, "z": -140},
+        "axis_end": {"x": 5400, "y": 5150, "z": -200},
+        "strong_axis": "vertical",
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.5",
+        "profile": "1200x150",
+        "axis_start": {"x": 6600, "y": -50, "z": -140},
+        "axis_end": {"x": 6600, "y": 5150, "z": -200},
         "strong_axis": "vertical",
         "existing": true
       }
@@ -305,6 +429,177 @@
       "at": {"x": 7075, "y": 1675, "z": 4133}
     },
     {
+      "id": "con.hollow.0.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.0",
+        "ref.house_wall"
+      ],
+      "at": {"x": 600, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.1.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.1",
+        "ref.house_wall"
+      ],
+      "at": {"x": 1800, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.2.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.2",
+        "ref.house_wall"
+      ],
+      "at": {"x": 3000, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.3.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.3",
+        "ref.house_wall"
+      ],
+      "at": {"x": 4200, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.4.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.4",
+        "ref.house_wall"
+      ],
+      "at": {"x": 5400, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.5.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.5",
+        "ref.house_wall"
+      ],
+      "at": {"x": 6600, "y": 0, "z": -141}
+    },
+    {
+      "id": "con.hollow.0.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.0",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 600, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.hollow.1.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.1",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 1800, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.hollow.2.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.2",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 3000, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.hollow.3.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.3",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 4200, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.hollow.4.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.4",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 5400, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.hollow.5.on.outer_beam",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.5",
+        "beam.bottom.conreate"
+      ],
+      "at": {"x": 6600, "y": 5150, "z": -200}
+    },
+    {
+      "id": "con.bottom.conreate.on.col.x125.outer",
+      "type": "supported_on",
+      "members": [
+        "beam.bottom.conreate",
+        "col.x125.outer.bottom"
+      ],
+      "at": {"x": 125, "y": 5275, "z": -550}
+    },
+    {
+      "id": "con.bottom.conreate.on.col.x3600.outer",
+      "type": "supported_on",
+      "members": [
+        "beam.bottom.conreate",
+        "col.x3600.outer.bottom"
+      ],
+      "at": {"x": 3600, "y": 5275, "z": -550}
+    },
+    {
+      "id": "con.bottom.conreate.on.col.x7075.outer",
+      "type": "supported_on",
+      "members": [
+        "beam.bottom.conreate",
+        "col.x7075.outer.bottom"
+      ],
+      "at": {"x": 7075, "y": 5275, "z": -550}
+    },
+    {
+      "id": "con.hollow.0.on.col.x125.bottom",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.0",
+        "col.x125.bottom"
+      ],
+      "at": {"x": 125, "y": 1675, "z": -250}
+    },
+    {
+      "id": "con.hollow.5.on.col.x7075.bottom",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.5",
+        "col.x7075.bottom"
+      ],
+      "at": {"x": 7075, "y": 1675, "z": -250}
+    },
+    {
+      "id": "con.col.x125.on.hollow.0",
+      "type": "supported_on",
+      "members": [
+        "col.x125",
+        "beam.hollow.0"
+      ],
+      "at": {"x": 125, "y": 1675, "z": 0}
+    },
+    {
+      "id": "con.col.x7075.on.hollow.5",
+      "type": "supported_on",
+      "members": [
+        "col.x7075",
+        "beam.hollow.5"
+      ],
+      "at": {"x": 7075, "y": 1675, "z": 0}
+    },
+    {
       "id": "con.purlins.lateral.kp450",
       "type": "lateral_brace",
       "members": [
@@ -314,20 +609,44 @@
       "spacing_mm": 900
     },
     {
-      "id": "con.col.x125.base",
+      "id": "con.col.x125.bottom.base",
       "type": "column_base",
       "members": [
-        "col.x125"
+        "col.x125.bottom"
       ],
-      "at": {"x": 125, "y": 1675, "z": 0}
+      "at": {"x": 125, "y": 1675, "z": -2990}
     },
     {
-      "id": "con.col.x7075.base",
+      "id": "con.col.x7075.bottom.base",
       "type": "column_base",
       "members": [
-        "col.x7075"
+        "col.x7075.bottom"
       ],
-      "at": {"x": 7075, "y": 1675, "z": 0}
+      "at": {"x": 7075, "y": 1675, "z": -2990}
+    },
+    {
+      "id": "con.col.x125.outer.bottom.base",
+      "type": "column_base",
+      "members": [
+        "col.x125.outer.bottom"
+      ],
+      "at": {"x": 125, "y": 5275, "z": -3090}
+    },
+    {
+      "id": "con.col.x3600.outer.bottom.base",
+      "type": "column_base",
+      "members": [
+        "col.x3600.outer.bottom"
+      ],
+      "at": {"x": 3600, "y": 5275, "z": -3090}
+    },
+    {
+      "id": "con.col.x7075.outer.bottom.base",
+      "type": "column_base",
+      "members": [
+        "col.x7075.outer.bottom"
+      ],
+      "at": {"x": 7075, "y": 5275, "z": -3090}
     }
   ],
   "surfaces": [
@@ -351,6 +670,35 @@
         "v": {
           "dir": "+y",
           "length_mm": 2200
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "surf.floor.cast",
+      "type": "boarding",
+      "material": "concreate",
+      "thickness_mm": 60,
+      "supported_by": [
+        "beam.hollow.0",
+        "beam.hollow.1",
+        "beam.hollow.2",
+        "beam.hollow.3",
+        "beam.hollow.4",
+        "beam.hollow.5"
+      ],
+      "placement": {
+        "anchor": {"x": 250, "y": 0, "z": -30},
+        "u": {
+          "dir": "+x",
+          "horizontal_mm": 6700
+        },
+        "v": {
+          "dir": "+y",
+          "horizontal_mm": 5100,
+          "rise_mm": -68
         }
       },
       "local_shape": {
