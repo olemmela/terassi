@@ -33,6 +33,35 @@ Laskee kuormat ja mitoitustarkistukset nykyiselle yksikalteiselle katokselle (ka
 
 ---
 
+### `terassilasitus_kuormituslaskenta.py` – Lopullisen puurakenteen kuormituslaskenta
+
+Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
+`geometry/terassi_puu.json`.
+
+**Rakennejärjestelmä:**
+- Sisäkattotuolit `198×48` C24 y-suunnassa
+- Reunakattotuolit `LP225×140` GL30c y-suunnassa
+- Orret / purlins `98×48` C24 x-suunnassa reunakaistoille
+- Vinot nurkka- ja reunaorret `98×48` C24 kulma-alueilla
+- Sisäpalkki `LP315×140` (GL30c), ulkopalkki `LP225×140` (GL30c)
+
+**Laskenta sisältää:**
+- Pysyvät kuormat, lumikuorma ja tuulen alas-/nostotapaukset
+- Talon seinää vasten syntyvän kinostuman geometriasta muuttuvalla `h(x)`-korkeudella
+- Aurinkopaneelien reunakaistojen kuormansiirron orsien kautta reunakattotuoleille paatypistekuormina noin 15 mm paassa ulkoreunasta
+- X-suuntaisten orsien ulomman tuen reunakattotuolilla kuormapuolen tukireunaan asti, ei kattotuolin akselikeskilinjalle
+- Ulkokulmien vinojen orsien kuormansiirron geometrian mukaisten liitosten kautta toiseksi uloimpaan kattotuoliin, reunakattotuoliin ja ulkopalkille
+- Sisäpään `beam.inner.new`-liitoksen heikosti kiertymää jäykistävän puolijäykän mallin
+  (`N`-mallin palkkikenkä 48×136, 5.0×40 ankkuriruuvit, täyskiinnitys; EC5 Kser -likimalli)
+- Orsien molempien päiden niveltuet
+- Reunimmaisten kattotuolien molempien päiden puolijäykät `N 48×136` -liitokset
+- Orsien, nurkkaorten, sisäkattotuolien ja reunakattotuolien taivutus-, leikkaus- ja taipumatarkistukset
+- Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_bottom_notch`, `rect_notch`)
+- Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
+- Pilarireaktiot ja nostotarpeet
+
+---
+
 ### `terassilasitus_rakenne_vaihtoehdot.py` – Lasitetun terassin kuormituslaskenta
 
 Laskee kuormat ja vertailee rakennevaihtoehtoja suunnitteilla olevalle lasitetulle terassille
@@ -95,6 +124,7 @@ on kuvattu yksiselitteisessä, LLM-ystävällisessä JSON-muodossa:
 - `geometry/schema.json` – yhteinen JSON Schema (draft 2020-12)
 - `geometry/katos.json` – nykyisen 12° katoksen geometria
 - `geometry/terassi.json` – lasitetun terassin geometria
+- `geometry/terassi_puu.json` – lopullisen puuratkaisun geometria
 - `geometry/portaikko.json` – portaikon katoksen geometria
 
 **Koordinaatisto:** yhteinen globaali origo talon ulkoseinän nurkassa
@@ -130,9 +160,10 @@ uudelleen – tulokset päivittyvät automaattisesti.
 
 **Validointi:**
 ```bash
-python -c "import json; from jsonschema import Draft202012Validator as V; \
+python -c "import json; from pathlib import Path; \
+  from jsonschema import Draft202012Validator as V; \
   s=json.load(open('geometry/schema.json')); \
-  [V(s).validate(json.load(open(p))) for p in ['geometry/katos.json','geometry/terassi.json','geometry/portaikko.json']]; \
+  [V(s).validate(json.load(open(p))) for p in sorted(Path('geometry').glob('*.json')) if p.name != 'schema.json']; \
   print('OK')"
 ```
 
@@ -155,6 +186,7 @@ python -c "import json; from jsonschema import Draft202012Validator as V; \
 
 ```bash
 python kuormituslaskenta.py
+python terassilasitus_kuormituslaskenta.py
 python terassilasitus_rakenne_vaihtoehdot.py
 python portaikko_kuormituslaskenta.py
 ```
