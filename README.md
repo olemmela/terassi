@@ -77,6 +77,20 @@ yksikkö mm.
 (liitosten topologia) ja `surfaces` (kate, aurinkopaneelit, sivu- ja
 kolmiolasit, laudoitukset, aukot). Liitosten yksityiskohdat (pultit,
 kannakkeet, ruuvijaot) pysyvät laskelmien proosassa, eivät JSON:issa.
+`connections` voi lisäksi sisältää loveus-/leikkausmetatietoa:
+vanha yksittäinen `notch` toimii yhä, mutta `notched_over`-liitokselle voi
+nyt antaa myös `cuts`-listan. Listan itemit voivat olla
+`rect_notch`, `birdsmouth_notch`, `end_bevel_cut` tai
+`bevel_bottom_notch`, ja ne voivat käyttää sijaintiviitteitä
+`support_inner_edge`, `support_outer_edge`, `support_centerline` tai
+`member_end` yhdessä `offset_mm`-kentän kanssa. `rect_notch` käyttää lisäksi
+`side`-kenttää (`top` tai `bottom`), jolloin suorakulmainen kolo voidaan
+mallintaa joko jäsenen ylä- tai alapintaan. `viewer.py` näyttää nämä
+overlay-muotoina; `birdsmouth_notch` johdetaan viewerissä tukijäsenen
+geometriasta, joten seat/plumb-kulmat seuraavat oikeaa tukikulmaa.
+`surfaces`-objektin `thickness_mm` näkyy
+viewerissä tilavuutena, joten esimerkiksi valu- ja levyrakenteet voidaan
+mallintaa oikealla paksuudella.
 
 **JSON on totuuden lähde geometrialle:** Python-laskelmat lukevat
 primitiiviset geometria-arvot (leveydet, jännevälit, profiilimitat ym.)

@@ -186,8 +186,103 @@
         },
         "members":    { "type": "array", "minItems": 1, "items": { "type": "string" } },
         "at":         { "$ref": "#/$defs/point" },
-        "spacing_mm": { "type": "number" }
+        "spacing_mm": { "type": "number" },
+        "notch":      { "$ref": "#/$defs/notch" },
+        "cuts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/notch" }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "notched_over" } }
+          },
+          "then": {
+            "required": ["at"],
+            "anyOf": [
+              { "required": ["notch"] },
+              { "required": ["cuts"] }
+            ]
+          }
+        }
+      ]
+    },
+
+    "cut_reference": {
+      "type": "string",
+      "enum": ["support_inner_edge", "support_outer_edge", "support_centerline", "member_end"]
+    },
+
+    "rect_notch": {
+      "type": "object",
+      "required": ["kind", "member_end", "side", "depth_mm", "length_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "kind":                   { "const": "rect_notch" },
+        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
+        "side":                   { "type": "string", "enum": ["bottom", "top"] },
+        "reference":              { "$ref": "#/$defs/cut_reference" },
+        "offset_mm":              { "type": "number", "default": 0 },
+        "x_from_support_edge_mm": { "type": "number", "default": 0 },
+        "depth_mm":               { "type": "number", "exclusiveMinimum": 0 },
+        "length_mm":              { "type": "number", "exclusiveMinimum": 0 }
       }
+    },
+
+    "birdsmouth_notch": {
+      "type": "object",
+      "required": ["kind", "member_end", "heel_depth_mm", "seat_length_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "kind":                   { "const": "birdsmouth_notch" },
+        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
+        "reference":              { "$ref": "#/$defs/cut_reference" },
+        "offset_mm":              { "type": "number", "default": 0 },
+        "x_from_support_edge_mm": { "type": "number", "default": 0 },
+        "heel_depth_mm":          { "type": "number", "exclusiveMinimum": 0 },
+        "seat_length_mm":         { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "end_bevel_cut": {
+      "type": "object",
+      "required": ["kind", "member_end", "cut_from", "length_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "kind":                   { "const": "end_bevel_cut" },
+        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
+        "reference":              { "$ref": "#/$defs/cut_reference" },
+        "offset_mm":              { "type": "number", "default": 0 },
+        "x_from_support_edge_mm": { "type": "number", "default": 0 },
+        "cut_from":               { "type": "string", "enum": ["bottom", "top"] },
+        "length_mm":              { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "bevel_bottom_notch": {
+      "type": "object",
+      "required": ["kind", "member_end", "depth_mm", "length_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "kind":                   { "const": "bevel_bottom_notch" },
+        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
+        "reference":              { "$ref": "#/$defs/cut_reference" },
+        "offset_mm":              { "type": "number", "default": 0 },
+        "x_from_support_edge_mm": { "type": "number", "default": 0 },
+        "depth_mm":               { "type": "number", "exclusiveMinimum": 0 },
+        "length_mm":              { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "notch": {
+      "oneOf": [
+        { "$ref": "#/$defs/rect_notch" },
+        { "$ref": "#/$defs/birdsmouth_notch" },
+        { "$ref": "#/$defs/end_bevel_cut" },
+        { "$ref": "#/$defs/bevel_bottom_notch" }
+      ]
     },
 
     "surface": {

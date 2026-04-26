@@ -51,9 +51,53 @@ def _expand_patterns(geo):
     return geo
 
 
+def _collect_pattern_specs(geo):
+    specs = {}
+    for group in ("beams", "rafters", "purlins"):
+        for m in geo.get("members", {}).get(group, []):
+            pat = m.get("pattern")
+            if not pat:
+                continue
+            specs[m["id"]] = {
+                "count": int(pat["count"]),
+                "offset": dict(pat["offset"]),
+                "id_template": pat.get("id_template", m["id"] + ".{i}"),
+            }
+    return specs
+
+
+def _expand_connection_patterns(geo, pattern_specs):
+    """Laajentaa pattern-jäseniin viittaavat liitokset yksittäisiksi instansseiksi."""
+    expanded = []
+    for con in geo.get("connections", []):
+        pattern_member = next((mid for mid in con.get("members", []) if mid in pattern_specs), None)
+        if not pattern_member:
+            expanded.append(con)
+            continue
+
+        spec = pattern_specs[pattern_member]
+        off = spec["offset"]
+        tmpl = spec["id_template"]
+        for i in range(spec["count"]):
+            nc = copy.deepcopy(con)
+            nc["id"] = f"{con['id']}.{i}"
+            nc["members"] = [
+                tmpl.replace("{i}", str(i)) if mid == pattern_member else mid
+                for mid in con["members"]
+            ]
+            if "at" in nc:
+                nc["at"]["x"] += off["x"] * i
+                nc["at"]["y"] += off["y"] * i
+                nc["at"]["z"] += off["z"] * i
+            expanded.append(nc)
+    geo["connections"] = expanded
+    return geo
+
+
 def _resolve_for_viewer(name):
     geo = geometry_loader.load(name + ".json")
     geo.pop("_points_by_id", None)
+    _expand_connection_patterns(geo, _collect_pattern_specs(geo))
     _expand_patterns(geo)
     return geo
 
@@ -69,6 +113,7 @@ def _resolve_preview(name, data):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
     geo.pop("_points_by_id", None)
+    _expand_connection_patterns(geo, _collect_pattern_specs(geo))
     _expand_patterns(geo)
     return geo
 
@@ -176,9 +221,14 @@ _HTML = """<!DOCTYPE html>
     color: #ccc; cursor: pointer; border-radius: 4px; font-size: 13px; }
   .btn-tab.active  { background: #0066cc; border-color: #0088ff; color: #fff; }
   .btn-tab.editing { box-shadow: inset 0 -3px 0 0 #fff; font-weight: bold; }
+  .btn-toggle { padding: 4px 16px; border: 1px solid #555; background: #3a3a3a;
+    color: #ccc; cursor: pointer; border-radius: 4px; font-size: 13px;
+    margin-left: auto; transition: background .2s, border-color .2s; }
+  .btn-toggle:hover  { background: #4a4a4a; }
+  .btn-toggle.active { background: #2b5d8a; border-color: #6ab0ff; color: #fff; }
   .btn-save { padding: 4px 16px; border: 1px solid #555; background: #3a3a3a;
     color: #ccc; cursor: pointer; border-radius: 4px; font-size: 13px;
-    margin-left: auto; transition: background .2s; }
+    transition: background .2s; }
   .btn-save:hover  { background: #0055aa; }
   .btn-save.saved  { background: #226622; border-color: #44aa44; }
   .btn-save.error  { background: #662222; border-color: #aa4444; }
@@ -200,7 +250,8 @@ _HTML = """<!DOCTYPE html>
   #resizer { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
   #resizer:hover, #resizer.dragging { background: #0066cc; }
 
-  #viewport { flex: 1; position: relative; overflow: hidden; }
+  #viewport { flex: 1; position: relative; overflow: hidden; outline: none; }
+  #viewport:focus { box-shadow: inset 0 0 0 2px rgba(0,136,255,.55); }
   canvas { display: block; }
 
   #tooltip { position: absolute; pointer-events: none;
@@ -217,6 +268,7 @@ _HTML = """<!DOCTYPE html>
 <body>
 <div id="toolbar">
   <span id="status">Ladataan...</span>
+  <button class="btn-toggle" id="btn-connections" aria-pressed="false">&#9675; Liitospisteet</button>
   <button class="btn-save" id="btn-save">&#128190; Tallenna</button>
 </div>
 <div id="main">
@@ -235,9 +287,13 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld" style="background:rgba(60,140,60,.6)"></div>Kattopinta</div>
       <div class="li"><div class="ld" style="background:rgba(150,130,100,.3)"></div>Viitepinta</div>
       <div class="li"><div class="ld" style="background:#ff4444;border-radius:50%"></div>Tuki (supported_on)</div>
+      <div class="li"><div class="ld" style="background:#66ccff;border-radius:50%"></div>Toistuva tuki (pattern)</div>
+      <div class="li"><div class="ld" style="background:#66ffee;border-radius:50%"></div>Jatkuva liitos</div>
+      <div class="li"><div class="ld" style="background:#ff66cc;border-radius:50%"></div>Loveus / leikkaus</div>
       <div class="li"><div class="ld" style="background:#ff8800;border-radius:50%"></div>Seinäkiinnitys</div>
       <div class="li"><div class="ld" style="background:#ffcc00;border-radius:50%"></div>Pilarijalkalevy</div>
       <div class="li"><div class="ld" style="background:#aa44ff;border-radius:50%"></div>Sivutuki (lateral)</div>
+      <div class="li"><div class="ld" style="background:#666"></div>Klikkaa 3D-näkymää → nuolilla liike, Ctrl+nuoli kääntö</div>
     </div>
   </div>
 </div>
@@ -246,13 +302,30 @@ _HTML = """<!DOCTYPE html>
 {
   "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/",
+    "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.8/src/index.js",
+    "three-bvh-csg": "https://cdn.jsdelivr.net/npm/three-bvh-csg@0.0.16/src/index.js"
   }
 }
 </script>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+// CSG boolean operations – loaded lazily so viewer works even if CDN is down
+let _csgMod = null;
+let _csgTried = false;
+async function getCSG() {
+  if (_csgTried) return _csgMod;
+  _csgTried = true;
+  try {
+    _csgMod = await import('three-bvh-csg');
+  } catch (e) {
+    console.warn('CSG library not available, notch overlays used as fallback:', e);
+  }
+  return _csgMod;
+}
 
 // ── Renderer & scene ──────────────────────────────────────────────────────────
 const vp = document.getElementById('viewport');
@@ -260,12 +333,90 @@ const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setClearColor(0x1a1a2e);
 vp.appendChild(renderer.domElement);
+vp.tabIndex = 0;
+vp.setAttribute('aria-label', '3D-näkymä');
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 1, 200000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
+vp.addEventListener('pointerdown', () => vp.focus({ preventScroll: true }));
+
+const KEY_MOVE_STEP_MM = 120;
+const KEY_ROTATE_STEP_RAD = THREE.MathUtils.degToRad(3);
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
+
+function translateViewLocal(forwardMm, strafeMm = 0) {
+  const forward = new THREE.Vector3();
+  camera.getWorldDirection(forward);
+  if (forward.lengthSq() < 1e-12) return;
+  forward.normalize();
+
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+  const delta = forward.multiplyScalar(forwardMm).add(right.multiplyScalar(strafeMm));
+  camera.position.add(delta);
+  controls.target.add(delta);
+  controls.update();
+}
+
+function rotateViewInPlace(yawRad = 0, pitchRad = 0) {
+  const offset = controls.target.clone().sub(camera.position);
+  if (offset.lengthSq() < 1e-12) return;
+
+  if (Math.abs(yawRad) > 1e-12) {
+    offset.applyAxisAngle(WORLD_UP, yawRad);
+  }
+  if (Math.abs(pitchRad) > 1e-12) {
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).normalize();
+    offset.applyAxisAngle(right, pitchRad);
+  }
+
+  controls.target.copy(camera.position.clone().add(offset));
+  controls.update();
+}
+
+vp.addEventListener('keydown', e => {
+  const moveStep = e.shiftKey ? KEY_MOVE_STEP_MM * 5 : KEY_MOVE_STEP_MM;
+  const rotateStep = e.shiftKey ? KEY_ROTATE_STEP_RAD * 3 : KEY_ROTATE_STEP_RAD;
+
+  if (e.ctrlKey || e.metaKey) {
+    switch (e.key) {
+      case 'ArrowLeft':
+        rotateViewInPlace(+rotateStep, 0);
+        break;
+      case 'ArrowRight':
+        rotateViewInPlace(-rotateStep, 0);
+        break;
+      case 'ArrowUp':
+        rotateViewInPlace(0, +rotateStep);
+        break;
+      case 'ArrowDown':
+        rotateViewInPlace(0, -rotateStep);
+        break;
+      default:
+        return;
+    }
+  } else {
+    switch (e.key) {
+      case 'ArrowLeft':
+        translateViewLocal(0, -moveStep);
+        break;
+      case 'ArrowRight':
+        translateViewLocal(0, +moveStep);
+        break;
+      case 'ArrowUp':
+        translateViewLocal(+moveStep, 0);
+        break;
+      case 'ArrowDown':
+        translateViewLocal(-moveStep, 0);
+        break;
+      default:
+        return;
+    }
+  }
+  e.preventDefault();
+});
 
 scene.add(new THREE.AmbientLight(0xffffff, 0.7));
 const dl = new THREE.DirectionalLight(0xffffff, 0.6);
@@ -298,10 +449,13 @@ const SCOL = {
   roof_covering: 0x3c8c3c, solar_panel_array: 0x1155cc,
   side_glazing: 0x00aaaa, triangle_glazing: 0x00bbbb, gable_glazing: 0x00cccc,
   opening: 0xddcc00, boarding: 0x7a6040, purlin_layer: 0x888866,
-  building_wall: 0x998877, building_roof: 0x887766,
+  building_wall: 0x998877, building_roof: 0x887766, floor: 0x777755,
 };
 const CCOL = {
   supported_on:  0xff4444,
+  supported_by_pattern: 0x66ccff,
+  continuous: 0x66ffee,
+  notched_over:  0xff66cc,
   wall_bolted:   0xff8800,
   column_base:   0xffcc00,
   lateral_brace: 0xaa44ff,
@@ -310,6 +464,7 @@ const CCOL = {
 // ── Scene groups (yksi per ladattu geometria) ─────────────────────────────────
 const geoGroups = new Map(); // name → THREE.Group
 let pickable = [];
+let showConnectionMarkers = false;
 
 function clearGeoFor(name) {
   const g = geoGroups.get(name);
@@ -320,28 +475,344 @@ function clearGeoFor(name) {
   pickable = pickable.filter(o => o.userData._geoName !== name);
 }
 
+function setConnectionMarkerVisibility(show) {
+  showConnectionMarkers = show;
+  const btn = document.getElementById('btn-connections');
+  if (btn) {
+    btn.classList.toggle('active', show);
+    btn.setAttribute('aria-pressed', String(show));
+    btn.textContent = show ? '● Liitospisteet' : '○ Liitospisteet';
+  }
+  for (const g of geoGroups.values()) {
+    g.traverse(o => {
+      if (o.userData?._isConnectionMarker) o.visible = show;
+      if (o.userData?._isCutMember) o.visible = !show;
+      if (o.userData?._isUncutMember) o.visible = show;
+      if (o.userData?._isNotchOverlay) o.visible = show;
+    });
+  }
+}
+
+function toggleConnectionMarkers() {
+  setConnectionMarkerVisibility(!showConnectionMarkers);
+}
+
 // ── Member box helper ─────────────────────────────────────────────────────────
-function memberQuaternion(start, end, strongAxis) {
-  // Returns quaternion to align BoxGeometry's X axis with (start→end),
-  // with Y dimension (h_mm) pointing as vertically as possible.
-  const dir = end.clone().sub(start).normalize();
+function memberFrame(start, end, strongAxis) {
+  const dirVec = end.clone().sub(start);
+  if (dirVec.lengthSq() < 1e-12) return null;
+  const dir = dirVec.normalize();
   const worldUp = new THREE.Vector3(0, 1, 0); // Three.js Y = geometry Z (up)
   const isVertical = Math.abs(dir.dot(worldUp)) > 0.95;
   // Choose reference up: if beam is nearly vertical (column), use X as ref
   const refUp = isVertical ? new THREE.Vector3(1, 0, 0) : worldUp;
   const zAx = new THREE.Vector3().crossVectors(dir, refUp).normalize();
-  if (zAx.lengthSq() < 1e-8) return new THREE.Quaternion();
+  if (zAx.lengthSq() < 1e-8) return null;
   const yAx = new THREE.Vector3().crossVectors(zAx, dir).normalize();
-  return new THREE.Quaternion().setFromRotationMatrix(
-    new THREE.Matrix4().makeBasis(dir, yAx, zAx)
+  return {
+    dir,
+    yAx,
+    zAx,
+    quaternion: new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(dir, yAx, zAx)
+    ),
+  };
+}
+
+function memberQuaternion(start, end, strongAxis) {
+  return memberFrame(start, end, strongAxis)?.quaternion ?? new THREE.Quaternion();
+}
+
+function cutLocalFrame(memberInfo, memberEnd) {
+  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.strongAxis);
+  if (!frame) return null;
+  const xAx = memberEnd === 'axis_end'
+    ? frame.dir.clone().negate()
+    : frame.dir.clone();
+  const yAx = frame.yAx.clone();
+  let zAx = new THREE.Vector3().crossVectors(xAx, yAx).normalize();
+  if (zAx.lengthSq() < 1e-8) zAx = frame.zAx.clone();
+  return {
+    xAx,
+    yAx,
+    zAx,
+    quaternion: new THREE.Quaternion().setFromRotationMatrix(
+      new THREE.Matrix4().makeBasis(xAx, yAx, zAx)
+    ),
+  };
+}
+
+function memberSectionDims(profile, strongAxis) {
+  const hMm = profile?.h_mm, bMm = profile?.b_mm, cnt = profile?.count ?? 1;
+  if (!hMm || !bMm) return [null, null];
+  return strongAxis === 'horizontal'
+    ? [bMm, hMm]
+    : [hMm, bMm * cnt];
+}
+
+function memberEnds(grpName, m) {
+  return grpName === 'columns'
+    ? [m.base, m.top]
+    : [m.axis_start, m.axis_end];
+}
+
+function buildMemberIndex(geo) {
+  const idx = new Map();
+  for (const [grpName, lst] of Object.entries(geo.members ?? {})) {
+    for (const m of lst ?? []) {
+      const [a, b] = memberEnds(grpName, m);
+      if (!a || !b) continue;
+      idx.set(m.id, {
+        group: grpName,
+        member: m,
+        start3: pt(a),
+        end3: pt(b),
+        strongAxis: m.strong_axis,
+        profile: m.profile,
+      });
+    }
+  }
+  return idx;
+}
+
+function projectPointToLine(point3, start3, end3) {
+  const vec = end3.clone().sub(start3);
+  const len = vec.length();
+  if (len < 1e-9) return start3.clone();
+  const dir = vec.clone().divideScalar(len);
+  const t = point3.clone().sub(start3).dot(dir);
+  return start3.clone().add(dir.multiplyScalar(t));
+}
+
+function projectedMemberHalfExtent(memberInfo, axisDir) {
+  if (!memberInfo) return 0;
+  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.strongAxis);
+  const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+  if (!frame || !boxH || !boxB) return 0;
+  const dir = axisDir.clone().normalize();
+  const halfLen = memberInfo.start3.distanceTo(memberInfo.end3) / 2;
+  return Math.abs(dir.dot(frame.dir)) * halfLen
+    + Math.abs(dir.dot(frame.yAx)) * (boxH / 2)
+    + Math.abs(dir.dot(frame.zAx)) * (boxB / 2);
+}
+
+function connectionCuts(con) {
+  return Array.isArray(con.cuts) && con.cuts.length
+    ? con.cuts
+    : (con.notch ? [con.notch] : []);
+}
+
+function cutOffsetMm(cut) {
+  return cut.offset_mm ?? cut.x_from_support_edge_mm ?? 0;
+}
+
+function resolveCutAnchor(cut, con, memberInfo, supportInfo) {
+  const frame = cutLocalFrame(memberInfo, cut.member_end);
+  if (!frame) return null;
+
+  const inwardDir = frame.xAx.clone();
+  const axisPoint = projectPointToLine(pt(con.at), memberInfo.start3, memberInfo.end3);
+  const endPoint = cut.member_end === 'axis_end'
+    ? memberInfo.end3.clone()
+    : memberInfo.start3.clone();
+  const ref = cut.reference ?? 'support_inner_edge';
+  const supportHalf = projectedMemberHalfExtent(supportInfo, inwardDir);
+
+  let anchor = axisPoint.clone();
+  switch (ref) {
+    case 'member_end':
+      anchor = endPoint;
+      break;
+    case 'support_outer_edge':
+      anchor = axisPoint.clone().add(inwardDir.clone().multiplyScalar(-supportHalf));
+      break;
+    case 'support_centerline':
+      anchor = axisPoint;
+      break;
+    case 'support_inner_edge':
+    default:
+      anchor = axisPoint.clone().add(inwardDir.clone().multiplyScalar(supportHalf));
+      break;
+  }
+  return anchor.add(inwardDir.multiplyScalar(cutOffsetMm(cut)));
+}
+
+function extrudeNotchPolygon(points, widthMm) {
+  const shape = new THREE.Shape();
+  shape.moveTo(points[0][0], points[0][1]);
+  for (let i = 1; i < points.length; i++) shape.lineTo(points[i][0], points[i][1]);
+  shape.closePath();
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: widthMm, bevelEnabled: false });
+  geo.translate(0, 0, -widthMm / 2);
+  return geo;
+}
+
+function birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
+  const frame = cutLocalFrame(memberInfo, notch.member_end);
+  if (!frame) return null;
+
+  let supportNormal = null;
+  if (supportInfo) {
+    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.strongAxis);
+    if (supportFrame) {
+      supportNormal = supportFrame.yAx.clone();
+      if (supportNormal.dot(frame.yAx) < 0) supportNormal.negate();
+    }
+  }
+  if (!supportNormal) supportNormal = frame.yAx.clone();
+
+  let plumb3 = supportNormal.clone().projectOnPlane(frame.zAx);
+  if (plumb3.lengthSq() < 1e-8) plumb3 = frame.yAx.clone();
+  let plumb2 = new THREE.Vector2(plumb3.dot(frame.xAx), plumb3.dot(frame.yAx));
+  if (plumb2.lengthSq() < 1e-8) return null;
+  plumb2.normalize();
+  if (plumb2.y > 0 || (Math.abs(plumb2.y) < 1e-6 && plumb2.x > 0)) {
+    plumb2.multiplyScalar(-1);
+  }
+
+  let seat2 = new THREE.Vector2(-plumb2.y, plumb2.x);
+  if (seat2.lengthSq() < 1e-8) return null;
+  seat2.normalize();
+  if (seat2.x > 0 || (Math.abs(seat2.x) < 1e-6 && seat2.y < 0)) {
+    seat2.multiplyScalar(-1);
+  }
+
+  const bottom = -boxH / 2;
+  const top = boxH / 2;
+  const heelY = bottom + notch.heel_depth_mm;
+  const heel = [0, heelY];
+
+  // Plumb cut: from heel along plumb direction to where it exits the member bottom
+  const plumbT = (bottom - heelY) / plumb2.y;
+  const plumbEnd = [plumbT * plumb2.x, bottom];
+
+  // Seat cut: from heel along seat direction by seat_length_mm
+  const seatEnd = [
+    seat2.x * notch.seat_length_mm,
+    heelY + seat2.y * notch.seat_length_mm,
+  ];
+
+  // Clip seatEnd to member boundaries (bottom/top)
+  let clippedSeatEnd = seatEnd;
+  if (seatEnd[1] < bottom || seatEnd[1] > top) {
+    const boundY = seatEnd[1] < bottom ? bottom : top;
+    const tClip = (boundY - heelY) / seat2.y;
+    clippedSeatEnd = [seat2.x * tClip, boundY];
+  }
+
+  // Build polygon: rafter bottom edge connects plumbEnd to seatBottom (CCW winding)
+  const seatBottom = [clippedSeatEnd[0], bottom];
+  const needsBottom = Math.abs(clippedSeatEnd[1] - bottom) > 0.1;
+  const poly = needsBottom
+    ? [seatBottom, plumbEnd, heel, clippedSeatEnd]
+    : [plumbEnd, heel, clippedSeatEnd];
+  return extrudeNotchPolygon(poly, boxB);
+}
+
+function notchGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
+  const bottom = -boxH / 2;
+  const top = boxH / 2;
+  if (notch.kind === 'rect_notch') {
+    const side = notch.side;
+    return side === 'top'
+      ? extrudeNotchPolygon([
+          [0, top],
+          [notch.length_mm, top],
+          [notch.length_mm, top - notch.depth_mm],
+          [0, top - notch.depth_mm],
+        ], boxB)
+      : extrudeNotchPolygon([
+          [0, bottom],
+          [notch.length_mm, bottom],
+          [notch.length_mm, bottom + notch.depth_mm],
+          [0, bottom + notch.depth_mm],
+        ], boxB);
+  }
+  if (notch.kind === 'bevel_bottom_notch') {
+    return extrudeNotchPolygon([
+      [0, bottom],
+      [notch.length_mm, bottom],
+      [0, bottom + notch.depth_mm],
+    ], boxB);
+  }
+  if (notch.kind === 'birdsmouth_notch') {
+    return birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo);
+  }
+  if (notch.kind === 'end_bevel_cut') {
+    return notch.cut_from === 'top'
+      ? extrudeNotchPolygon([
+          [0, top],
+          [notch.length_mm, top],
+          [0, bottom],
+        ], boxB)
+      : extrudeNotchPolygon([
+          [0, bottom],
+          [notch.length_mm, bottom],
+          [0, top],
+        ], boxB);
+  }
+  return null;
+}
+
+function addNotchVisual(g, pk, con, notch, memberInfo, supportInfo, cutIndex = 0) {
+  if (!notch || !memberInfo) return;
+  const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+  if (!boxH || !boxB) return;
+
+  const notchGeo = notchGeometry(notch, boxH, boxB, memberInfo, supportInfo);
+  if (!notchGeo) return;
+
+  const localFrame = cutLocalFrame(memberInfo, notch.member_end);
+  if (!localFrame) return;
+  const anchorPoint = resolveCutAnchor(notch, con, memberInfo, supportInfo);
+  if (!anchorPoint) return;
+
+  const wrapper = new THREE.Group();
+  wrapper.position.copy(anchorPoint);
+  wrapper.quaternion.copy(localFrame.quaternion);
+  const notchMemberId = con.members?.[0];
+  wrapper.userData = {
+    id: `${con.id}:${cutIndex}`,
+    kind: `${con.type}:${notch.kind}`,
+    _geoName: g.userData.geoName,
+    _isNotchOverlay: true,
+    _notchMemberId: notchMemberId,
+  };
+
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xff66cc,
+    transparent: true,
+    opacity: 0.45,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+    depthTest: false,
+  });
+  const mesh = new THREE.Mesh(notchGeo, mat);
+  mesh.renderOrder = 20;
+  mesh.userData = { ...wrapper.userData };
+  wrapper.add(mesh);
+  pk.push(mesh);
+
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(notchGeo),
+    new THREE.LineBasicMaterial({
+      color: 0x441133,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+    })
   );
+  edges.renderOrder = 21;
+  edges.userData = { ...wrapper.userData };
+  wrapper.add(edges);
+  g.add(wrapper);
 }
 
 function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData) {
   const len  = start3.distanceTo(end3);
   if (len < 1) return;
 
-  let hMm = profile?.h_mm, bMm = profile?.b_mm, cnt = profile?.count ?? 1;
+  let hMm = profile?.h_mm, bMm = profile?.b_mm;
 
   if (!hMm || !bMm) {
     // TBD profile: draw as line
@@ -355,9 +826,7 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
 
   // strong_axis='vertical' → h_mm is the vertical dimension
   // strong_axis='horizontal' → h_mm is horizontal, b_mm is vertical
-  const [boxH, boxB] = strongAxis === 'horizontal'
-    ? [bMm, hMm]
-    : [hMm, bMm * cnt];
+  const [boxH, boxB] = memberSectionDims(profile, strongAxis);
 
   const q   = memberQuaternion(start3, end3, strongAxis);
   const mid = start3.clone().add(end3).multiplyScalar(0.5);
@@ -367,7 +836,7 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
   const mesh   = new THREE.Mesh(boxGeo, mat);
   mesh.position.copy(mid);
   mesh.quaternion.copy(q);
-  mesh.userData = userData;
+  mesh.userData = { ...userData, _isMemberMesh: true };
   g.add(mesh); pk.push(mesh);
 
   // Edges for clarity
@@ -375,6 +844,7 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
   const edges   = new THREE.LineSegments(new THREE.EdgesGeometry(boxGeo), edgeMat);
   edges.position.copy(mid);
   edges.quaternion.copy(q);
+  edges.userData = { ...userData, _isMemberEdge: true };
   g.add(edges);
 }
 
@@ -383,8 +853,7 @@ function addMembers(g, pk, geo) {
   for (const [grpName, lst] of Object.entries(geo.members ?? {})) {
     const col = MCOL[grpName] ?? 0xffffff;
     for (const m of lst ?? []) {
-      const a = grpName === 'columns' ? m.base       : m.axis_start;
-      const b = grpName === 'columns' ? m.top        : m.axis_end;
+      const [a, b] = memberEnds(grpName, m);
       if (!a || !b) continue;
       addMemberMesh(g, pk, pt(a), pt(b), m.profile, m.strong_axis, col,
         { id: m.id, kind: grpName, _geoName: g.userData.geoName });
@@ -393,41 +862,107 @@ function addMembers(g, pk, geo) {
 }
 
 // ── Surface meshes ────────────────────────────────────────────────────────────
+function signedArea2D(points2) {
+  let area = 0;
+  for (let i = 0; i < points2.length; i++) {
+    const a = points2[i];
+    const b = points2[(i + 1) % points2.length];
+    area += a.x * b.y - b.x * a.y;
+  }
+  return 0.5 * area;
+}
+
+function surfaceFrame(poly) {
+  const pts3 = poly.map(pt);
+  const origin = pts3[0].clone();
+
+  let xAxis = null;
+  for (let i = 1; i < pts3.length; i++) {
+    const candidate = pts3[i].clone().sub(origin);
+    if (candidate.lengthSq() > 1e-9) {
+      xAxis = candidate.normalize();
+      break;
+    }
+  }
+  if (!xAxis) return null;
+
+  let normal = null;
+  for (let i = 2; i < pts3.length; i++) {
+    const vec = pts3[i].clone().sub(origin);
+    const cand = new THREE.Vector3().crossVectors(xAxis, vec);
+    if (cand.lengthSq() > 1e-9) {
+      normal = cand.normalize();
+      break;
+    }
+  }
+  if (!normal) return null;
+
+  const yAxis = new THREE.Vector3().crossVectors(normal, xAxis).normalize();
+  return { origin, xAxis, yAxis, normal };
+}
+
+function buildSurfaceGeometry(poly, thicknessMm = 0) {
+  const frame = surfaceFrame(poly);
+  if (!frame) return null;
+
+  let points2 = poly.map(p => {
+    const rel = pt(p).sub(frame.origin);
+    return new THREE.Vector2(rel.dot(frame.xAxis), rel.dot(frame.yAxis));
+  });
+  if (signedArea2D(points2) < 0) points2 = points2.reverse();
+
+  const shape = new THREE.Shape(points2);
+  const geom = thicknessMm > 0
+    ? new THREE.ExtrudeGeometry(shape, { depth: thicknessMm, bevelEnabled: false })
+    : new THREE.ShapeGeometry(shape);
+
+  if (thicknessMm > 0) geom.translate(0, 0, -thicknessMm / 2);
+
+  const basis = new THREE.Matrix4().makeBasis(frame.xAxis, frame.yAxis, frame.normal);
+  basis.setPosition(frame.origin);
+  geom.applyMatrix4(basis);
+  geom.computeVertexNormals();
+  return geom;
+}
+
 function addSurfaces(g, pk, list, opacity) {
   const geoName = g.userData.geoName;
   for (const s of list ?? []) {
     const poly = s.polygon;
     if (!poly || poly.length < 3) continue;
     const col = SCOL[s.type] ?? 0xaaaaaa;
-
-    // Fan triangulation (works for convex polygons)
-    const pos = [];
-    for (let i = 1; i < poly.length - 1; i++) {
-      [poly[0], poly[i], poly[i+1]].forEach(p => { const v = pt(p); pos.push(v.x, v.y, v.z); });
-    }
-    const mg = new THREE.BufferGeometry();
-    mg.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    mg.computeVertexNormals();
+    const thicknessMm = Math.max(0, s.thickness_mm ?? 0);
+    const mg = buildSurfaceGeometry(poly, thicknessMm);
+    if (!mg) continue;
     const mesh = new THREE.Mesh(mg, new THREE.MeshBasicMaterial(
       { color: col, transparent: true, opacity, side: THREE.DoubleSide }
     ));
     mesh.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
     g.add(mesh); pk.push(mesh);
 
-    // Outline
-    const outPts = [...poly.map(pt), pt(poly[0])];
-    const line = new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(outPts),
-      new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: Math.min(opacity * 2, 1) })
-    );
-    line.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
-    g.add(line);
+    if (thicknessMm > 0) {
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(mg),
+        new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: Math.min(opacity * 2, 1) })
+      );
+      edges.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
+      g.add(edges);
+    } else {
+      const outPts = [...poly.map(pt), pt(poly[0])];
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(outPts),
+        new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: Math.min(opacity * 2, 1) })
+      );
+      line.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
+      g.add(line);
+    }
   }
 }
 
 // ── Connection markers ────────────────────────────────────────────────────────
-function addConnections(g, pk, connections) {
+function addConnections(g, pk, connections, memberIndex) {
   const sphereGeo = new THREE.SphereGeometry(80, 12, 8);
+  const notchCutsMap = new Map();
   for (const con of connections ?? []) {
     if (!con.at) continue;
     const col = CCOL[con.type] ?? 0xffffff;
@@ -436,10 +971,43 @@ function addConnections(g, pk, connections) {
       new THREE.MeshBasicMaterial({ color: col })
     );
     mesh.position.copy(pt(con.at));
-    mesh.userData = { id: con.id, kind: con.type ?? 'connection', _geoName: g.userData.geoName };
+    mesh.visible = showConnectionMarkers;
+    mesh.userData = {
+      id: con.id,
+      kind: con.type ?? 'connection',
+      _geoName: g.userData.geoName,
+      _isConnectionMarker: true,
+    };
     g.add(mesh);
     pk.push(mesh);
+    if (con.type === 'notched_over') {
+      const cuts = connectionCuts(con);
+      const memberId = con.members?.[0];
+      const memberInfo = memberIndex.get(memberId);
+      const supportInfo = memberIndex.get(con.members?.[1]);
+      for (let i = 0; i < cuts.length; i++) {
+        addNotchVisual(g, pk, con, cuts[i], memberInfo, supportInfo, i);
+        // Collect notch geometry data for CSG subtraction
+        if (memberInfo && memberId) {
+          const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+          if (boxH && boxB) {
+            const notchGeo = notchGeometry(cuts[i], boxH, boxB, memberInfo, supportInfo);
+            const localFrame = cutLocalFrame(memberInfo, cuts[i].member_end);
+            const anchorPoint = resolveCutAnchor(cuts[i], con, memberInfo, supportInfo);
+            if (notchGeo && localFrame && anchorPoint) {
+              if (!notchCutsMap.has(memberId)) notchCutsMap.set(memberId, []);
+              notchCutsMap.get(memberId).push({
+                notchGeo,
+                anchorPoint,
+                cutQ: localFrame.quaternion,
+              });
+            }
+          }
+        }
+      }
+    }
   }
+  return notchCutsMap;
 }
 
 // ── Fit camera ────────────────────────────────────────────────────────────────
@@ -456,18 +1024,264 @@ function fitCamera() {
   controls.update();
 }
 
+function captureViewState() {
+  return {
+    position: camera.position.clone(),
+    target: controls.target.clone(),
+    zoom: camera.zoom,
+  };
+}
+
+function restoreViewState(state) {
+  if (!state) return false;
+  camera.position.copy(state.position);
+  controls.target.copy(state.target);
+  camera.zoom = state.zoom;
+  camera.updateProjectionMatrix();
+  controls.update();
+  return true;
+}
+
+// ── CSG boolean subtraction of notches from member meshes ─────────────────────
+// ── Categorized edge classification for notched members ──────────────────────
+// Returns { sharp, shallow, boundary } – each a BufferGeometry or null.
+// sharp:    dihedral > 30° → real corners
+// shallow:  5° < dihedral ≤ 30° → possible CSG tessellation artefacts
+// boundary: edges with only one adjacent face (open-mesh)
+//
+// Uses position-based vertex matching (rounded to 0.5 mm) instead of index
+// matching, because three-bvh-csg can leave numerically distinct vertices at
+// geometrically identical positions that mergeVertices fails to unify.
+function classifyMeshEdges(geometry) {
+  const pos = geometry.attributes.position;
+  if (!pos) return { sharp: null, shallow: null, boundary: null };
+  const idx = geometry.index;
+  const triCount = idx ? idx.count / 3 : pos.count / 3;
+
+  // Round each coordinate to the nearest 0.5 mm to tolerate CSG precision noise
+  const vKey = i => {
+    const r = 2; // multiply → round → gives 0.5-unit grid
+    return `${Math.round(pos.getX(i) * r)}|${Math.round(pos.getY(i) * r)}|${Math.round(pos.getZ(i) * r)}`;
+  };
+  const getI = (t, v) => idx ? idx.getX(t * 3 + v) : t * 3 + v;
+
+  // edgeKey → { n1, n2, pa, pb }  (pa/pb are the actual 3-D positions for output)
+  const edgeMap = new Map();
+
+  for (let t = 0; t < triCount; t++) {
+    const ai = getI(t, 0), bi = getI(t, 1), ci = getI(t, 2);
+    const pa = new THREE.Vector3(pos.getX(ai), pos.getY(ai), pos.getZ(ai));
+    const pb = new THREE.Vector3(pos.getX(bi), pos.getY(bi), pos.getZ(bi));
+    const pc = new THREE.Vector3(pos.getX(ci), pos.getY(ci), pos.getZ(ci));
+    const n  = new THREE.Vector3().crossVectors(pb.clone().sub(pa), pc.clone().sub(pa));
+    if (n.lengthSq() < 1e-20) continue; // skip degenerate triangles
+    n.normalize();
+
+    for (const [ei, ej, p0, p1] of [
+      [ai, bi, pa, pb],
+      [bi, ci, pb, pc],
+      [ci, ai, pc, pa],
+    ]) {
+      const ka = vKey(ei), kb = vKey(ej);
+      const k  = ka < kb ? `${ka}/${kb}` : `${kb}/${ka}`;
+      if (!edgeMap.has(k)) edgeMap.set(k, { n1: n, n2: null, pa: p0, pb: p1 });
+      else edgeMap.get(k).n2 = n;
+    }
+  }
+
+  const COS30 = Math.cos(THREE.MathUtils.degToRad(30));
+  const COS5  = Math.cos(THREE.MathUtils.degToRad(5));
+  const sharp = [], shallow = [], boundary = [];
+
+  for (const { n1, n2, pa, pb } of edgeMap.values()) {
+    const seg = [pa.x, pa.y, pa.z, pb.x, pb.y, pb.z];
+    if (!n2)                     boundary.push(...seg);
+    else if (n1.dot(n2) < COS30) sharp.push(...seg);
+    else if (n1.dot(n2) < COS5)  shallow.push(...seg);
+  }
+
+  const makeGeo = pts => {
+    if (!pts.length) return null;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    return g;
+  };
+  return { sharp: makeGeo(sharp), shallow: makeGeo(shallow), boundary: makeGeo(boundary) };
+}
+
+// Returns true if the segment pa→pb is parallel to and close to any segment in
+// expectedSegs (array of [Vector3, Vector3] pairs). Used to distinguish real
+// silhouette edges from CSG tessellation boundary artefacts.
+function nearExpectedEdge(pa, pb, expectedSegs, tol = 2.0) {
+  const len = pa.distanceTo(pb);
+  if (len < 1e-6) return false;
+  const dir = pb.clone().sub(pa).divideScalar(len);
+  const mid = pa.clone().add(pb).multiplyScalar(0.5);
+
+  for (const [ea, eb] of expectedSegs) {
+    const eLen = ea.distanceTo(eb);
+    if (eLen < 1e-6) continue;
+    const eDir = eb.clone().sub(ea).divideScalar(eLen);
+    if (Math.abs(dir.dot(eDir)) < 0.98) continue; // not parallel (< ~11°)
+    // Distance from midpoint to the infinite line through ea in direction eDir
+    const proj = ea.clone().addScaledVector(eDir, mid.clone().sub(ea).dot(eDir));
+    if (mid.distanceTo(proj) < tol) return true;
+  }
+  return false;
+}
+
+async function applyCSGCuts(g, pk, memberIndex, notchCutsMap) {
+  if (!notchCutsMap || notchCutsMap.size === 0) return;
+  const csg = await getCSG();
+  if (!csg) { console.warn('CSG module not loaded, skipping cuts'); return; }
+  const { Evaluator, Brush, SUBTRACTION } = csg;
+  if (!Evaluator || !Brush || !SUBTRACTION) {
+    console.warn('CSG exports missing:', { Evaluator: !!Evaluator, Brush: !!Brush, SUBTRACTION: !!SUBTRACTION });
+    return;
+  }
+  const evaluator = new Evaluator();
+  console.log('CSG: processing', notchCutsMap.size, 'members with notch cuts');
+
+  for (const [memberId, cuts] of notchCutsMap) {
+    let memberMesh = null, memberEdges = null;
+    g.traverse(o => {
+      if (o.userData?.id === memberId) {
+        if (o.userData._isMemberMesh) memberMesh = o;
+        if (o.userData._isMemberEdge) memberEdges = o;
+      }
+    });
+    if (!memberMesh) { console.warn('CSG: member mesh not found for', memberId); continue; }
+    console.log('CSG: cutting member', memberId, 'with', cuts.length, 'notch(es)');
+
+    const memberWorld = new THREE.Matrix4().compose(
+      memberMesh.position, memberMesh.quaternion, new THREE.Vector3(1, 1, 1)
+    );
+    const memberWorldInv = memberWorld.clone().invert();
+
+    try {
+      let currentBrush = new Brush(memberMesh.geometry.clone());
+      const localNotchGeos = []; // saved in member local space for expected-edge computation
+
+      for (const cut of cuts) {
+        const notchGeoCopy = cut.notchGeo.clone();
+        const notchWorld = new THREE.Matrix4().compose(
+          cut.anchorPoint, cut.cutQ, new THREE.Vector3(1, 1, 1)
+        );
+        const relMatrix = memberWorldInv.clone().multiply(notchWorld);
+        notchGeoCopy.applyMatrix4(relMatrix);
+        localNotchGeos.push(notchGeoCopy.clone()); // save before CSG consumes it
+
+        const notchBrush = new Brush(notchGeoCopy);
+        notchBrush.updateMatrixWorld();
+        currentBrush.updateMatrixWorld();
+        currentBrush = evaluator.evaluate(currentBrush, notchBrush, SUBTRACTION);
+      }
+
+      const cutGeo = currentBrush.geometry;
+      cutGeo.computeVertexNormals();
+      const cutMat = memberMesh.material.clone();
+      cutMat.flatShading = true;
+      const cutMesh = new THREE.Mesh(cutGeo, cutMat);
+      cutMesh.position.copy(memberMesh.position);
+      cutMesh.quaternion.copy(memberMesh.quaternion);
+      cutMesh.userData = { ...memberMesh.userData, _isCutMember: true };
+      cutMesh.visible = !showConnectionMarkers;
+      g.add(cutMesh);
+      pk.push(cutMesh);
+
+      // Build expected edge segments in member local space:
+      //   original box edges + all notch geometry edges.
+      // Boundary CSG edges that lie on these lines are real silhouette edges;
+      // others are tessellation artefacts introduced by the CSG algorithm.
+      const expectedSegs = [];
+      const addEdgesFromGeo = geo => {
+        const eg = new THREE.EdgesGeometry(geo);
+        const p  = eg.attributes.position;
+        for (let i = 0; i < p.count; i += 2) {
+          expectedSegs.push([
+            new THREE.Vector3(p.getX(i),   p.getY(i),   p.getZ(i)),
+            new THREE.Vector3(p.getX(i+1), p.getY(i+1), p.getZ(i+1)),
+          ]);
+        }
+      };
+      addEdgesFromGeo(memberMesh.geometry); // original box (local frame)
+      for (const ng of localNotchGeos) addEdgesFromGeo(ng);
+
+      // Classify CSG edges and split boundary into real vs artefact
+      const { sharp: sharpGeo, shallow: shallowGeo, boundary: boundaryGeo } =
+        classifyMeshEdges(cutGeo);
+
+      const realPts = [];
+      const artifactPts = [];
+
+      const collectGeo = (geo, dest) => {
+        if (!geo) return;
+        const p = geo.attributes.position;
+        for (let i = 0; i < p.count; i++)
+          dest.push(p.getX(i), p.getY(i), p.getZ(i));
+      };
+      collectGeo(sharpGeo, realPts);
+
+      if (boundaryGeo) {
+        const p = boundaryGeo.attributes.position;
+        for (let i = 0; i < p.count; i += 2) {
+          const pa = new THREE.Vector3(p.getX(i),   p.getY(i),   p.getZ(i));
+          const pb = new THREE.Vector3(p.getX(i+1), p.getY(i+1), p.getZ(i+1));
+          const dest = nearExpectedEdge(pa, pb, expectedSegs) ? realPts : artifactPts;
+          dest.push(pa.x, pa.y, pa.z, pb.x, pb.y, pb.z);
+        }
+      }
+
+      const makePtsGeo = pts => {
+        if (!pts.length) return null;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+        return geo;
+      };
+
+      const realGeo = makePtsGeo(realPts);
+      if (realGeo) {
+        const line = new THREE.LineSegments(
+          realGeo, new THREE.LineBasicMaterial({ color: 0x000000 })
+        );
+        line.position.copy(memberMesh.position);
+        line.quaternion.copy(memberMesh.quaternion);
+        line.userData = { ...memberMesh.userData, _isCutMember: true };
+        line.visible = !showConnectionMarkers;
+        g.add(line);
+      }
+
+      // Hide original box edges (uncut shape) along with the uncut mesh
+      memberMesh.userData._isUncutMember = true;
+      memberMesh.visible = showConnectionMarkers;
+      if (memberEdges) {
+        memberEdges.userData._isUncutMember = true;
+        memberEdges.visible = showConnectionMarkers;
+      }
+
+    } catch (e) {
+      console.warn('CSG failed for member', memberId, e.message, e.stack);
+    }
+  }
+}
+
 // ── Render resolved geometry into a named group ───────────────────────────────
-function renderGeoFor(name, resolved) {
+async function renderGeoFor(name, resolved, options = {}) {
+  const preserveView = options.preserveView ?? (geoGroups.size > 0);
+  const viewState = preserveView ? captureViewState() : null;
   clearGeoFor(name);
   const g = new THREE.Group();
   g.userData.geoName = name;
   scene.add(g);
   geoGroups.set(name, g);
+  const memberIndex = buildMemberIndex(resolved);
   addMembers(g, pickable, resolved);
   addSurfaces(g, pickable, resolved.surfaces, 0.30);
   addSurfaces(g, pickable, resolved.reference_surfaces, 0.12);
-  addConnections(g, pickable, resolved.connections);
-  fitCamera();
+  const notchCutsMap = addConnections(g, pickable, resolved.connections, memberIndex);
+  await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
+  setConnectionMarkerVisibility(showConnectionMarkers);
+  if (!restoreViewState(viewState)) fitCamera();
 }
 
 // ── Tooltip via raycasting ────────────────────────────────────────────────────
@@ -524,7 +1338,7 @@ async function loadGeometry(name) {
     editor.value = await rawRes.text();
     const data = await resolvedRes.json();
     if (data.error) throw new Error(data.error);
-    renderGeoFor(name, data);
+    await renderGeoFor(name, data);
     setStatus('OK', 'ok');
   } catch(e) { setStatus('Virhe: ' + e.message, 'err'); }
 }
@@ -548,7 +1362,6 @@ async function toggleGeometry(name) {
     // Klikattu uudelleen: piilota scenestä
     activeNames.delete(name);
     clearGeoFor(name);
-    fitCamera();
     editingName = [...activeNames][0] ?? null;
     if (editingName) {
       try {
@@ -577,7 +1390,7 @@ editor.addEventListener('input', () => {
       });
       const data = await res.json();
       if (data.error) { setStatus(data.error, 'err'); return; }
-      renderGeoFor(editingName, data);
+      await renderGeoFor(editingName, data);
       setStatus('Esikatselu ✓', 'ok');
     } catch(e) { setStatus('Esikatselu virhe: ' + e.message, 'err'); }
   }, 800);
@@ -630,6 +1443,7 @@ window.addEventListener('mouseup', () => { dragging = false; resizerEl.classList
 (async () => {
   const toolbar  = document.getElementById('toolbar');
   const statusEl = document.getElementById('status');
+  const connBtn  = document.getElementById('btn-connections');
   const saveBtn  = document.getElementById('btn-save');
   let   first    = null;
 
@@ -649,6 +1463,8 @@ window.addEventListener('mouseup', () => { dragging = false; resizerEl.classList
     setStatus('Geometrioiden lataus epäonnistui: ' + e.message, 'err');
   }
 
+  connBtn.addEventListener('click', toggleConnectionMarkers);
+  setConnectionMarkerVisibility(showConnectionMarkers);
   saveBtn.addEventListener('click', saveGeometry);
   if (first) loadGeometry(first);
 })();
