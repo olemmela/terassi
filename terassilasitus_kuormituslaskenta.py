@@ -6,11 +6,11 @@ Standardit: EN 1990, EN 1991-1-1, EN 1991-1-3, EN 1991-1-4, EN 1995-1-1
 Geometria luetaan tiedostosta geometry/terassi_puu.json:
   - uusi puuratkaisu: orret 98×48, nurkkaorret 98×48, kattotuolit 198×48,
     ulkopalkki LP225×140, sisäpalkki LP315×140
+  - lineaarijäsenten poikkileikkauksen kierto luetaan section_rotation_deg-kentästä
   - aurinkopaneelien reunakaistat siirtyvät reunakattotuoleille vain orsien kautta
   - ulkokulmien nurkkaorret sidotaan uloimpaan orteen ja kantavat ulkopalkin ulkoreunalla
-  - orsien tuet mallinnetaan nivellettyinä; reunakattotuolien molemmat päät puolijäykkinä
-  - sisäpään palkkikenkä N 48×136 mallinnetaan heikosti kiertymää jäykistävänä
-    puolijäykkänä liitoksena (5.0×40 ankkuriruuvit, täyskiinnitys)
+  - liitosten tuki- ja rotaatiomallit luetaan connections.analysis-metadatasta
+  - paneelikuorman piste/viivamalli luetaan surfaces[*].load_transfer-metadatasta
   - kinostuma talon seinää vasten johdetaan geometriasta muuttuvalla h(x)-korkeudella
   - lovi- ja nettoh-tarkistukset luetaan geometry/terassi_puu.json:n cuts-kentistä
 """
@@ -338,18 +338,25 @@ def sample_max_deflection_mm(nodes_mm, disp_mm, rot_rad, step_mm=2.0):
     return {"value_mm": max_abs[0], "x_mm": max_abs[1]}
 
 
-def sample_net_section_utilization(elements, section_h_mm_at_x, b_mm, fm_d_Nmm2, fv_d_Nmm2, x_start_mm, x_end_mm, step_mm=1.0):
+def member_section_rotation_deg(member_obj):
+    return float(member_obj.get("section_rotation_deg", 0.0))
+
+
+def sample_net_section_utilization(elements, member_obj, section_h_mm_at_x, fm_d_Nmm2, fv_d_Nmm2, x_start_mm, x_end_mm, step_mm=1.0):
     x_lo_mm = min(float(x_start_mm), float(x_end_mm))
     x_hi_mm = max(float(x_start_mm), float(x_end_mm))
     max_eta_M = {"value_pct": 0.0, "x_mm": None, "M_kNm": 0.0, "h_mm": None}
     max_eta_V = {"value_pct": 0.0, "x_mm": None, "V_kN": 0.0, "h_mm": None}
+    b_mm = profile_b(member_obj)
+    section_rotation = member_section_rotation_deg(member_obj)
 
     x_mm = x_lo_mm
     while x_mm <= x_hi_mm + 1e-9:
         h_mm = max(1e-9, float(section_h_mm_at_x(x_mm)))
         state = section_state_at_x_mm(elements, x_mm)
-        W_mm3 = b_mm * h_mm**2 / 6.0
-        A_mm2 = b_mm * h_mm
+        props = member_rect_props(b_mm, h_mm, section_rotation)
+        W_mm3 = props["W_mm3"]
+        A_mm2 = props["A_mm2"]
         MRd_kNm = fm_d_Nmm2 * W_mm3 / 1.0e6
         VRd_kN = fv_d_Nmm2 * A_mm2 / 1.5e3
         eta_M_pct = abs(state["M_kNm"]) / MRd_kNm * 100.0
@@ -379,12 +386,27 @@ def governing_moment(internal):
     }
 
 
-def member_rect_props(b_mm, h_mm):
+def member_rect_props(b_mm, h_mm, section_rotation_deg=0.0):
+    theta = math.radians(float(section_rotation_deg))
+    cos_theta = math.cos(theta)
+    sin_theta = math.sin(theta)
+    I_strong_mm4 = b_mm * h_mm**3 / 12.0
+    I_weak_mm4 = h_mm * b_mm**3 / 12.0
+    I_vertical_mm4 = I_strong_mm4 * cos_theta**2 + I_weak_mm4 * sin_theta**2
+    I_horizontal_mm4 = I_strong_mm4 * sin_theta**2 + I_weak_mm4 * cos_theta**2
+    c_vertical_mm = max(1e-9, 0.5 * (abs(h_mm * cos_theta) + abs(b_mm * sin_theta)))
+    c_horizontal_mm = max(1e-9, 0.5 * (abs(h_mm * sin_theta) + abs(b_mm * cos_theta)))
     return {
-        "W_mm3": b_mm * h_mm**2 / 6.0,
+        "W_mm3": I_vertical_mm4 / c_vertical_mm,
+        "W_vertical_mm3": I_vertical_mm4 / c_vertical_mm,
+        "W_horizontal_mm3": I_horizontal_mm4 / c_horizontal_mm,
         "A_mm2": b_mm * h_mm,
-        "I_strong_mm4": b_mm * h_mm**3 / 12.0,
-        "I_weak_mm4": h_mm * b_mm**3 / 12.0,
+        "I_mm4": I_vertical_mm4,
+        "I_vertical_mm4": I_vertical_mm4,
+        "I_horizontal_mm4": I_horizontal_mm4,
+        "I_strong_mm4": I_strong_mm4,
+        "I_weak_mm4": I_weak_mm4,
+        "section_rotation_deg": float(section_rotation_deg),
     }
 
 
@@ -440,6 +462,10 @@ def member_side_from_id(member_id):
 
 GEO = load("terassi_puu.json")
 CONNECTIONS = {conn["id"]: conn for conn in GEO["connections"]}
+MEMBERS_BY_ID = {}
+for group_name in GEO["members"]:
+    for member_obj in expanded_members(GEO, group_name):
+        MEMBERS_BY_ID[member_obj["id"]] = member_obj
 
 
 def connection_by_members(member_a_id, member_b_id):
@@ -448,6 +474,10 @@ def connection_by_members(member_a_id, member_b_id):
         if set(conn.get("members", [])) == wanted:
             return conn
     raise KeyError(f"Connection not found for members: {member_a_id}, {member_b_id}")
+
+
+def member_by_id_any(member_id):
+    return MEMBERS_BY_ID[member_id]
 
 
 def first_connection_matching(member_id, predicate):
@@ -522,6 +552,85 @@ roof_inner_z0_mm = roof_inner_pts[0]["z"]
 roof_inner_z1_mm = roof_inner_pts[-1]["z"]
 panel_joint_y_mm = 0.5 * (roof_y0_mm + roof_y1_mm)
 panel_frame_edge_offset_mm = 15.0
+DEFAULT_ROOF_LOAD_TRANSFER_RULE = {
+    "model": "point",
+    "reference": "axis_end",
+    "offset_mm": -panel_frame_edge_offset_mm,
+}
+
+
+def roof_load_transfer_rule(member_id):
+    load_transfer = roof.get("load_transfer", {})
+    for rule in load_transfer.get("to_members", []):
+        if member_id in rule.get("member_refs", []):
+            return merge_analysis_dict(DEFAULT_ROOF_LOAD_TRANSFER_RULE, rule)
+    return dict(DEFAULT_ROOF_LOAD_TRANSFER_RULE)
+
+
+LOAD_TRANSFER_REFERENCE_LABELS = {
+    "axis_start": "axis_start-päästä",
+    "axis_end": "axis_end-päästä",
+    "support_centerline": "tukikeskilinjasta",
+    "support_inner_edge": "tuen sisäreunasta",
+    "support_outer_edge": "tuen ulkoreunasta",
+}
+
+
+def strip_member_refs_from_rule(rule):
+    return {key: value for key, value in rule.items() if key != "member_refs"}
+
+
+def format_load_transfer_rule(member_ids):
+    rules = [roof_load_transfer_rule(member_id) for member_id in member_ids]
+    if not rules:
+        return "ei kuormansiirtosääntöä"
+    base_rule = strip_member_refs_from_rule(rules[0])
+    if any(strip_member_refs_from_rule(rule) != base_rule for rule in rules[1:]):
+        return "jäsenkohtaiset member_refs-säännöt; omapaino viivakuormana"
+    rule = rules[0]
+    if rule["model"] == "uniform":
+        return "kuorma viivakuormana koko matkalle; omapaino viivakuormana"
+    ref_label = LOAD_TRANSFER_REFERENCE_LABELS[rule["reference"]]
+    offset_mm = float(rule.get("offset_mm", 0.0))
+    if rule["model"] == "point":
+        return f"kuorma pisteenä {offset_mm:+.0f} mm {ref_label}; omapaino viivakuormana"
+    if rule["model"] == "partial_uniform":
+        return (
+            f"kuorma osaviivakuormana {offset_mm:+.0f} mm {ref_label}, "
+            f"pituus {float(rule['length_mm']):.0f} mm; omapaino viivakuormana"
+        )
+    return f"kuormamalli {rule['model']}; omapaino viivakuormana"
+
+
+def unique_bevel_notch_specs(notch_infos):
+    seen = set()
+    for info in notch_infos:
+        if not info or not info.get("active"):
+            continue
+        spec = (float(info["depth_mm"]), float(info["length_mm"]))
+        if spec in seen:
+            continue
+        seen.add(spec)
+    return sorted(seen)
+
+
+def format_bevel_notch_specs(notch_infos):
+    specs = unique_bevel_notch_specs(notch_infos)
+    if not specs:
+        return "ei bevel-lovea"
+    return " / ".join(f"{depth_mm:.0f} × {length_mm:.0f} mm" for depth_mm, length_mm in specs)
+
+
+def format_labeled_bevel_notch_specs(notch_info_by_label):
+    label_text = {"left": "vasen", "right": "oikea"}
+    parts = []
+    for label, info in notch_info_by_label.items():
+        if not info or not info.get("active"):
+            continue
+        parts.append(f"{label_text.get(label, label)}: {float(info['depth_mm']):.0f} × {float(info['length_mm']):.0f} mm")
+    if not parts:
+        return "ei bevel-lovea"
+    return "bevel_bottom_notch " + " | ".join(parts)
 
 house_roof = reference(GEO, "ref.house.roof")
 house_roof_poly = house_roof["polygon"]
@@ -584,6 +693,43 @@ def project_point_to_member_s_mm(member_obj, point_xyz):
     return t * math.sqrt(length_sq)
 
 
+def connection_other_member_id(connection_obj, member_id):
+    return next((other for other in connection_obj.get("members", []) if other != member_id), None)
+
+
+def connection_support_point(connection_obj, member_id, support_line_ref=None):
+    point_xyz = dict(connection_obj["at"])
+    support_member_id = connection_other_member_id(connection_obj, member_id)
+    if support_member_id is None:
+        return point_xyz
+
+    if support_line_ref is None:
+        support_line_ref = connection_obj.get("analysis", {}).get("support_line_ref", "support_centerline")
+    if support_line_ref == "support_centerline":
+        return point_xyz
+
+    support_member_obj = member_by_id_any(support_member_id)
+    support_half_b_mm = profile_b(support_member_obj) / 2.0
+
+    if support_member_id in {edge_rafter_id("left"), edge_rafter_id("right")}:
+        outer_sign = -1.0 if support_member_id == edge_rafter_id("left") else 1.0
+        sign = outer_sign if support_line_ref == "support_outer_edge" else -outer_sign
+        point_xyz["x"] = float(point_xyz["x"]) + sign * support_half_b_mm
+        return point_xyz
+
+    if support_member_id.startswith(INTERIOR_RAFTER_PREFIX):
+        if support_line_ref != "support_centerline":
+            raise ValueError(f"Unsupported support line ref {support_line_ref} for {support_member_id}")
+        return point_xyz
+
+    if support_member_id.startswith("beam."):
+        sign = 1.0 if support_line_ref == "support_outer_edge" else -1.0
+        point_xyz["y"] = float(point_xyz["y"]) + sign * support_half_b_mm
+        return point_xyz
+
+    raise ValueError(f"Unsupported support member for support line ref: {support_member_id}")
+
+
 rafters_all = sorted(expanded_members(GEO, "rafters"), key=lambda item: (float(item["axis_start"]["x"]), item["id"]))
 interior_rafters = [m for m in rafters_all if m["id"].startswith(INTERIOR_RAFTER_PREFIX) and m["id"].split(".")[-1].isdigit()]
 edge_rafters = {
@@ -625,6 +771,8 @@ corner_purlins = [member_obj for side in ("left", "right") for member_obj in cor
 left_purlins = sorted([m for m in main_purlins if member_side_from_id(m["id"]) == "left"], key=lambda item: float(item["axis_start"]["y"]))
 right_purlins = sorted([m for m in main_purlins if member_side_from_id(m["id"]) == "right"], key=lambda item: float(item["axis_start"]["y"]))
 purlins_by_side = {"left": left_purlins, "right": right_purlins}
+horizontal_edge_purlin_ids = [member_obj["id"] for member_obj in left_purlins + right_purlins]
+slanted_edge_purlin_ids = [member_obj["id"] for member_obj in corner_purlins]
 
 outer_beam = member(GEO, "beams", "beam.outer")
 inner_beam = member(GEO, "beams", "beam.inner.new")
@@ -678,10 +826,10 @@ rafter_axis_step = 1.0
 left_purlin_axis_step = -1.0
 right_purlin_axis_step = 1.0
 
-interior_inner_support_y_mm = float(CONNECTIONS["con.kattotuoli.on.inner_beam"]["at"]["y"])
-interior_outer_support_y_mm = float(CONNECTIONS["con.kattotuoli.on.outer_beam"]["at"]["y"])
-edge_inner_support_y_mm = float(CONNECTIONS["con.kattotuoli.vasen.on.inner_beam"]["at"]["y"])
-edge_outer_support_y_mm = float(CONNECTIONS["con.kattotuoli.vasen.on.outer_beam"]["at"]["y"])
+interior_inner_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.on.inner_beam"], "kattotuoli.0")["y"])
+interior_outer_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.on.outer_beam"], "kattotuoli.0")["y"])
+edge_inner_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.vasen.on.inner_beam"], edge_rafter_id("left"))["y"])
+edge_outer_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.vasen.on.outer_beam"], edge_rafter_id("left"))["y"])
 rafter_analysis_start_y_mm = min(interior_inner_support_y_mm, min(float(m["axis_start"]["y"]) for m in rafters_all))
 rafter_analysis_end_y_mm = max(float(m["axis_end"]["y"]) for m in rafters_all)
 
@@ -708,9 +856,6 @@ purlin_inner_notch_info = {
     "left": bevel_notch_info("con.orsi.vasen.on.kattotuoli.0"),
     "right": bevel_notch_info("con.orsi.oikea.on.kattotuoli.5"),
 }
-purlin_inner_notch_ref = next((item for item in purlin_inner_notch_info.values() if item["active"]), None)
-purlin_notch_depth_mm = purlin_inner_notch_ref["depth_mm"] if purlin_inner_notch_ref else 0.0
-purlin_notch_length_mm = purlin_inner_notch_ref["length_mm"] if purlin_inner_notch_ref else 0.0
 purlin_edge_notch_info = {
     "left": rect_notch_info("con.orsi.vasen.on.kattotuoli.vasen"),
     "right": rect_notch_info("con.orsi.oikea.on.kattotuoli.oikea"),
@@ -718,10 +863,14 @@ purlin_edge_notch_info = {
 purlin_edge_notch_ref = next((item for item in purlin_edge_notch_info.values() if item["active"]), None)
 purlin_edge_notch_depth_mm = purlin_edge_notch_ref["depth_mm"] if purlin_edge_notch_ref else 0.0
 purlin_edge_notch_length_mm = purlin_edge_notch_ref["length_mm"] if purlin_edge_notch_ref else 0.0
-left_purlin_support_x_mm = max(float(left_purlins[0]["axis_start"]["x"]), float(left_purlins[0]["axis_end"]["x"]))
-right_purlin_support_x_mm = min(float(right_purlins[0]["axis_start"]["x"]), float(right_purlins[0]["axis_end"]["x"]))
-left_purlin_edge_support_center_x_mm = float(edge_rafters["left"]["axis_start"]["x"])
-right_purlin_edge_support_center_x_mm = float(edge_rafters["right"]["axis_start"]["x"])
+left_purlin_inner_support_conn = CONNECTIONS["con.orsi.vasen.on.kattotuoli.0"]
+right_purlin_inner_support_conn = CONNECTIONS["con.orsi.oikea.on.kattotuoli.5"]
+left_purlin_edge_support_conn = CONNECTIONS["con.orsi.vasen.on.kattotuoli.vasen"]
+right_purlin_edge_support_conn = CONNECTIONS["con.orsi.oikea.on.kattotuoli.oikea"]
+left_purlin_support_x_mm = float(connection_support_point(left_purlin_inner_support_conn, side_purlin_root_id("left"))["x"])
+right_purlin_support_x_mm = float(connection_support_point(right_purlin_inner_support_conn, side_purlin_root_id("right"))["x"])
+left_purlin_edge_support_center_x_mm = float(connection_support_point(left_purlin_edge_support_conn, side_purlin_root_id("left"), "support_centerline")["x"])
+right_purlin_edge_support_center_x_mm = float(connection_support_point(right_purlin_edge_support_conn, side_purlin_root_id("right"), "support_centerline")["x"])
 corner_purlin_inner_support_connections = {}
 corner_purlin_inner_support_points = {}
 corner_purlin_inner_support_member_ids = {}
@@ -749,7 +898,7 @@ for side, members in corner_purlins_by_side.items():
             lambda _conn, conn_members: any(other.startswith(INTERIOR_RAFTER_PREFIX) and other.split(".")[-1].isdigit() for other in conn_members if other != member_id),
         )
         corner_purlin_inner_support_connections[member_id] = inner_conn
-        corner_purlin_inner_support_points[member_id] = dict(inner_conn["at"]) if inner_conn is not None else dict(member_obj["axis_start"])
+        corner_purlin_inner_support_points[member_id] = connection_support_point(inner_conn, member_id) if inner_conn is not None else dict(member_obj["axis_start"])
         corner_purlin_inner_support_member_ids[member_id] = None if inner_conn is None else next(
             (other for other in inner_conn.get("members", []) if other != member_id),
             None,
@@ -768,14 +917,7 @@ for side, members in corner_purlins_by_side.items():
         outer_support_member_id = next((other for other in outer_conn.get("members", []) if other != member_id), None)
         corner_purlin_outer_support_connections[member_id] = outer_conn
         corner_purlin_outer_support_member_ids[member_id] = outer_support_member_id
-        if outer_support_member_id == "beam.outer":
-            corner_purlin_outer_support_points[member_id] = {
-                "x": float(outer_conn["at"]["x"]),
-                "y": float(outer_conn["at"]["y"]) + outer_beam_b_mm / 2.0,
-                "z": float(outer_conn["at"]["z"]),
-            }
-        else:
-            corner_purlin_outer_support_points[member_id] = dict(outer_conn["at"])
+        corner_purlin_outer_support_points[member_id] = connection_support_point(outer_conn, member_id)
         corner_purlin_outer_notch_info[member_id] = bevel_notch_info(outer_conn["id"])
 
 for side, members in corner_purlins_by_side.items():
@@ -883,22 +1025,124 @@ def ec5_rotational_spring_k_Nmm_per_rad(fastener_d_mm, fastener_count, effective
     return fastener_count * kser_per_fastener_N_per_mm * effective_height_mm**2 / 12.0
 
 
-# Sisäpään puolijäykkä liitos: palkkikenkä N 48×136, 5.0×40 ankkuriruuvit, täyskiinnitys.
-# Likimalli:
-#   - EN 1995-1-1 taulukko 7.1: Kser = rho_m^1.5 * d / 23  (d <= 6 mm)
-#   - 24 kpl Ø5-reikiä oletetaan täyskiinnitetyiksi
-#   - ruuvit mallinnetaan korkeussuunnassa tasaisesti 136 mm matkalle
-#     -> rotaatiojousi k_theta = Σ(Kser_i * y_i^2) ≈ n * Kser * h^2 / 12
-inner_hanger_name = "Palkkikenkä N 48x136"
-inner_hanger_fastener = "5.0x40 ankkuriruuvi"
-inner_hanger_fastener_count = 24
-inner_hanger_height_mm = 136.0
-inner_hanger_rot_k_Nmm_per_rad = ec5_rotational_spring_k_Nmm_per_rad(5.0, inner_hanger_fastener_count, inner_hanger_height_mm)
+DEFAULT_INNER_HANGER_ANALYSIS = {
+    "support_model": "semi_rigid",
+    "support_line_ref": "support_centerline",
+    "label": "Palkkikenkä N 48x136",
+    "fastener_label": "5.0x40 ankkuriruuvi",
+    "rotation_spring": {
+        "model": "ec5_fasteners",
+        "fastener_d_mm": 5.0,
+        "fastener_count": 24,
+        "effective_height_mm": 136.0,
+        "rho_kg_m3": rho_c24,
+    },
+}
+DEFAULT_PINNED_CENTER_ANALYSIS = {"support_model": "pinned", "support_line_ref": "support_centerline"}
+DEFAULT_PINNED_OUTER_EDGE_ANALYSIS = {"support_model": "pinned", "support_line_ref": "support_outer_edge"}
 
-# Reunimmaiset kattotuolit oletetaan N-kiinnikkeillä molemmista päistä.
-edge_rafter_support_name = inner_hanger_name
-edge_rafter_support_fastener = inner_hanger_fastener
-edge_rafter_support_rot_k_Nmm_per_rad = inner_hanger_rot_k_Nmm_per_rad
+DEFAULT_CONNECTION_ANALYSIS_BY_ID = {
+    "con.kattotuoli.on.inner_beam": DEFAULT_INNER_HANGER_ANALYSIS,
+    "con.kattotuoli.on.outer_beam": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.kattotuoli.vasen.on.inner_beam": DEFAULT_INNER_HANGER_ANALYSIS,
+    "con.kattotuoli.oikea.on.inner_beam": DEFAULT_INNER_HANGER_ANALYSIS,
+    "con.kattotuoli.vasen.on.outer_beam": DEFAULT_INNER_HANGER_ANALYSIS,
+    "con.kattotuoli.oikea.on.outer_beam": DEFAULT_INNER_HANGER_ANALYSIS,
+    "con.orsi.vasen.on.kattotuoli.0": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.oikea.on.kattotuoli.5": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.vasen.on.kattotuoli.vasen": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+    "con.orsi.oikea.on.kattotuoli.oikea": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+    "con.orsi.vasen.67.on.kattotuoli.0": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.vasen.67.on.kattotuoli.vasen": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.vasen.45.on.kattotuoli.0": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.vasen.45.on.outer_beam": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+    "con.orsi.vasen.22.on.kattotuoli.0": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.vasen.22.on.outer_beam": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+    "con.orsi.oikea.67.on.kattotuoli.5": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.oikea.67.on.kattotuoli.oikea": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.oikea.45.on.kattotuoli.5": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.oikea.45.on.outer_beam": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+    "con.orsi.oikea.22.on.kattotuoli.5": DEFAULT_PINNED_CENTER_ANALYSIS,
+    "con.orsi.oikea.22.on.outer_beam": DEFAULT_PINNED_OUTER_EDGE_ANALYSIS,
+}
+RIGID_SUPPORT_ROT_K_NMM_PER_RAD = 1.0e15
+
+
+def merge_analysis_dict(base, override):
+    merged = dict(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            nested = dict(merged[key])
+            nested.update(value)
+            merged[key] = nested
+        else:
+            merged[key] = value
+    return merged
+
+
+def connection_analysis_info(connection_id):
+    default_info = DEFAULT_CONNECTION_ANALYSIS_BY_ID.get(connection_id, DEFAULT_PINNED_CENTER_ANALYSIS)
+    analysis = CONNECTIONS[connection_id].get("analysis", {})
+    merged = merge_analysis_dict(default_info, analysis)
+    merged.setdefault("support_model", "pinned")
+    merged.setdefault("support_line_ref", "support_centerline")
+    return merged
+
+
+def rotation_spring_k_from_info(spring_info):
+    if spring_info is None:
+        return None
+    if spring_info["model"] == "explicit":
+        return float(spring_info["k_theta_Nmm_per_rad"])
+    if spring_info["model"] == "ec5_fasteners":
+        rho_kg_m3 = float(spring_info["rho_kg_m3"])
+        fastener_d_mm = float(spring_info["fastener_d_mm"])
+        fastener_count = int(spring_info["fastener_count"])
+        effective_height_mm = float(spring_info["effective_height_mm"])
+        kser_per_fastener_N_per_mm = rho_kg_m3**1.5 * fastener_d_mm / 23.0
+        return fastener_count * kser_per_fastener_N_per_mm * effective_height_mm**2 / 12.0
+    raise ValueError(f"Unsupported rotation spring model: {spring_info['model']}")
+
+
+def connection_rotational_spring_k_Nmm_per_rad(connection_id):
+    analysis = connection_analysis_info(connection_id)
+    if analysis["support_model"] == "pinned":
+        return None
+    if analysis["support_model"] == "rigid":
+        return RIGID_SUPPORT_ROT_K_NMM_PER_RAD
+    return rotation_spring_k_from_info(analysis["rotation_spring"])
+
+
+inner_hanger_analysis = connection_analysis_info("con.kattotuoli.on.inner_beam")
+inner_hanger_name = inner_hanger_analysis.get("label", "liitos")
+inner_hanger_fastener = inner_hanger_analysis.get("fastener_label", "")
+inner_hanger_rot_k_Nmm_per_rad = connection_rotational_spring_k_Nmm_per_rad("con.kattotuoli.on.inner_beam")
+
+edge_rafter_support_analysis_by_side = {
+    "left": connection_analysis_info("con.kattotuoli.vasen.on.inner_beam"),
+    "right": connection_analysis_info("con.kattotuoli.oikea.on.inner_beam"),
+}
+edge_rafter_support_rot_k_by_side = {
+    side: connection_rotational_spring_k_Nmm_per_rad(f"con.kattotuoli.{SIDE_MEMBER_LABEL[side]}.on.inner_beam")
+    for side in ("left", "right")
+}
+
+
+def format_connection_behavior(analysis, rot_k_Nmm_per_rad):
+    parts = []
+    label = analysis.get("label")
+    fastener_label = analysis.get("fastener_label")
+    if label:
+        parts.append(label)
+    if fastener_label:
+        parts.append(fastener_label)
+    if analysis["support_model"] == "pinned":
+        parts.append("nivel")
+    elif analysis["support_model"] == "rigid":
+        parts.append("jäykkä")
+    elif rot_k_Nmm_per_rad is not None:
+        parts.append(f"kθ ≈ {rot_k_Nmm_per_rad/1.0e6:.1f} kNm/rad")
+    return ", ".join(parts) if parts else analysis["support_model"]
 
 roof_area_uls_A = gammaG * gk_roofing + gammaQ * s_roof + gammaQ * psi0_W * w_down
 roof_area_uls_B = gammaG * gk_roofing + gammaQ * psi0_snow * s_roof
@@ -1071,10 +1315,10 @@ def make_edge_rect_depth_fn(side):
     return zones_mm, depth_fn, True
 
 
-RAfter_PROPS = member_rect_props(rafter_b_mm, rafter_h_mm)
-PURLIN_PROPS = member_rect_props(purlin_b_mm, purlin_h_mm)
-OUTER_BEAM_PROPS = member_rect_props(outer_beam_b_mm, outer_beam_h_mm)
-INNER_BEAM_PROPS = member_rect_props(inner_beam_b_mm, inner_beam_h_mm)
+RAfter_PROPS = member_rect_props(rafter_b_mm, rafter_h_mm, member_section_rotation_deg(interior_rafters[0]))
+PURLIN_PROPS = member_rect_props(purlin_b_mm, purlin_h_mm, member_section_rotation_deg(left_purlins[0]))
+OUTER_BEAM_PROPS = member_rect_props(outer_beam_b_mm, outer_beam_h_mm, member_section_rotation_deg(outer_beam))
+INNER_BEAM_PROPS = member_rect_props(inner_beam_b_mm, inner_beam_h_mm, member_section_rotation_deg(inner_beam))
 
 RAfter_MRd_kNm = fm_d_c24 * RAfter_PROPS["W_mm3"] / 1.0e6
 RAfter_VRd_kN = fv_d_c24 * RAfter_PROPS["A_mm2"] / 1.5e3
@@ -1082,7 +1326,7 @@ PURLIN_MRd_kNm = fm_d_c24 * PURLIN_PROPS["W_mm3"] / 1.0e6
 PURLIN_VRd_kN = fv_d_c24 * PURLIN_PROPS["A_mm2"] / 1.5e3
 OUTER_BEAM_MRd_y_kNm = fm_d_gl30c * OUTER_BEAM_PROPS["W_mm3"] / 1.0e6
 OUTER_BEAM_VRd_kN = fv_d_gl30c * OUTER_BEAM_PROPS["A_mm2"] / 1.5e3
-OUTER_BEAM_MRd_z_kNm = fm_d_gl30c * (outer_beam_h_mm * outer_beam_b_mm**2 / 6.0) / 1.0e6
+OUTER_BEAM_MRd_z_kNm = fm_d_gl30c * OUTER_BEAM_PROPS["W_horizontal_mm3"] / 1.0e6
 INNER_BEAM_MRd_kNm = fm_d_gl30c * INNER_BEAM_PROPS["W_mm3"] / 1.0e6
 INNER_BEAM_VRd_kN = fv_d_gl30c * INNER_BEAM_PROPS["A_mm2"] / 1.5e3
 
@@ -1090,18 +1334,19 @@ edge_rafter_section_by_side = {}
 for side, member_obj in edge_rafters.items():
     b_mm = profile_b(member_obj)
     h_mm = profile_h(member_obj)
-    props = member_rect_props(b_mm, h_mm)
+    props = member_rect_props(b_mm, h_mm, member_section_rotation_deg(member_obj))
     edge_rafter_section_by_side[side] = {
         "profile": member_obj["profile"]["name"],
         "b_mm": b_mm,
         "h_mm": h_mm,
+        "section_rotation_deg": props["section_rotation_deg"],
         "self_kNm": (b_mm / 1000.0) * (h_mm / 1000.0) * gamma_gl30c / math.cos(roof_slope_rad),
         "MRd_kNm": fm_d_gl30c * props["W_mm3"] / 1.0e6,
         "VRd_kN": fv_d_gl30c * props["A_mm2"] / 1.5e3,
     }
 
-left_purlin_edge_support_line_x_mm = left_purlin_edge_support_center_x_mm - edge_rafter_section_by_side["left"]["b_mm"] / 2.0
-right_purlin_edge_support_line_x_mm = right_purlin_edge_support_center_x_mm + edge_rafter_section_by_side["right"]["b_mm"] / 2.0
+left_purlin_edge_support_line_x_mm = float(connection_support_point(left_purlin_edge_support_conn, side_purlin_root_id("left"), "support_outer_edge")["x"])
+right_purlin_edge_support_line_x_mm = float(connection_support_point(right_purlin_edge_support_conn, side_purlin_root_id("right"), "support_outer_edge")["x"])
 
 
 analysis_step_member_mm = 100.0
@@ -1167,11 +1412,50 @@ def member_uniform_loads(nodes_mm, fixed_coord_mm, roof_area_kNm2_at, trib_width
     return loads, load_stats(loads)
 
 
+def load_application_interval_from_rule(load_rule, reference_positions_mm, local_axis_positive_sign, coord_min_mm, coord_max_mm):
+    reference_mm = reference_positions_mm[load_rule["reference"]]
+    start_mm = clamp(reference_mm + local_axis_positive_sign * float(load_rule.get("offset_mm", 0.0)), coord_min_mm, coord_max_mm)
+    if load_rule["model"] != "partial_uniform":
+        return start_mm, start_mm
+    end_mm = clamp(start_mm + local_axis_positive_sign * float(load_rule["length_mm"]), coord_min_mm, coord_max_mm)
+    return start_mm, end_mm
+
+
+def roof_load_application_from_rule(roof_uniform_loads, load_rule, reference_positions_mm, local_axis_positive_sign, coord_min_mm, coord_max_mm):
+    model = load_rule["model"]
+    if model == "uniform":
+        return [], roof_uniform_loads, "uniform"
+
+    start_mm, end_mm = load_application_interval_from_rule(
+        load_rule,
+        reference_positions_mm,
+        local_axis_positive_sign,
+        coord_min_mm,
+        coord_max_mm,
+    )
+    total_roof_load_kN = total_uniform_load_kN(roof_uniform_loads)
+
+    if model == "point":
+        return [(start_mm, total_roof_load_kN)], [], "point"
+
+    if model == "partial_uniform":
+        a_mm, b_mm = sorted((start_mm, end_mm))
+        load_length_mm = max(1e-9, b_mm - a_mm)
+        return [], [(a_mm, b_mm, total_roof_load_kN / load_length_mm)], "partial_uniform"
+
+    raise ValueError(f"Unsupported load transfer model: {model}")
+
+
 def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_self):
     member_obj = left_purlins[index] if side == "left" else right_purlins[index]
+    axis_start_x_mm = float(member_obj["axis_start"]["x"])
+    axis_end_x_mm = float(member_obj["axis_end"]["x"])
     x0_mm = min(float(member_obj["axis_start"]["x"]), float(member_obj["axis_end"]["x"]))
     x1_mm = max(float(member_obj["axis_start"]["x"]), float(member_obj["axis_end"]["x"]))
     member_y_mm = float(member_obj["axis_start"]["y"])
+    member_props = member_rect_props(purlin_b_mm, purlin_h_mm, member_section_rotation_deg(member_obj))
+    member_MRd_kNm = fm_d_c24 * member_props["W_mm3"] / 1.0e6
+    member_VRd_kN = fv_d_c24 * member_props["A_mm2"] / 1.5e3
     if side == "left":
         edge_support_x_mm = left_purlin_edge_support_line_x_mm
         supports = [edge_support_x_mm, left_purlin_support_x_mm]
@@ -1186,21 +1470,47 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
         depth_functions.append(edge_notch_depth_fn)
     section_h_fn = combined_section_h(purlin_h_mm, depth_functions)
 
+    outer_edge_x_mm = x0_mm if side == "left" else x1_mm
+    support_center_x_mm = left_purlin_edge_support_center_x_mm if side == "left" else right_purlin_edge_support_center_x_mm
+    roof_load_rule = roof_load_transfer_rule(member_obj["id"])
+    roof_reference_positions_mm = {
+        "axis_start": axis_start_x_mm,
+        "axis_end": axis_end_x_mm,
+        "support_centerline": support_center_x_mm,
+        "support_outer_edge": edge_support_x_mm,
+        "support_inner_edge": 2.0 * support_center_x_mm - edge_support_x_mm,
+    }
+    local_axis_positive_sign = 1.0 if axis_end_x_mm >= axis_start_x_mm else -1.0
     node_points = [x0_mm, x1_mm, *supports, *inner_notch_zone_mm]
     if edge_notch_active:
         node_points.extend(edge_notch_zone_mm)
-    outer_edge_x_mm = x0_mm if side == "left" else x1_mm
-    panel_load_x_mm = outer_edge_x_mm + panel_frame_edge_offset_mm if side == "left" else outer_edge_x_mm - panel_frame_edge_offset_mm
-    node_points.append(panel_load_x_mm)
+    if roof_load_rule["model"] != "uniform":
+        roof_load_start_mm, roof_load_end_mm = load_application_interval_from_rule(
+            roof_load_rule,
+            roof_reference_positions_mm,
+            local_axis_positive_sign,
+            x0_mm,
+            x1_mm,
+        )
+        node_points.extend([roof_load_start_mm, roof_load_end_mm])
     nodes_mm = refine_nodes_mm(node_points, analysis_step_member_mm)
     roof_uniform = roof_area_uniform_loads(nodes_mm, member_y_mm, roof_area_kNm2_at, trib_height_m, axis="x")
     self_uniform = uniform_loads_for_nodes(nodes_mm, gamma_self * purlin_self_kNm / 1000.0)
     q_line_stats = load_stats(combine_uniform_loads(roof_uniform, self_uniform))
-    uniform = self_uniform
-    panel_point_load_kN = total_uniform_load_kN(roof_uniform)
-    point_loads = [(panel_load_x_mm, panel_point_load_kN)]
-    panel_load_mode = "outer_edge_point"
-    EI_by_segment = [E_c24 * purlin_b_mm * section_h_fn(0.5 * (a_mm + b_mm)) ** 3 / 12.0 for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])]
+    point_loads, roof_applied_uniform, panel_load_mode = roof_load_application_from_rule(
+        roof_uniform,
+        roof_load_rule,
+        roof_reference_positions_mm,
+        local_axis_positive_sign,
+        x0_mm,
+        x1_mm,
+    )
+    uniform = combine_uniform_loads(self_uniform, roof_applied_uniform)
+    panel_point_load_kN = sum(load_kN for _, load_kN in point_loads)
+    EI_by_segment = [
+        E_c24 * member_rect_props(purlin_b_mm, section_h_fn(0.5 * (a_mm + b_mm)), member_props["section_rotation_deg"])["I_mm4"]
+        for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])
+    ]
 
     response, internal, delta = solve_member_response(
         nodes_mm,
@@ -1216,8 +1526,8 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
     if inner_notch_active:
         inner_notch = sample_net_section_utilization(
             response["elements"],
+            member_obj=member_obj,
             section_h_mm_at_x=section_h_fn,
-            b_mm=purlin_b_mm,
             fm_d_Nmm2=fm_d_c24,
             fv_d_Nmm2=fv_d_c24,
             x_start_mm=inner_notch_zone_mm[0],
@@ -1228,8 +1538,8 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
     if edge_notch_active:
         edge_notch = sample_net_section_utilization(
             response["elements"],
+            member_obj=member_obj,
             section_h_mm_at_x=section_h_fn,
-            b_mm=purlin_b_mm,
             fm_d_Nmm2=fm_d_c24,
             fv_d_Nmm2=fv_d_c24,
             x_start_mm=edge_notch_zone_mm[0],
@@ -1252,10 +1562,13 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
         "V_abs": internal["V_abs"],
         "delta": delta,
         "delta_lim_mm": abs(interior_support_x_mm - edge_support_x_mm) / 300.0,
+        "section_rotation_deg": member_props["section_rotation_deg"],
+        "MRd_kNm": member_MRd_kNm,
+        "VRd_kN": member_VRd_kN,
         "R_edge_kN": response["reactions_kN"][edge_support_x_mm],
         "R_inner_kN": response["reactions_kN"][interior_support_x_mm],
-        "eta_M": moment_gov["value_kNm"] / PURLIN_MRd_kNm * 100.0,
-        "eta_V": abs(internal["V_abs"]["value_kN"]) / PURLIN_VRd_kN * 100.0,
+        "eta_M": moment_gov["value_kNm"] / member_MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / member_VRd_kN * 100.0,
         "notch": notch,
         "inner_notch": inner_notch,
         "edge_notch": edge_notch,
@@ -1267,12 +1580,28 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
 def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at, gamma_self):
     member_id = member_obj["id"]
     member_length_mm = member_axis_length_mm(member_obj)
+    member_props = member_rect_props(purlin_b_mm, purlin_h_mm, member_section_rotation_deg(member_obj))
+    member_MRd_kNm = fm_d_c24 * member_props["W_mm3"] / 1.0e6
+    member_VRd_kN = fv_d_c24 * member_props["A_mm2"] / 1.5e3
     inner_conn = corner_purlin_inner_support_connections[member_id]
+    outer_conn = corner_purlin_outer_support_connections[member_id]
     support_inner_point = corner_purlin_inner_support_points[member_id]
     support_outer_point = corner_purlin_outer_support_points[member_id]
     support_inner_s_mm = project_point_to_member_s_mm(member_obj, support_inner_point)
     support_outer_s_mm = project_point_to_member_s_mm(member_obj, support_outer_point)
-    outer_end_s_mm = 0.0 if support_outer_s_mm <= member_length_mm - support_outer_s_mm else member_length_mm
+    support_outer_center_s_mm = project_point_to_member_s_mm(
+        member_obj,
+        connection_support_point(outer_conn, member_id, "support_centerline"),
+    )
+    support_outer_outer_edge_s_mm = project_point_to_member_s_mm(
+        member_obj,
+        connection_support_point(outer_conn, member_id, "support_outer_edge"),
+    )
+    support_outer_inner_edge_s_mm = project_point_to_member_s_mm(
+        member_obj,
+        connection_support_point(outer_conn, member_id, "support_inner_edge"),
+    )
+    outer_free_end_s_mm = 0.0 if support_inner_s_mm >= member_length_mm - support_inner_s_mm else member_length_mm
     inner_notch_info = dict(inactive_bevel_notch_info) if inner_conn is None else bevel_notch_info(inner_conn["id"])
     inner_notch_zone_mm, inner_notch_depth_fn, inner_notch_active = make_slanted_support_notch_depth_fn(inner_notch_info, member_length_mm)
     outer_notch_zone_mm, outer_notch_depth_fn, outer_notch_active = make_slanted_support_notch_depth_fn(
@@ -1285,29 +1614,51 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
     if outer_notch_active:
         depth_functions.append(outer_notch_depth_fn)
     section_h_fn = combined_section_h(purlin_h_mm, depth_functions)
+    roof_load_rule = roof_load_transfer_rule(member_id)
+    roof_reference_positions_mm = {
+        "axis_start": 0.0,
+        "axis_end": member_length_mm,
+        "support_centerline": support_outer_center_s_mm,
+        "support_outer_edge": support_outer_outer_edge_s_mm,
+        "support_inner_edge": support_outer_inner_edge_s_mm,
+    }
+    local_axis_positive_sign = 1.0
     node_points = [0.0, member_length_mm, support_inner_s_mm, support_outer_s_mm]
     if inner_notch_active:
         node_points.extend(inner_notch_zone_mm)
     if outer_notch_active:
         node_points.extend(outer_notch_zone_mm)
-    panel_load_s_mm = clamp(
-        outer_end_s_mm + (panel_frame_edge_offset_mm if outer_end_s_mm <= 1e-9 else -panel_frame_edge_offset_mm),
-        0.0,
-        member_length_mm,
-    )
-    node_points.append(panel_load_s_mm)
+    if roof_load_rule["model"] != "uniform":
+        roof_load_start_s_mm, roof_load_end_s_mm = load_application_interval_from_rule(
+            roof_load_rule,
+            roof_reference_positions_mm,
+            local_axis_positive_sign,
+            0.0,
+            member_length_mm,
+        )
+        node_points.extend([roof_load_start_s_mm, roof_load_end_s_mm])
     nodes_mm = refine_nodes_mm(node_points, analysis_step_member_mm)
     roof_uniform = roof_area_uniform_loads_on_member(nodes_mm, member_obj, roof_area_kNm2_at, trib_width_m)
     self_uniform = uniform_loads_for_nodes(nodes_mm, gamma_self * purlin_self_kNm / 1000.0)
     q_line_stats = load_stats(combine_uniform_loads(roof_uniform, self_uniform))
-    point_loads = [(panel_load_s_mm, total_uniform_load_kN(roof_uniform))]
-    uniform = self_uniform
+    point_loads, roof_applied_uniform, panel_load_mode = roof_load_application_from_rule(
+        roof_uniform,
+        roof_load_rule,
+        roof_reference_positions_mm,
+        local_axis_positive_sign,
+        0.0,
+        member_length_mm,
+    )
+    uniform = combine_uniform_loads(self_uniform, roof_applied_uniform)
     response, internal, delta = solve_member_response(
         nodes_mm,
         [support_inner_s_mm, support_outer_s_mm],
         point_loads,
         uniform,
-        EI_by_segment_Nmm2=[E_c24 * purlin_b_mm * section_h_fn(0.5 * (a_mm + b_mm)) ** 3 / 12.0 for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])],
+        EI_by_segment_Nmm2=[
+            E_c24 * member_rect_props(purlin_b_mm, section_h_fn(0.5 * (a_mm + b_mm)), member_props["section_rotation_deg"])["I_mm4"]
+            for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])
+        ],
     )
     moment_gov = governing_moment(internal)
     reactions = response["reactions_kN"]
@@ -1317,8 +1668,8 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
     if inner_notch_active:
         inner_notch = sample_net_section_utilization(
             response["elements"],
+            member_obj=member_obj,
             section_h_mm_at_x=section_h_fn,
-            b_mm=purlin_b_mm,
             fm_d_Nmm2=fm_d_c24,
             fv_d_Nmm2=fv_d_c24,
             x_start_mm=inner_notch_zone_mm[0],
@@ -1329,8 +1680,8 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
     if outer_notch_active:
         outer_notch = sample_net_section_utilization(
             response["elements"],
+            member_obj=member_obj,
             section_h_mm_at_x=section_h_fn,
-            b_mm=purlin_b_mm,
             fm_d_Nmm2=fm_d_c24,
             fv_d_Nmm2=fv_d_c24,
             x_start_mm=outer_notch_zone_mm[0],
@@ -1351,25 +1702,28 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
         "q_line_kNm": q_line_stats["avg_kNm"],
         "q_line_min_kNm": q_line_stats["min_kNm"],
         "q_line_max_kNm": q_line_stats["max_kNm"],
-        "panel_load_mode": "outer_edge_point",
-        "panel_point_load_kN": point_loads[0][1],
+        "panel_load_mode": panel_load_mode,
+        "panel_point_load_kN": sum(load_kN for _, load_kN in point_loads),
         "M_gov": moment_gov,
         "V_abs": internal["V_abs"],
         "delta": delta,
-        "delta_lim_mm": abs(outer_end_s_mm - support_outer_s_mm) / 300.0,
+        "delta_lim_mm": abs(outer_free_end_s_mm - support_outer_s_mm) / 300.0,
         "support_inner_s_mm": support_inner_s_mm,
         "support_outer_s_mm": support_outer_s_mm,
         "support_inner_y_mm": float(support_inner_point["y"]),
         "support_outer_y_mm": float(support_outer_point["y"]),
         "support_outer_x_mm": float(support_outer_point["x"]),
+        "section_rotation_deg": member_props["section_rotation_deg"],
+        "MRd_kNm": member_MRd_kNm,
+        "VRd_kN": member_VRd_kN,
         "inner_support_member_id": corner_purlin_inner_support_member_ids[member_id],
         "outer_support_member_id": corner_purlin_outer_support_member_ids[member_id],
         "outer_support_label": corner_purlin_outer_support_member_ids[member_id],
         "R_inner_kN": reactions[support_inner_s_mm],
         "R_outer_kN": reactions[support_outer_s_mm],
         "R_outer_beam_kN": reactions[support_outer_s_mm],
-        "eta_M": moment_gov["value_kNm"] / PURLIN_MRd_kNm * 100.0,
-        "eta_V": abs(internal["V_abs"]["value_kN"]) / PURLIN_VRd_kN * 100.0,
+        "eta_M": moment_gov["value_kNm"] / member_MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / member_VRd_kN * 100.0,
         "notch": notch,
         "inner_notch": inner_notch,
         "outer_notch": outer_notch,
@@ -1386,6 +1740,7 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     y_end_mm = float(member_obj["axis_end"]["y"])
     inner_support_y_mm = edge_inner_support_y_mm if edge else interior_inner_support_y_mm
     outer_support_y_mm = edge_outer_support_y_mm if edge else interior_outer_support_y_mm
+    section_rotation = member_section_rotation_deg(member_obj)
     member_E_Nmm2 = E_gl30c if edge else E_c24
     member_fm_d_Nmm2 = fm_d_gl30c if edge else fm_d_c24
     member_fv_d_Nmm2 = fv_d_gl30c if edge else fv_d_c24
@@ -1422,13 +1777,20 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
         analysis_step_member_mm,
     )
     uniform, q_line_stats = member_uniform_loads(nodes_mm, member_x_mm, roof_area_kNm2_at, direct_width_m, gamma_self, member_self_kNm, axis="y")
-    EI_by_segment = [member_E_Nmm2 * member_b_mm * section_h_fn(0.5 * (a_mm + b_mm)) ** 3 / 12.0 for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])]
-    rotational_springs = {inner_support_y_mm: inner_hanger_rot_k_Nmm_per_rad}
+    EI_by_segment = [
+        member_E_Nmm2 * member_rect_props(member_b_mm, section_h_fn(0.5 * (a_mm + b_mm)), section_rotation)["I_mm4"]
+        for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])
+    ]
     if edge:
-        rotational_springs = {
-            inner_support_y_mm: edge_rafter_support_rot_k_Nmm_per_rad,
-            outer_support_y_mm: edge_rafter_support_rot_k_Nmm_per_rad,
-        }
+        rotational_springs = {}
+        edge_rot_k = edge_rafter_support_rot_k_by_side[side]
+        if edge_rot_k is not None:
+            rotational_springs[inner_support_y_mm] = edge_rot_k
+            rotational_springs[outer_support_y_mm] = edge_rot_k
+    else:
+        rotational_springs = {}
+        if inner_hanger_rot_k_Nmm_per_rad is not None:
+            rotational_springs[inner_support_y_mm] = inner_hanger_rot_k_Nmm_per_rad
     response, internal, delta = solve_member_response(
         nodes_mm,
         [inner_support_y_mm, outer_support_y_mm],
@@ -1443,8 +1805,8 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     if birdsmouth_ranges:
         birdsmouth = sample_net_section_utilization(
             response["elements"],
+            member_obj=member_obj,
             section_h_mm_at_x=section_h_fn,
-            b_mm=member_b_mm,
             fm_d_Nmm2=member_fm_d_Nmm2,
             fv_d_Nmm2=member_fv_d_Nmm2,
             x_start_mm=birdsmouth_zone_mm[0],
@@ -1456,8 +1818,8 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
         top_checks = [
             sample_net_section_utilization(
                 response["elements"],
+                member_obj=member_obj,
                 section_h_mm_at_x=section_h_fn,
-                b_mm=member_b_mm,
                 fm_d_Nmm2=member_fm_d_Nmm2,
                 fv_d_Nmm2=member_fv_d_Nmm2,
                 x_start_mm=rng[0],
@@ -1487,6 +1849,7 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
         "V_abs": internal["V_abs"],
         "delta": delta,
         "delta_lim_mm": abs(outer_support_y_mm - inner_support_y_mm) / 300.0,
+        "section_rotation_deg": section_rotation,
         "R_inner_kN": response["reactions_kN"][inner_support_y_mm],
         "R_outer_kN": response["reactions_kN"][outer_support_y_mm],
         "MRd_kNm": member_MRd_kNm,
@@ -1537,7 +1900,7 @@ def analyse_outer_beam_horizontal(q_line_kNm):
         interval_loads.append((start_mm, end_mm, q_line_kNm / 1000.0))
     nodes_mm = refine_nodes_mm(interval_points_mm, analysis_step_beam_mm)
     uniform = intervals_to_uniform_loads(nodes_mm, interval_loads)
-    response, internal, _ = solve_member_response(nodes_mm, outer_supports_x_mm, [], uniform, EI_Nmm2=E_gl30c * OUTER_BEAM_PROPS["I_weak_mm4"])
+    response, internal, _ = solve_member_response(nodes_mm, outer_supports_x_mm, [], uniform, EI_Nmm2=E_gl30c * OUTER_BEAM_PROPS["I_horizontal_mm4"])
     moment_gov = governing_moment(internal)
     return {
         "M_pos": internal["M_pos"],
@@ -1628,7 +1991,7 @@ def analyse_case(case_key):
         sorted(outer_beam_point_loads, key=lambda item: item[0]),
         gamma_self,
         E_gl30c,
-        OUTER_BEAM_PROPS["I_strong_mm4"],
+        OUTER_BEAM_PROPS["I_vertical_mm4"],
         OUTER_BEAM_MRd_y_kNm,
         OUTER_BEAM_VRd_kN,
     )
@@ -1638,7 +2001,7 @@ def analyse_case(case_key):
         sorted(inner_beam_point_loads, key=lambda item: item[0]),
         gamma_self,
         E_gl30c,
-        INNER_BEAM_PROPS["I_strong_mm4"],
+        INNER_BEAM_PROPS["I_vertical_mm4"],
         INNER_BEAM_MRd_kNm,
         INNER_BEAM_VRd_kN,
     )
@@ -1802,8 +2165,14 @@ if corner_purlins:
     print(f"  Nurkkaorret y-suunnassa       {len(corner_purlins)} kpl  @ x = " + ", ".join(f"{float(item['axis_start']['x']):.0f}" for item in corner_purlins) + " mm")
 print(f"  Kattotuolien tuet sisa/ulko   y = {interior_inner_support_y_mm:.0f} / {interior_outer_support_y_mm:.0f} mm")
 print(f"  Reunakattotuolien sisatuki    y = {edge_inner_support_y_mm:.0f} mm")
-print(f"  Sisäpään liitos               {inner_hanger_name}, {inner_hanger_fastener}, kθ ≈ {inner_hanger_rot_k_Nmm_per_rad/1.0e6:.1f} kNm/rad")
-print(f"  Reunakattotuolien liitokset   {edge_rafter_support_name} molemmissa päissä, kθ ≈ {edge_rafter_support_rot_k_Nmm_per_rad/1.0e6:.1f} kNm/rad")
+print(f"  Sisäpään liitos               {format_connection_behavior(inner_hanger_analysis, inner_hanger_rot_k_Nmm_per_rad)}")
+print(
+    "  Reunakattotuolien liitokset   "
+    + " / ".join(
+        f"{SIDE_MEMBER_LABEL[side]}: {format_connection_behavior(edge_rafter_support_analysis_by_side[side], edge_rafter_support_rot_k_by_side[side])}"
+        for side in ("left", "right")
+    )
+)
 print("  Orsien liitokset              nivelletyt tuet")
 print(f"  Ulkopalkin tuet               x = " + " / ".join(f"{x_mm:.0f}" for x_mm in outer_supports_x_mm) + " mm")
 print(f"  Sisäpalkin tuet               x = " + " / ".join(f"{x_mm:.0f}" for x_mm in inner_supports_x_mm) + " mm")
@@ -1829,9 +2198,14 @@ print(
     f"  Tributäärikorkeudet           vasen: {' / '.join(f'{h_m:.3f}' for h_m in purlin_trib_heights_m['left'])} m"
     f" | oikea: {' / '.join(f'{h_m:.3f}' for h_m in purlin_trib_heights_m['right'])} m"
 )
-print(f"  Paneelikehikko                kuorma pisteena {panel_frame_edge_offset_mm:.0f} mm ulkoreunasta; omapaino viivakuormana")
-print(f"  MRd = {PURLIN_MRd_kNm:.2f} kNm,  VRd = {PURLIN_VRd_kN:.2f} kN,  δ_lim = {(left_purlin_support_x_mm-left_purlin_edge_support_line_x_mm)/300.0:.1f} mm")
-print(f"  Paatybevel ulokepaassa        bevel_bottom_notch {purlin_notch_depth_mm:.0f} × {purlin_notch_length_mm:.0f} mm")
+print(f"  Poikkileikkauksen kierto      vasen: {member_section_rotation_deg(left_purlins[0]):+.1f}° | oikea: {member_section_rotation_deg(right_purlins[0]):+.1f}°")
+print(f"  Paneelikehikko                {format_load_transfer_rule(horizontal_edge_purlin_ids)}")
+print(
+    f"  MRd = {PURLIN_MRd_kNm:.2f} kNm,  VRd = {PURLIN_VRd_kN:.2f} kN,  "
+    f"δ_lim vasen / oikea = {(left_purlin_support_x_mm-left_purlin_edge_support_line_x_mm)/300.0:.1f} / "
+    f"{(right_purlin_edge_support_line_x_mm-right_purlin_support_x_mm)/300.0:.1f} mm"
+)
+print(f"  Paatybevel ulokepaassa        {format_labeled_bevel_notch_specs(purlin_inner_notch_info)}")
 if purlin_edge_notch_ref is not None:
     print(f"  Lovi reunatuella              rect_notch {purlin_edge_notch_depth_mm:.0f} × {purlin_edge_notch_length_mm:.0f} mm, h_net,min = {critical_purlin['h_net_min_mm']:.0f} mm")
 else:
@@ -1861,46 +2235,44 @@ if corner_purlin_design_results:
             for side in sorted(corner_purlin_design_results)
         )
     )
-    print(f"  Paneelikuorma                 paatypistekuormana {panel_frame_edge_offset_mm:.0f} mm ulkoreunasta; omapaino viivakuormana")
-    slanted_notch_desc = []
-    slanted_rafter_notch = next(
-        (
-            bevel_notch_info(conn["id"])
-            for conn in corner_purlin_inner_support_connections.values()
-            if conn is not None and bevel_notch_info(conn["id"])["active"]
-        ),
-        None,
+    print(
+        "  Poikkileikkauksen kierto      "
+        + " | ".join(
+            f"{side}: {min(row['section_rotation_deg'] for row in corner_purlin_design_results[side]):+.1f} … {max(row['section_rotation_deg'] for row in corner_purlin_design_results[side]):+.1f}°"
+            for side in sorted(corner_purlin_design_results)
+        )
     )
-    if slanted_rafter_notch is None:
-        slanted_rafter_notch = next(
-            (
-                info
-                for member_id, info in corner_purlin_outer_notch_info.items()
-                if info["active"] and corner_purlin_outer_support_member_ids[member_id].startswith(INTERIOR_RAFTER_PREFIX)
-            ),
-            None,
-        )
-    if slanted_rafter_notch is not None:
-        slanted_notch_desc.append(
-            f"rafter-tuet bevel_bottom_notch {slanted_rafter_notch['depth_mm']:.0f} × {slanted_rafter_notch['length_mm']:.0f} mm"
-        )
-    slanted_beam_notch = next(
-        (
+    print(f"  Paneelikuorma                 {format_load_transfer_rule(slanted_edge_purlin_ids)}")
+    slanted_notch_desc = []
+    slanted_rafter_notches = [
+        bevel_notch_info(conn["id"])
+        for conn in corner_purlin_inner_support_connections.values()
+        if conn is not None and bevel_notch_info(conn["id"])["active"]
+    ]
+    if not slanted_rafter_notches:
+        slanted_rafter_notches = [
             info
             for member_id, info in corner_purlin_outer_notch_info.items()
-            if info["active"] and corner_purlin_outer_support_member_ids[member_id] == "beam.outer"
-        ),
-        None,
-    )
-    if slanted_beam_notch is not None:
+            if info["active"] and corner_purlin_outer_support_member_ids[member_id].startswith(INTERIOR_RAFTER_PREFIX)
+        ]
+    if slanted_rafter_notches:
         slanted_notch_desc.append(
-            f"beam.outer bevel_bottom_notch {slanted_beam_notch['depth_mm']:.0f} × {slanted_beam_notch['length_mm']:.0f} mm"
+            f"rafter-tuet bevel_bottom_notch {format_bevel_notch_specs(slanted_rafter_notches)}"
+        )
+    slanted_beam_notches = [
+        info
+        for member_id, info in corner_purlin_outer_notch_info.items()
+        if info["active"] and corner_purlin_outer_support_member_ids[member_id] == "beam.outer"
+    ]
+    if slanted_beam_notches:
+        slanted_notch_desc.append(
+            f"beam.outer bevel_bottom_notch {format_bevel_notch_specs(slanted_beam_notches)}"
         )
     if slanted_notch_desc:
         print(
         f"  Paatybevelit vinoissa orsissa "
             + "; ".join(slanted_notch_desc)
-            + f", h_net,min = {critical_corner_purlin['h_net_min_mm']:.0f} mm"
+            + f", h_net,min = {min(row['h_net_min_mm'] for rows in corner_purlin_design_results.values() for row in rows):.0f} mm"
         )
     print()
     print(f"  {'ID':<20} {'b_trib':>7} {'q_avg':>7} {'R_in':>8} {'R_out':>8} {'Md':>7} {'η_M':>7} {'η_V':>7} {'η_lovi':>8} {'δ_sls':>9}")
@@ -2027,21 +2399,27 @@ print(f"  Suurin sisätuen nostotarve        {abs(min(inner_uplift.values())):.2
 
 print("\n── HUOMIOT ───────────────────────────────────────────────────────")
 print("  * Reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa; kuorma siirtyy")
-print(f"    geometry/terassi_puu.json:n mukaisten orsien kautta paatypistekuormina {panel_frame_edge_offset_mm:.0f} mm")
-print("    ulkoreunasta; orren oma paino mallinnetaan viivakuormana.")
+print("    geometry/terassi_puu.json:n load_transfer.member_refs-metadatan mukaisesti orsien kautta;")
+print("    orren oma paino mallinnetaan viivakuormana.")
 print("  * Ulkokulmien nurkkaorret mallinnetaan tuettuina toiseksi uloimpaan kattotuoliin ja")
 print("    ulkopalkin ulkoreunalta kantavina ulokkeina; reunatuki voi siksi olla vetava.")
-print("  * Orsien kaikki tuet mallinnetaan puolijaykkina EC5/Kser-likimallin rotaatiojousina")
-print("    (oletus: 4 x 5.0x80 puuruuvi per tuki, ruuvit jakautuvat 98 mm korkeudelle).")
+print("  * Liitosten tuki- ja rotaatiomallit luetaan geometry/terassi_puu.json:n")
+print("    connections.analysis-metadatasta; nykygeometriassa orsien tuet ovat niveliä.")
 print("  * Orsien ja kattotuolien lovi-/nettoh-tarkistukset luetaan suoraan geometry/terassi_puu.json:n")
 print("    cuts-kentistä; terassivertailuskriptin hardkoodattuja loviarvoja ei käytetä.")
 print("  * Kinostuma mallinnetaan jäsenkohtaisena muuttuvana s(x,y)-kuormana; taulukon q_avg")
 print("    on roof-stripin ekvivalentin viivakuorman pituuspainotettu keskiarvo ennen kehikkosiirtoa.")
 print("  * Birdsmouth-loven seat-pituus 570 mm tekee nettoh:n nousun lineaariseksi lovivyöhykkeellä;")
 print("    tarkistus tehdään koko loven pituudella, ei vain yhdessä poikkileikkauksessa.")
-print("  * Sisäpään liitos mallinnetaan heikosti kiertymää jäykistävänä rotaatiojousena")
-print("    (palkkikenkä N 48x136, 5.0x40 ankkuriruuvit, täyskiinnitys; EC5 Kser-likimalli).")
-print("  * Reunarafterien molemmat päät mallinnetaan puolijaykkinä samoilla N-kiinnikejousilla.")
+print(f"  * Sisäkattotuolien sisäpään liitos luetaan metadataan: {format_connection_behavior(inner_hanger_analysis, inner_hanger_rot_k_Nmm_per_rad)}.")
+print(
+    "  * Reunakattotuolien liitosmallit luetaan metadataan: "
+    + " / ".join(
+        f"{SIDE_MEMBER_LABEL[side]}: {format_connection_behavior(edge_rafter_support_analysis_by_side[side], edge_rafter_support_rot_k_by_side[side])}"
+        for side in ("left", "right")
+    )
+    + "."
+)
 print("  * Uplift käyttää suljetun lasituksen imutapausta (w_up_closed); kiinnitykset tulee mitoittaa")
 print("    vähintään yllä raportoiduille nostoreaktioille.")
 print(DW)

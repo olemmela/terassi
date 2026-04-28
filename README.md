@@ -48,13 +48,19 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 **Laskenta sisältää:**
 - Pysyvät kuormat, lumikuorma ja tuulen alas-/nostotapaukset
 - Talon seinää vasten syntyvän kinostuman geometriasta muuttuvalla `h(x)`-korkeudella
-- Aurinkopaneelien reunakaistojen kuormansiirron orsien kautta reunakattotuoleille paatypistekuormina noin 15 mm paassa ulkoreunasta
-- X-suuntaisten orsien ulomman tuen reunakattotuolilla kuormapuolen tukireunaan asti, ei kattotuolin akselikeskilinjalle
+- Aurinkopaneelien reuna- ja kulma-alueiden kuormansiirron
+  `surfaces[*].load_transfer.member_refs`-metadatasta (nykygeometriassa
+  pistekuormina `axis_end`-päästä 15 mm sisään,
+  eli `reference = axis_end`, `offset_mm = -15`)
+- X-suuntaisten orsien ulomman tuen geometrian `support_line_ref`-metadatasta
+  kuormapuolen tukireunaan asti, ei kattotuolin akselikeskilinjalle
+- Jäsenten poikkileikkauksen kierrot `section_rotation_deg`-kentästä niin viewerissä
+  kuin orsien/nurkkaorsien mitoituksessa
 - Ulkokulmien vinojen orsien kuormansiirron geometrian mukaisten liitosten kautta toiseksi uloimpaan kattotuoliin, reunakattotuoliin ja ulkopalkille
-- Sisäpään `beam.inner.new`-liitoksen heikosti kiertymää jäykistävän puolijäykän mallin
-  (`N`-mallin palkkikenkä 48×136, 5.0×40 ankkuriruuvit, täyskiinnitys; EC5 Kser -likimalli)
-- Orsien molempien päiden niveltuet
-- Reunimmaisten kattotuolien molempien päiden puolijäykät `N 48×136` -liitokset
+- Liitosten `connections.analysis`-metadatasta luetut tuki- ja rotaatiomallit
+  (`support_model`, `support_line_ref`, `rotation_spring`)
+- Nykygeometrian mukaiset orsien niveltuet, sisäkattotuolien puolijäykkä sisäpään
+  palkkikenkä sekä reunimmaisten kattotuolien puolijäykät `N 48×136` -liitokset
 - Orsien, nurkkaorten, sisäkattotuolien ja reunakattotuolien taivutus-, leikkaus- ja taipumatarkistukset
 - Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_bottom_notch`, `rect_notch`)
 - Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
@@ -133,9 +139,8 @@ yksikkö mm.
 
 **Sisältö:** `project`-metatiedot, `reference_surfaces` (talon seinä/katto),
 `members` (`columns`, `beams`, `rafters`, `purlins`), `connections`
-(liitosten topologia) ja `surfaces` (kate, aurinkopaneelit, sivu- ja
-kolmiolasit, laudoitukset, aukot). Liitosten yksityiskohdat (pultit,
-kannakkeet, ruuvijaot) pysyvät laskelmien proosassa, eivät JSON:issa.
+(liitosten topologia + analyysimetatieto) ja `surfaces` (kate,
+aurinkopaneelit, sivu- ja kolmiolasit, laudoitukset, aukot).
 `connections` voi lisäksi sisältää loveus-/leikkausmetatietoa:
 vanha yksittäinen `notch` toimii yhä, mutta `notched_over`-liitokselle voi
 nyt antaa myös `cuts`-listan. Listan itemit voivat olla
@@ -147,6 +152,20 @@ nyt antaa myös `cuts`-listan. Listan itemit voivat olla
 mallintaa joko jäsenen ylä- tai alapintaan. `viewer.py` näyttää nämä
 overlay-muotoina; `birdsmouth_notch` johdetaan viewerissä tukijäsenen
 geometriasta, joten seat/plumb-kulmat seuraavat oikeaa tukikulmaa.
+Lisäksi `connections.analysis` voi kuvata analyysikäyttäytymisen
+(`support_model`, `support_line_ref`, `rotation_spring`) ja
+`surfaces[*].load_transfer` voi kuvata, siirtyykö pinta-kuorma jäsenille
+pistekuormana, viivakuormana vai osaviivakuormana; säännöt osoittavat
+kohdejäseniin eksplisiittisesti `member_refs`-listalla. Tämä on toistaiseksi
+otettu käyttöön lopullisen puurakenteen laskurissa
+`terassilasitus_kuormituslaskenta.py` tiedostolle `geometry/terassi_puu.json`.
+Kuormansiirron `reference` käyttää eksplisiittisiä jäsenviitteitä
+`axis_start` / `axis_end` tai tukiviitteitä `support_*`; `offset_mm` tulkitaan
+jäsenen paikallisen akselin suunnassa (positiivinen = `axis_start → axis_end`).
+Lineaariset jäsenet voivat lisäksi antaa `section_rotation_deg`-kentän, jossa
+`0` tarkoittaa profiilin `h_mm`-suunnan olevan pystyssä ja positiivinen kulma
+kiertää poikkileikkausta oikean käden säännöllä akselin `axis_start → axis_end`
+suuntaan.
 `surfaces`-objektin `thickness_mm` näkyy
 viewerissä tilavuutena, joten esimerkiksi valu- ja levyrakenteet voidaan
 mallintaa oikealla paksuudella.
