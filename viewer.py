@@ -58,19 +58,36 @@ def _collect_pattern_specs(geo):
             pat = m.get("pattern")
             if not pat:
                 continue
+            id_template = pat.get("id_template", m["id"] + ".{i}")
             specs[m["id"]] = {
                 "count": int(pat["count"]),
                 "offset": dict(pat["offset"]),
-                "id_template": pat.get("id_template", m["id"] + ".{i}"),
+                "id_template": id_template,
+                "first_instance_id": id_template.replace("{i}", "0"),
             }
     return specs
+
+
+def _should_expand_connection_member(con, pattern_member, spec):
+    # If the pattern root ID is also the first real instance ID (e.g. "kattotuoli.0"),
+    # an explicit connection may legitimately target only that single instance.
+    # In that ambiguous case, only auto-expand when the connection ID itself stays generic.
+    if pattern_member == spec["first_instance_id"] and pattern_member in con.get("id", ""):
+        return False
+    return True
 
 
 def _expand_connection_patterns(geo, pattern_specs):
     """Laajentaa pattern-jäseniin viittaavat liitokset yksittäisiksi instansseiksi."""
     expanded = []
     for con in geo.get("connections", []):
-        pattern_member = next((mid for mid in con.get("members", []) if mid in pattern_specs), None)
+        pattern_member = next(
+            (
+                mid for mid in con.get("members", [])
+                if mid in pattern_specs and _should_expand_connection_member(con, mid, pattern_specs[mid])
+            ),
+            None,
+        )
         if not pattern_member:
             expanded.append(con)
             continue
@@ -223,7 +240,8 @@ _HTML = """<!DOCTYPE html>
   .btn-tab.editing { box-shadow: inset 0 -3px 0 0 #fff; font-weight: bold; }
   .btn-toggle { padding: 4px 16px; border: 1px solid #555; background: #3a3a3a;
     color: #ccc; cursor: pointer; border-radius: 4px; font-size: 13px;
-    margin-left: auto; transition: background .2s, border-color .2s; }
+    transition: background .2s, border-color .2s; }
+  #btn-connections { margin-left: auto; }
   .btn-toggle:hover  { background: #4a4a4a; }
   .btn-toggle.active { background: #2b5d8a; border-color: #6ab0ff; color: #fff; }
   .btn-save { padding: 4px 16px; border: 1px solid #555; background: #3a3a3a;
@@ -255,20 +273,30 @@ _HTML = """<!DOCTYPE html>
   canvas { display: block; }
 
   #tooltip { position: absolute; pointer-events: none;
-    background: rgba(0,0,0,.8); color: #fff; padding: 4px 9px;
-    border-radius: 4px; font-size: 12px; display: none; }
+    background: rgba(0,0,0,.8); color: #fff; padding: 6px 9px;
+    border-radius: 4px; font-size: 12px; display: none; white-space: pre-line;
+    line-height: 1.35; max-width: 420px; }
 
   #legend { position: absolute; bottom: 10px; right: 10px;
     background: rgba(0,0,0,.65); padding: 8px 12px; border-radius: 6px;
     font-size: 11px; line-height: 1.8; }
   .li { display: flex; align-items: center; gap: 7px; }
   .ld { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+  .ld-dot { border-radius: 50%; background: currentColor; }
+  .ld-shift {
+    width: 16px; height: 2px; background: currentColor; border-radius: 0; position: relative;
+  }
+  .ld-shift::after {
+    content: ''; position: absolute; right: -1px; top: -4px; width: 6px; height: 10px;
+    border: 1px solid currentColor; border-radius: 1px;
+  }
 </style>
 </head>
 <body>
 <div id="toolbar">
   <span id="status">Ladataan...</span>
   <button class="btn-toggle" id="btn-connections" aria-pressed="false">&#9675; Liitospisteet</button>
+  <button class="btn-toggle" id="btn-analysis" aria-pressed="false">&#9675; Analyysi-overlayt</button>
   <button class="btn-save" id="btn-save">&#128190; Tallenna</button>
 </div>
 <div id="main">
@@ -293,6 +321,11 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld" style="background:#ff8800;border-radius:50%"></div>Seinäkiinnitys</div>
       <div class="li"><div class="ld" style="background:#ffcc00;border-radius:50%"></div>Pilarijalkalevy</div>
       <div class="li"><div class="ld" style="background:#aa44ff;border-radius:50%"></div>Sivutuki (lateral)</div>
+      <div class="li"><div class="ld ld-dot" style="color:#c8ccd4"></div>Analyysipiste: nivel</div>
+      <div class="li"><div class="ld ld-dot" style="color:#ffb347"></div>Analyysipiste: puolijäykkä</div>
+      <div class="li"><div class="ld ld-dot" style="color:#66ddff"></div>Analyysipiste: jäykkä</div>
+      <div class="li"><div class="ld ld-shift" style="color:#99ff33"></div>Tukilinjan siirtymä (viiva + levy)</div>
+      <div class="li"><div class="ld" style="background:#ffee66"></div>Hover kattopintaan → member_refs-korostus</div>
       <div class="li"><div class="ld" style="background:#666"></div>Klikkaa 3D-näkymää → nuolilla liike, Ctrl+nuoli kääntö</div>
     </div>
   </div>
@@ -460,13 +493,178 @@ const CCOL = {
   column_base:   0xffcc00,
   lateral_brace: 0xaa44ff,
 };
+const ANALYSIS_SUPPORT_MODEL_COLORS = {
+  pinned: 0xc8ccd4,
+  semi_rigid: 0xffb347,
+  rigid: 0x66ddff,
+};
+const SUPPORT_MODEL_LABELS = {
+  pinned: 'nivel',
+  semi_rigid: 'puolijäykkä',
+  rigid: 'jäykkä',
+};
+const REFERENCE_LABELS = {
+  axis_start: 'axis_start-pää',
+  axis_end: 'axis_end-pää',
+  member_end: 'jäsenen ulkopää',
+  support_centerline: 'tukikeskilinja',
+  support_inner_edge: 'tuen sisäreuna',
+  support_outer_edge: 'tuen ulkoreuna',
+};
+const HIGHLIGHT_MEMBER_COLOR = 0xffee66;
+const SUPPORT_LINE_SHIFT_COLOR = 0x99ff33;
 
 // ── Scene groups (yksi per ladattu geometria) ─────────────────────────────────
 const geoGroups = new Map(); // name → THREE.Group
+const memberVisuals = new Map(); // geo::memberId → Array<THREE.Object3D>
 let pickable = [];
 let showConnectionMarkers = false;
+let showAnalysisOverlays = false;
+let highlightedMemberKeys = new Set();
+
+function memberVisualKey(geoName, memberId) {
+  return `${geoName}::${memberId}`;
+}
+
+function registerMemberVisual(geoName, memberId, object) {
+  if (!geoName || !memberId || !object) return;
+  const key = memberVisualKey(geoName, memberId);
+  if (!memberVisuals.has(key)) memberVisuals.set(key, []);
+  if (object.material?.color && object.userData._baseColor == null) {
+    object.userData._baseColor = object.material.color.getHex();
+  }
+  if (object.material?.emissive && object.userData._baseEmissive == null) {
+    object.userData._baseEmissive = object.material.emissive.getHex();
+  }
+  if (object.material?.opacity != null && object.userData._baseOpacity == null) {
+    object.userData._baseOpacity = object.material.opacity;
+  }
+  memberVisuals.get(key).push(object);
+}
+
+function updateObjectHighlight(object, active) {
+  const mat = object.material;
+  if (!mat) return;
+  if (active) {
+    if (mat.color) mat.color.setHex(HIGHLIGHT_MEMBER_COLOR);
+    if (mat.emissive) mat.emissive.setHex(0x665500);
+    if (mat.opacity != null) mat.opacity = Math.max(object.userData._baseOpacity ?? 1, 0.95);
+    return;
+  }
+  if (mat.color && object.userData._baseColor != null) mat.color.setHex(object.userData._baseColor);
+  if (mat.emissive && object.userData._baseEmissive != null) mat.emissive.setHex(object.userData._baseEmissive);
+  if (mat.opacity != null && object.userData._baseOpacity != null) mat.opacity = object.userData._baseOpacity;
+}
+
+function setHighlightedMemberKeys(nextKeys) {
+  for (const key of highlightedMemberKeys) {
+    if (nextKeys.has(key)) continue;
+    for (const object of memberVisuals.get(key) ?? []) updateObjectHighlight(object, false);
+  }
+  for (const key of nextKeys) {
+    if (highlightedMemberKeys.has(key)) continue;
+    for (const object of memberVisuals.get(key) ?? []) updateObjectHighlight(object, true);
+  }
+  highlightedMemberKeys = nextKeys;
+}
+
+function clearHighlightedMembers() {
+  setHighlightedMemberKeys(new Set());
+}
+
+function setHighlightedMembersForSurface(geoName, memberRefs) {
+  if (!showAnalysisOverlays || !geoName || !Array.isArray(memberRefs) || memberRefs.length === 0) {
+    clearHighlightedMembers();
+    return;
+  }
+  const keys = new Set(memberRefs.map(memberId => memberVisualKey(geoName, memberId)));
+  setHighlightedMemberKeys(keys);
+}
+
+function clearGeoMemberVisuals(geoName) {
+  for (const key of [...memberVisuals.keys()]) {
+    if (key.startsWith(`${geoName}::`)) memberVisuals.delete(key);
+  }
+}
+
+function createAnalysisMarker(color) {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(28, 12, 10),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+}
+
+function summarizeMemberRefs(memberRefs, limit = 4) {
+  if (!Array.isArray(memberRefs) || memberRefs.length === 0) return 'ei kohdejäseniä';
+  if (memberRefs.length <= limit) return memberRefs.join(', ');
+  return `${memberRefs.slice(0, limit).join(', ')}, +${memberRefs.length - limit} muuta`;
+}
+
+function rotationSpringSummary(analysis) {
+  const spring = analysis?.rotation_spring;
+  if (!spring) return null;
+  if (spring.model === 'explicit' && spring.k_theta_Nmm_per_rad != null) {
+    return `kθ ${(spring.k_theta_Nmm_per_rad / 1e6).toFixed(1)} kNm/rad`;
+  }
+  if (spring.model === 'ec5_fasteners') {
+    return `EC5-jousi d${spring.fastener_d_mm ?? '?'} n${spring.fastener_count ?? '?'}`;
+  }
+  return spring.model ?? null;
+}
+
+function connectionTooltipLines(con) {
+  const lines = [`${con.id}  —  ${con.type ?? 'connection'}`];
+  const analysis = con.analysis;
+  if (analysis) {
+    const supportModel = analysis.support_model ?? 'pinned';
+    lines.push(`tuki: ${SUPPORT_MODEL_LABELS[supportModel] ?? supportModel}`);
+    if (analysis.support_line_ref) {
+      lines.push(`tukilinja: ${REFERENCE_LABELS[analysis.support_line_ref] ?? analysis.support_line_ref}`);
+    }
+    if (analysis.label) {
+      lines.push(
+        analysis.fastener_label
+          ? `liitos: ${analysis.label}, ${analysis.fastener_label}`
+          : `liitos: ${analysis.label}`
+      );
+    }
+    const springSummary = rotationSpringSummary(analysis);
+    if (springSummary) lines.push(`rotaatio: ${springSummary}`);
+  }
+  const cuts = connectionCuts(con);
+  if (cuts.length) lines.push(`cuts: ${cuts.map(cut => cut.kind).join(', ')}`);
+  return lines;
+}
+
+function loadTransferRuleSummary(rule) {
+  const model = rule.model === 'partial_uniform'
+    ? `osaviivakuorma ${rule.length_mm} mm`
+    : rule.model === 'uniform'
+      ? 'viivakuorma'
+      : 'pistekuorma';
+  const reference = REFERENCE_LABELS[rule.reference] ?? rule.reference ?? 'jäsen';
+  const offset = rule.offset_mm ?? 0;
+  return `${model}, ${offset} mm ${reference} → ${rule.member_refs?.length ?? 0} jäsentä (${summarizeMemberRefs(rule.member_refs)})`;
+}
+
+function surfaceTooltipLines(surfaceObj) {
+  const lines = [`${surfaceObj.id}  —  ${surfaceObj.type ?? 'surface'}`];
+  const rules = surfaceObj.load_transfer?.to_members;
+  if (Array.isArray(rules) && rules.length) {
+    for (const rule of rules) lines.push(`load_transfer: ${loadTransferRuleSummary(rule)}`);
+  }
+  return lines;
+}
 
 function clearGeoFor(name) {
+  clearHighlightedMembers();
+  clearGeoMemberVisuals(name);
   const g = geoGroups.get(name);
   if (!g) return;
   scene.remove(g);
@@ -495,6 +693,26 @@ function setConnectionMarkerVisibility(show) {
 
 function toggleConnectionMarkers() {
   setConnectionMarkerVisibility(!showConnectionMarkers);
+}
+
+function setAnalysisOverlayVisibility(show) {
+  showAnalysisOverlays = show;
+  const btn = document.getElementById('btn-analysis');
+  if (btn) {
+    btn.classList.toggle('active', show);
+    btn.setAttribute('aria-pressed', String(show));
+    btn.textContent = show ? '● Analyysi-overlayt' : '○ Analyysi-overlayt';
+  }
+  if (!show) clearHighlightedMembers();
+  for (const g of geoGroups.values()) {
+    g.traverse(o => {
+      if (o.userData?._isAnalysisOverlay) o.visible = show;
+    });
+  }
+}
+
+function toggleAnalysisOverlays() {
+  setAnalysisOverlayVisibility(!showAnalysisOverlays);
 }
 
 // ── Member box helper ─────────────────────────────────────────────────────────
@@ -573,6 +791,114 @@ function buildMemberIndex(geo) {
     }
   }
   return idx;
+}
+
+function connectionSupportLinePoint(con, memberIndex, supportLineRef) {
+  if (!con.at || supportLineRef === 'support_centerline') return pt(con.at);
+  const supportId = con.members?.[1];
+  const supportInfo = supportId ? memberIndex.get(supportId) : null;
+  if (!supportInfo) return null;
+
+  const halfWidthMm = ((supportInfo.profile?.b_mm ?? 0) * (supportInfo.profile?.count ?? 1)) / 2;
+  if (!halfWidthMm) return null;
+
+  const anchor = { ...con.at };
+  if (supportId === 'kattotuoli.vasen' || supportId === 'kattotuoli.oikea') {
+    const outerSign = supportId === 'kattotuoli.vasen' ? -1 : 1;
+    const sign = supportLineRef === 'support_outer_edge' ? outerSign : -outerSign;
+    anchor.x += sign * halfWidthMm;
+    return pt(anchor);
+  }
+  if (supportId.startsWith('beam.')) {
+    const sign = supportLineRef === 'support_outer_edge' ? 1 : -1;
+    anchor.y += sign * halfWidthMm;
+    return pt(anchor);
+  }
+  return null;
+}
+
+function supportLinePlateAxes(supportInfo, shiftDir) {
+  let plateU = null;
+  if (supportInfo) {
+    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.strongAxis);
+    if (supportFrame) {
+      plateU = supportFrame.dir.clone().projectOnPlane(shiftDir);
+    }
+  }
+  if (!plateU || plateU.lengthSq() < 1e-8) {
+    plateU = WORLD_UP.clone().projectOnPlane(shiftDir);
+  }
+  if (plateU.lengthSq() < 1e-8) {
+    plateU = new THREE.Vector3(1, 0, 0).projectOnPlane(shiftDir);
+  }
+  if (plateU.lengthSq() < 1e-8) {
+    plateU = new THREE.Vector3(0, 0, 1).projectOnPlane(shiftDir);
+  }
+  plateU.normalize();
+  const plateV = new THREE.Vector3().crossVectors(shiftDir, plateU).normalize();
+  return { plateU, plateV };
+}
+
+function addSupportLineShiftVisual(g, pk, anchor, supportPoint, supportInfo, baseUserData) {
+  const shiftVec = supportPoint.clone().sub(anchor);
+  const shiftLen = shiftVec.length();
+  if (shiftLen <= 1e-6) return;
+
+  const shiftDir = shiftVec.clone().normalize();
+  const shaft = new THREE.Mesh(
+    new THREE.CylinderGeometry(8, 8, shiftLen, 10),
+    new THREE.MeshBasicMaterial({
+      color: SUPPORT_LINE_SHIFT_COLOR,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+  shaft.position.copy(anchor.clone().add(supportPoint).multiplyScalar(0.5));
+  shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), shiftDir);
+  shaft.renderOrder = 29;
+  shaft.visible = showAnalysisOverlays;
+  shaft.userData = { ...baseUserData };
+  g.add(shaft);
+  pk.push(shaft);
+
+  const { plateU, plateV } = supportLinePlateAxes(supportInfo, shiftDir);
+  const plateGeo = new THREE.BoxGeometry(150, 90, 8);
+  const plate = new THREE.Mesh(
+    plateGeo,
+    new THREE.MeshBasicMaterial({
+      color: SUPPORT_LINE_SHIFT_COLOR,
+      transparent: true,
+      opacity: 0.32,
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+  plate.position.copy(supportPoint);
+  plate.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(plateU, plateV, shiftDir));
+  plate.renderOrder = 29;
+  plate.visible = showAnalysisOverlays;
+  plate.userData = { ...baseUserData };
+  g.add(plate);
+  pk.push(plate);
+
+  const plateEdges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(plateGeo),
+    new THREE.LineBasicMaterial({
+      color: SUPPORT_LINE_SHIFT_COLOR,
+      transparent: true,
+      opacity: 1.0,
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+  plateEdges.position.copy(supportPoint);
+  plateEdges.quaternion.copy(plate.quaternion);
+  plateEdges.renderOrder = 30;
+  plateEdges.visible = showAnalysisOverlays;
+  plateEdges.userData = { ...baseUserData, _isAnalysisOverlay: true };
+  g.add(plateEdges);
 }
 
 function projectPointToLine(point3, start3, end3) {
@@ -819,8 +1145,9 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
     const lineGeo = new THREE.BufferGeometry().setFromPoints([start3, end3]);
     const line = new THREE.Line(lineGeo, new THREE.LineDashedMaterial({ color, dashSize: 60, gapSize: 40 }));
     line.computeLineDistances();
-    line.userData = userData;
+    line.userData = { ...userData, _isMemberLine: true };
     g.add(line); pk.push(line);
+    registerMemberVisual(g.userData.geoName, userData.id, line);
     return;
   }
 
@@ -838,6 +1165,7 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
   mesh.quaternion.copy(q);
   mesh.userData = { ...userData, _isMemberMesh: true };
   g.add(mesh); pk.push(mesh);
+  registerMemberVisual(g.userData.geoName, userData.id, mesh);
 
   // Edges for clarity
   const edgeMat = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4 });
@@ -846,6 +1174,7 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
   edges.quaternion.copy(q);
   edges.userData = { ...userData, _isMemberEdge: true };
   g.add(edges);
+  registerMemberVisual(g.userData.geoName, userData.id, edges);
 }
 
 // ── Members ───────────────────────────────────────────────────────────────────
@@ -937,7 +1266,14 @@ function addSurfaces(g, pk, list, opacity) {
     const mesh = new THREE.Mesh(mg, new THREE.MeshBasicMaterial(
       { color: col, transparent: true, opacity, side: THREE.DoubleSide }
     ));
-    mesh.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
+    const memberRefs = [...new Set((s.load_transfer?.to_members ?? []).flatMap(rule => rule.member_refs ?? []))];
+    mesh.userData = {
+      id: s.id,
+      kind: s.type ?? 'surface',
+      _geoName: geoName,
+      _loadTransferMemberRefs: memberRefs,
+      tooltipLines: surfaceTooltipLines(s),
+    };
     g.add(mesh); pk.push(mesh);
 
     if (thicknessMm > 0) {
@@ -960,12 +1296,43 @@ function addSurfaces(g, pk, list, opacity) {
 }
 
 // ── Connection markers ────────────────────────────────────────────────────────
+function addConnectionAnalysisVisuals(g, pk, con, memberIndex, tooltipLines) {
+  const analysis = con.analysis;
+  if (!analysis || !con.at) return;
+
+  const anchor = pt(con.at);
+  const supportModel = analysis.support_model ?? 'pinned';
+  const markerColor = ANALYSIS_SUPPORT_MODEL_COLORS[supportModel] ?? 0xffffff;
+  const baseUserData = {
+    id: con.id,
+    kind: `${con.type ?? 'connection'} / analysis`,
+    _geoName: g.userData.geoName,
+    _isAnalysisOverlay: true,
+    tooltipLines,
+  };
+
+  const marker = createAnalysisMarker(markerColor);
+  marker.position.copy(anchor);
+  marker.renderOrder = 30;
+  marker.visible = showAnalysisOverlays;
+  marker.userData = { ...baseUserData };
+  g.add(marker);
+  pk.push(marker);
+
+  const supportLineRef = analysis.support_line_ref ?? 'support_centerline';
+  const supportInfo = con.members?.[1] ? memberIndex.get(con.members[1]) : null;
+  const supportPoint = connectionSupportLinePoint(con, memberIndex, supportLineRef);
+  if (!supportPoint || supportPoint.distanceTo(anchor) <= 1e-6) return;
+  addSupportLineShiftVisual(g, pk, anchor, supportPoint, supportInfo, baseUserData);
+}
+
 function addConnections(g, pk, connections, memberIndex) {
   const sphereGeo = new THREE.SphereGeometry(80, 12, 8);
   const notchCutsMap = new Map();
   for (const con of connections ?? []) {
     if (!con.at) continue;
     const col = CCOL[con.type] ?? 0xffffff;
+    const tooltipLines = connectionTooltipLines(con);
     const mesh = new THREE.Mesh(
       sphereGeo,
       new THREE.MeshBasicMaterial({ color: col })
@@ -977,9 +1344,11 @@ function addConnections(g, pk, connections, memberIndex) {
       kind: con.type ?? 'connection',
       _geoName: g.userData.geoName,
       _isConnectionMarker: true,
+      tooltipLines,
     };
     g.add(mesh);
     pk.push(mesh);
+    addConnectionAnalysisVisuals(g, pk, con, memberIndex, tooltipLines);
     if (con.type === 'notched_over') {
       const cuts = connectionCuts(con);
       const memberId = con.members?.[0];
@@ -1188,6 +1557,7 @@ async function applyCSGCuts(g, pk, memberIndex, notchCutsMap) {
       cutMesh.visible = !showConnectionMarkers;
       g.add(cutMesh);
       pk.push(cutMesh);
+      registerMemberVisual(g.userData.geoName, memberId, cutMesh);
 
       // Build expected edge segments in member local space:
       //   original box edges + all notch geometry edges.
@@ -1249,6 +1619,7 @@ async function applyCSGCuts(g, pk, memberIndex, notchCutsMap) {
         line.userData = { ...memberMesh.userData, _isCutMember: true };
         line.visible = !showConnectionMarkers;
         g.add(line);
+        registerMemberVisual(g.userData.geoName, memberId, line);
       }
 
       // Hide original box edges (uncut shape) along with the uncut mesh
@@ -1281,6 +1652,7 @@ async function renderGeoFor(name, resolved, options = {}) {
   const notchCutsMap = addConnections(g, pickable, resolved.connections, memberIndex);
   await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
   setConnectionMarkerVisibility(showConnectionMarkers);
+  setAnalysisOverlayVisibility(showAnalysisOverlays);
   if (!restoreViewState(viewState)) fitCamera();
 }
 
@@ -1297,14 +1669,24 @@ renderer.domElement.addEventListener('mousemove', e => {
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObjects(pickable, false);
   if (hits.length) {
-    const { id, kind } = hits[0].object.userData;
+    const userData = hits[0].object.userData ?? {};
+    const { id, kind } = userData;
     tooltip.style.display = 'block';
     tooltip.style.left = (e.clientX - r.left + 14) + 'px';
     tooltip.style.top  = (e.clientY - r.top  - 28) + 'px';
-    tooltip.textContent = id + (kind ? '  —  ' + kind : '');
+    tooltip.textContent = Array.isArray(userData.tooltipLines)
+      ? userData.tooltipLines.join('\\n')
+      : id + (kind ? '  —  ' + kind : '');
+    setHighlightedMembersForSurface(userData._geoName, userData._loadTransferMemberRefs);
   } else {
     tooltip.style.display = 'none';
+    clearHighlightedMembers();
   }
+});
+
+renderer.domElement.addEventListener('mouseleave', () => {
+  tooltip.style.display = 'none';
+  clearHighlightedMembers();
 });
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -1444,6 +1826,7 @@ window.addEventListener('mouseup', () => { dragging = false; resizerEl.classList
   const toolbar  = document.getElementById('toolbar');
   const statusEl = document.getElementById('status');
   const connBtn  = document.getElementById('btn-connections');
+  const analysisBtn = document.getElementById('btn-analysis');
   const saveBtn  = document.getElementById('btn-save');
   let   first    = null;
 
@@ -1464,7 +1847,9 @@ window.addEventListener('mouseup', () => { dragging = false; resizerEl.classList
   }
 
   connBtn.addEventListener('click', toggleConnectionMarkers);
+  analysisBtn.addEventListener('click', toggleAnalysisOverlays);
   setConnectionMarkerVisibility(showConnectionMarkers);
+  setAnalysisOverlayVisibility(showAnalysisOverlays);
   saveBtn.addEventListener('click', saveGeometry);
   if (first) loadGeometry(first);
 })();
