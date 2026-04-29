@@ -12,6 +12,7 @@ Geometria luetaan tiedostosta geometry/terassi_puu.json:
   - liitosten tuki- ja rotaatiomallit luetaan connections.analysis-metadatasta
   - paneelikuorman piste/viivamalli luetaan surfaces[*].load_transfer-metadatasta
   - kinostuma talon seinää vasten johdetaan geometriasta muuttuvalla h(x)-korkeudella
+  - paneelien kinostumakestävyys tarkistetaan 5.40 kN/m² etupuolen rajaa vasten
   - lovi- ja nettoh-tarkistukset luetaan geometry/terassi_puu.json:n cuts-kentistä
 """
 
@@ -963,8 +964,19 @@ z_ref_m = math.ceil(max(all_z_mm) / 500.0) * 0.5
 # ── kuormat ja materiaalit ──────────────────────────────────────────────────
 
 panel_count = roof["count"]
+panel_material = roof.get("material", "aurinkopaneeli")
+panel_unit_width_mm = float(panel_count["unit_size_mm"]["x"])
+panel_unit_slope_length_mm = float(panel_count["unit_size_mm"]["y"])
+panel_unit_thickness_mm = float(panel_count["unit_size_mm"].get("z", roof.get("thickness_mm", 0.0)))
 panel_mass_kg = float(panel_count["unit_mass_kg"])
+panel_count_x = int(panel_count["nx"])
+panel_count_y = int(panel_count["ny"])
 panel_count_total = int(panel_count["nx"]) * int(panel_count["ny"])
+panel_total_mass_kg = panel_count_total * panel_mass_kg
+panel_field_slope_width_mm = panel_count_x * panel_unit_width_mm
+panel_field_slope_length_mm = panel_count_y * panel_unit_slope_length_mm
+panel_row_projected_depth_mm = roof_depth_mm / max(panel_count_y, 1)
+panel_front_snow_cap_kNm2 = 5.40
 panels_total_kN = panel_count_total * panel_mass_kg * 9.81 / 1000.0
 gk_panels = panels_total_kN / roof_area_m2
 gk_fixings = 0.05
@@ -1173,6 +1185,31 @@ def drift_snow_kNm2(x_mm, y_mm):
     return max(s_roof, s_drift_local)
 
 
+def drift_snow_kNm2_from_height(h_m, y_offset_mm):
+    if h_m <= 1e-9:
+        return s_roof
+    ls_m, _, _, _, s_peak_kNm2 = snow_drift_params(h_m, roof_depth_m, sk, mu1_=mu1)
+    distance_m = max(0.0, y_offset_mm / 1000.0)
+    s_drift_local = s_peak_kNm2 * max(0.0, 1.0 - distance_m / ls_m)
+    return max(s_roof, s_drift_local)
+
+
+def wall_height_limit_for_panel_capacity(capacity_kNm2, y_offset_mm):
+    if gammaQ * s_roof > capacity_kNm2 + 1e-9:
+        return None
+    low_h_m = 0.0
+    high_h_m = max(0.5, critical_drift["h_m"] if "critical_drift" in globals() else 0.5)
+    while gammaQ * drift_snow_kNm2_from_height(high_h_m, y_offset_mm) <= capacity_kNm2 and high_h_m < 20.0:
+        high_h_m *= 2.0
+    for _ in range(80):
+        mid_h_m = 0.5 * (low_h_m + high_h_m)
+        if gammaQ * drift_snow_kNm2_from_height(mid_h_m, y_offset_mm) <= capacity_kNm2:
+            low_h_m = mid_h_m
+        else:
+            high_h_m = mid_h_m
+    return low_h_m
+
+
 def constant_roof_area_kNm2_at(value_kNm2):
     return lambda _x_mm, _y_mm, value_kNm2=value_kNm2: value_kNm2
 
@@ -1203,6 +1240,75 @@ for x_mm in sorted({roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m 
         "s_inner_edge_rafter_kNm2": drift_snow_kNm2(x_mm, edge_inner_support_y_mm),
     })
 critical_drift = max(DRIFT_SUMMARY, key=lambda item: (item["s_peak_kNm2"], item["h_m"], item["x_mm"]))
+
+
+def dedupe_panel_checkpoints(points):
+    deduped = []
+    seen = set()
+    for dy_mm, label in points:
+        dy_key = round(float(dy_mm), 6)
+        if dy_key in seen:
+            continue
+        seen.add(dy_key)
+        deduped.append((float(dy_mm), label))
+    return deduped
+
+
+def panel_depth_checkpoints(projected_depth_mm, row_count):
+    points = [(0.0, "sisäreuna")]
+    if projected_depth_mm > 1e-9:
+        points.append((min(200.0, projected_depth_mm), "200 mm sisäreunasta"))
+    row_depth_mm = projected_depth_mm / max(row_count, 1)
+    for row_index in range(row_count):
+        row_no = row_index + 1
+        points.append(((row_index + 0.5) * row_depth_mm, f"{row_no}. rivin puoliväli"))
+        edge_label = "ulkoreuna" if row_no == row_count else "rivisauma"
+        points.append((row_no * row_depth_mm, edge_label))
+    return dedupe_panel_checkpoints(points)
+
+
+PANEL_COLUMN_SUMMARY = []
+for panel_col_index in range(panel_count_x):
+    x_center_mm = roof_x0_mm + (panel_col_index + 0.5) * roof_width_mm / max(panel_count_x, 1)
+    h_local_m = local_wall_height_m_at_x(x_center_mm)
+    ls_m, mu2, mu2_h, s_base_kNm2, s_peak_kNm2 = snow_drift_params(h_local_m, roof_depth_m, sk, mu1_=mu1)
+    uls_inner_kNm2 = gammaQ * drift_snow_kNm2(x_center_mm, roof_y0_mm)
+    PANEL_COLUMN_SUMMARY.append({
+        "index": panel_col_index + 1,
+        "x_center_mm": x_center_mm,
+        "h_m": h_local_m,
+        "ls_m": ls_m,
+        "mu2": mu2,
+        "mu2_h": mu2_h,
+        "s_base_kNm2": s_base_kNm2,
+        "s_peak_kNm2": s_peak_kNm2,
+        "uls_inner_kNm2": uls_inner_kNm2,
+        "eta_inner_pct": 100.0 * uls_inner_kNm2 / panel_front_snow_cap_kNm2,
+    })
+critical_panel_column = max(PANEL_COLUMN_SUMMARY, key=lambda item: (item["uls_inner_kNm2"], item["x_center_mm"]))
+critical_panel_check_rows = []
+for dy_mm, label in panel_depth_checkpoints(roof_depth_mm, panel_count_y):
+    y_mm = roof_y0_mm + dy_mm
+    s_char_kNm2 = drift_snow_kNm2(critical_panel_column["x_center_mm"], y_mm)
+    uls_kNm2 = gammaQ * s_char_kNm2
+    critical_panel_check_rows.append({
+        "label": label,
+        "y_mm": y_mm,
+        "s_char_kNm2": s_char_kNm2,
+        "uls_kNm2": uls_kNm2,
+        "eta_pct": 100.0 * uls_kNm2 / panel_front_snow_cap_kNm2,
+        "ok": uls_kNm2 <= panel_front_snow_cap_kNm2 + 1e-9,
+    })
+critical_panel_check = max(critical_panel_check_rows, key=lambda item: (item["uls_kNm2"], -item["y_mm"]))
+critical_panel_ok = all(item["ok"] for item in critical_panel_check_rows)
+panel_edge_reference_uls_kNm2 = gammaQ * drift_snow_kNm2(critical_drift["x_mm"], roof_y0_mm)
+panel_edge_reference_eta_pct = 100.0 * panel_edge_reference_uls_kNm2 / panel_front_snow_cap_kNm2
+panel_char_limit_kNm2 = panel_front_snow_cap_kNm2 / gammaQ
+critical_panel_y_offset_mm = critical_panel_check["y_mm"] - roof_y0_mm
+panel_height_limit_m = wall_height_limit_for_panel_capacity(panel_front_snow_cap_kNm2, critical_panel_y_offset_mm)
+panel_height_margin_mm = None if panel_height_limit_m is None else 1000.0 * (critical_panel_column["h_m"] - panel_height_limit_m)
+panel_char_margin_kNm2 = critical_panel_check["s_char_kNm2"] - panel_char_limit_kNm2
+panel_uls_margin_kNm2 = critical_panel_check["uls_kNm2"] - panel_front_snow_cap_kNm2
 
 
 # ── jäsenanalyysit ───────────────────────────────────────────────────────────
@@ -2191,6 +2297,62 @@ print(f"  Uplift-kattokuorma            {roof_area_uplift:.3f} kN/m²  (0.9G + 1
 print(f"  Seinää vasten h(x)            {h_seina_left_m:.2f} … {h_seina_right_m:.2f} m")
 print(f"    hallitseva x                {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
 print(f"    s_kin,max / s@y_in          {critical_drift['s_peak_kNm2']:.2f} / {critical_drift['s_inner_rafter_kNm2']:.2f} kN/m²")
+
+print("\n── PANEELIT ──────────────────────────────────────────────────────")
+print(f"  Tyyppi                        {panel_material}")
+print(
+    f"  Moduuli                       {panel_unit_width_mm:.0f} × {panel_unit_slope_length_mm:.0f} × "
+    f"{panel_unit_thickness_mm:.0f} mm, {panel_mass_kg:.0f} kg/kpl"
+)
+print(
+    f"  Kenttä                        {panel_count_x} × {panel_count_y} = {panel_count_total} kpl, "
+    f"lappeella {panel_field_slope_width_mm:.0f} × {panel_field_slope_length_mm:.0f} mm, "
+    f"vaakaprojektio {roof_width_mm:.0f} × {roof_depth_mm:.0f} mm"
+)
+print(f"  Kokonaismassa                 {panel_total_mass_kg:.0f} kg = {panels_total_kN:.2f} kN")
+print(
+    f"  Kinostumatarkistus            etupuolen mekaaninen raja {panel_front_snow_cap_kNm2:.2f} kN/m², "
+    f"ULS = 1.5·s_kin"
+)
+print(
+    f"  Mitoittava paneelisarake      {critical_panel_column['index']}/{panel_count_x}, "
+    f"x = {critical_panel_column['x_center_mm']:.0f} mm, h = {critical_panel_column['h_m']:.2f} m, "
+    f"ls = {critical_panel_column['ls_m']:.2f} m, s_peak = {critical_panel_column['s_peak_kNm2']:.2f} kN/m²"
+)
+panel_status = "OK" if critical_panel_ok else "YLITTYY"
+print(
+    f"  Mitoittava piste              {critical_panel_check['label']}, y = {critical_panel_check['y_mm']:.0f} mm, "
+    f"ULS = {critical_panel_check['uls_kNm2']:.2f}/{panel_front_snow_cap_kNm2:.2f} kN/m², "
+    f"η = {critical_panel_check['eta_pct']:.1f}%  -> {panel_status}"
+)
+if panel_height_limit_m is None:
+    print(
+        f"  Rajan alitus edellyttää       ei mahdollinen pelkällä kinostumageometrian tarkennuksella "
+        f"(1.5·μ1·sk = {gammaQ * s_roof:.2f} kN/m² > {panel_front_snow_cap_kNm2:.2f} kN/m²)"
+    )
+else:
+    print(
+        f"  Rajan alitus edellyttää       s_kin <= {panel_char_limit_kNm2:.2f} kN/m², "
+        f"h <= {panel_height_limit_m:.2f} m @ {critical_panel_check['label']}"
+    )
+    print(
+        f"  Nykyinen ylitys / varmuus     ΔULS = {panel_uls_margin_kNm2:+.2f} kN/m², "
+        f"Δs_kin = {panel_char_margin_kNm2:+.2f} kN/m², Δh = {panel_height_margin_mm:+.0f} mm"
+    )
+print(
+    f"  Kentän reuna vertailuna       x = {critical_drift['x_mm']:.0f} mm → "
+    f"ULS = {panel_edge_reference_uls_kNm2:.2f} kN/m², η = {panel_edge_reference_eta_pct:.1f}%"
+)
+print()
+print(f"  Tarkistuspisteet              kriittinen sarake {critical_panel_column['index']}/{panel_count_x}")
+print(f"  {'Sijainti':<24} {'y [mm]':>7} {'s_kin':>7} {'ULS':>7} {'η':>7} {'Tila':>8}")
+print(f"  {'-'*24} {'-'*7} {'-'*7} {'-'*7} {'-'*7} {'-'*8}")
+for row in critical_panel_check_rows:
+    print(
+        f"  {row['label']:<24} {row['y_mm']:>7.0f} {row['s_char_kNm2']:>7.2f} "
+        f"{row['uls_kNm2']:>7.2f} {row['eta_pct']:>6.1f}% "
+        f"{('OK' if row['ok'] else 'YLITYS'):>8}"
+    )
 
 print("\n── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────")
 print(f"  Sivukaista vasen / oikea      {left_strip_width_m:.3f} / {right_strip_width_m:.3f} m")

@@ -52,6 +52,8 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
   `surfaces[*].load_transfer.member_refs`-metadatasta (nykygeometriassa
   pistekuormina `axis_end`-päästä 15 mm sisään,
   eli `reference = axis_end`, `offset_mm = -15`)
+- Aurinkopaneelien kinostumatarkistuksen valmistajan etupuolen 5.40 kN/m²
+  mekaanista rajaa vasten, nykygeometrian mitoittavalla paneelisarakkeella
 - X-suuntaisten orsien ulomman tuen geometrian `support_line_ref`-metadatasta
   kuormapuolen tukireunaan asti, ei kattotuolin akselikeskilinjalle
 - Jäsenten poikkileikkauksen kierrot `section_rotation_deg`-kentästä niin viewerissä

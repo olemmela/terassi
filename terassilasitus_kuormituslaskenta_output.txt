@@ -34,6 +34,28 @@
     hallitseva x                7569 mm, ls = 3.95 m, μ2 = 1.95
     s_kin,max / s@y_in          3.91 / 3.86 kN/m²
 
+── PANEELIT ──────────────────────────────────────────────────────
+  Tyyppi                        Longi Himo X10 LR7 aurinkopaneeli
+  Moduuli                       1134 × 1990 × 30 mm, 25 kg/kpl
+  Kenttä                        7 × 2 = 14 kpl, lappeella 7938 × 3980 mm, vaakaprojektio 7938 × 3951 mm
+  Kokonaismassa                 350 kg = 3.43 kN
+  Kinostumatarkistus            etupuolen mekaaninen raja 5.40 kN/m², ULS = 1.5·s_kin
+  Mitoittava paneelisarake      7/7, x = 7002 mm, h = 1.83 m, ls = 3.95 m, s_peak = 3.65 kN/m²
+  Mitoittava piste              sisäreuna, y = 1800 mm, ULS = 5.48/5.40 kN/m², η = 101.5%  -> YLITTYY
+  Rajan alitus edellyttää       s_kin <= 3.60 kN/m², h <= 1.80 m @ sisäreuna
+  Nykyinen ylitys / varmuus     ΔULS = +0.08 kN/m², Δs_kin = +0.05 kN/m², Δh = +27 mm
+  Kentän reuna vertailuna       x = 7569 mm → ULS = 5.86 kN/m², η = 108.5%
+
+  Tarkistuspisteet              kriittinen sarake 7/7
+  Sijainti                  y [mm]   s_kin     ULS       η     Tila
+  ------------------------ ------- ------- ------- ------- --------
+  sisäreuna                   1800    3.65    5.48  101.5%   YLITYS
+  200 mm sisäreunasta         2000    3.47    5.20   96.4%       OK
+  1. rivin puoliväli          2788    2.74    4.11   76.1%       OK
+  rivisauma                   3776    1.83    2.74   50.7%       OK
+  2. rivin puoliväli          4763    1.60    2.40   44.4%       OK
+  ulkoreuna                   5751    1.60    2.40   44.4%       OK
+
 ── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────
   Sivukaista vasen / oikea      1.123 / 1.145 m
   Tributäärikorkeudet           vasen: 0.405 / 0.450 / 0.450 / 0.450 / 0.450 / 0.450 / 0.255 m | oikea: 0.405 / 0.450 / 0.450 / 0.450 / 0.450 / 0.450 / 0.255 m
