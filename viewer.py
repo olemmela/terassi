@@ -716,7 +716,11 @@ function toggleAnalysisOverlays() {
 }
 
 // ── Member box helper ─────────────────────────────────────────────────────────
-function memberFrame(start, end, strongAxis) {
+function memberSectionRotationDeg(member) {
+  return Number(member?.section_rotation_deg ?? 0);
+}
+
+function memberFrame(start, end, sectionRotationDeg = 0) {
   const dirVec = end.clone().sub(start);
   if (dirVec.lengthSq() < 1e-12) return null;
   const dir = dirVec.normalize();
@@ -727,6 +731,11 @@ function memberFrame(start, end, strongAxis) {
   const zAx = new THREE.Vector3().crossVectors(dir, refUp).normalize();
   if (zAx.lengthSq() < 1e-8) return null;
   const yAx = new THREE.Vector3().crossVectors(zAx, dir).normalize();
+  if (Math.abs(sectionRotationDeg) > 1e-9) {
+    const roll = new THREE.Quaternion().setFromAxisAngle(dir, THREE.MathUtils.degToRad(sectionRotationDeg));
+    yAx.applyQuaternion(roll).normalize();
+    zAx.applyQuaternion(roll).normalize();
+  }
   return {
     dir,
     yAx,
@@ -737,12 +746,12 @@ function memberFrame(start, end, strongAxis) {
   };
 }
 
-function memberQuaternion(start, end, strongAxis) {
-  return memberFrame(start, end, strongAxis)?.quaternion ?? new THREE.Quaternion();
+function memberQuaternion(start, end, sectionRotationDeg = 0) {
+  return memberFrame(start, end, sectionRotationDeg)?.quaternion ?? new THREE.Quaternion();
 }
 
 function cutLocalFrame(memberInfo, memberEnd) {
-  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.strongAxis);
+  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.sectionRotationDeg);
   if (!frame) return null;
   const xAx = memberEnd === 'axis_end'
     ? frame.dir.clone().negate()
@@ -760,12 +769,10 @@ function cutLocalFrame(memberInfo, memberEnd) {
   };
 }
 
-function memberSectionDims(profile, strongAxis) {
+function memberSectionDims(profile) {
   const hMm = profile?.h_mm, bMm = profile?.b_mm, cnt = profile?.count ?? 1;
   if (!hMm || !bMm) return [null, null];
-  return strongAxis === 'horizontal'
-    ? [bMm, hMm]
-    : [hMm, bMm * cnt];
+  return [hMm, bMm * cnt];
 }
 
 function memberEnds(grpName, m) {
@@ -785,7 +792,7 @@ function buildMemberIndex(geo) {
         member: m,
         start3: pt(a),
         end3: pt(b),
-        strongAxis: m.strong_axis,
+        sectionRotationDeg: memberSectionRotationDeg(m),
         profile: m.profile,
       });
     }
@@ -820,7 +827,7 @@ function connectionSupportLinePoint(con, memberIndex, supportLineRef) {
 function supportLinePlateAxes(supportInfo, shiftDir) {
   let plateU = null;
   if (supportInfo) {
-    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.strongAxis);
+    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.sectionRotationDeg);
     if (supportFrame) {
       plateU = supportFrame.dir.clone().projectOnPlane(shiftDir);
     }
@@ -912,8 +919,8 @@ function projectPointToLine(point3, start3, end3) {
 
 function projectedMemberHalfExtent(memberInfo, axisDir) {
   if (!memberInfo) return 0;
-  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.strongAxis);
-  const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+  const frame = memberFrame(memberInfo.start3, memberInfo.end3, memberInfo.sectionRotationDeg);
+  const [boxH, boxB] = memberSectionDims(memberInfo.profile);
   if (!frame || !boxH || !boxB) return 0;
   const dir = axisDir.clone().normalize();
   const halfLen = memberInfo.start3.distanceTo(memberInfo.end3) / 2;
@@ -979,7 +986,7 @@ function birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
 
   let supportNormal = null;
   if (supportInfo) {
-    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.strongAxis);
+    const supportFrame = memberFrame(supportInfo.start3, supportInfo.end3, supportInfo.sectionRotationDeg);
     if (supportFrame) {
       supportNormal = supportFrame.yAx.clone();
       if (supportNormal.dot(frame.yAx) < 0) supportNormal.negate();
@@ -1082,7 +1089,7 @@ function notchGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
 
 function addNotchVisual(g, pk, con, notch, memberInfo, supportInfo, cutIndex = 0) {
   if (!notch || !memberInfo) return;
-  const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+  const [boxH, boxB] = memberSectionDims(memberInfo.profile);
   if (!boxH || !boxB) return;
 
   const notchGeo = notchGeometry(notch, boxH, boxB, memberInfo, supportInfo);
@@ -1134,7 +1141,7 @@ function addNotchVisual(g, pk, con, notch, memberInfo, supportInfo, cutIndex = 0
   g.add(wrapper);
 }
 
-function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData) {
+function addMemberMesh(g, pk, start3, end3, profile, sectionRotationDeg, color, userData) {
   const len  = start3.distanceTo(end3);
   if (len < 1) return;
 
@@ -1151,11 +1158,10 @@ function addMemberMesh(g, pk, start3, end3, profile, strongAxis, color, userData
     return;
   }
 
-  // strong_axis='vertical' → h_mm is the vertical dimension
-  // strong_axis='horizontal' → h_mm is horizontal, b_mm is vertical
-  const [boxH, boxB] = memberSectionDims(profile, strongAxis);
+  // section_rotation_deg=0 → h_mm is vertical; positive values roll about axis_start→axis_end
+  const [boxH, boxB] = memberSectionDims(profile);
 
-  const q   = memberQuaternion(start3, end3, strongAxis);
+  const q   = memberQuaternion(start3, end3, sectionRotationDeg);
   const mid = start3.clone().add(end3).multiplyScalar(0.5);
 
   const boxGeo = new THREE.BoxGeometry(len, boxH, boxB);
@@ -1184,7 +1190,7 @@ function addMembers(g, pk, geo) {
     for (const m of lst ?? []) {
       const [a, b] = memberEnds(grpName, m);
       if (!a || !b) continue;
-      addMemberMesh(g, pk, pt(a), pt(b), m.profile, m.strong_axis, col,
+      addMemberMesh(g, pk, pt(a), pt(b), m.profile, memberSectionRotationDeg(m), col,
         { id: m.id, kind: grpName, _geoName: g.userData.geoName });
     }
   }
@@ -1358,7 +1364,7 @@ function addConnections(g, pk, connections, memberIndex) {
         addNotchVisual(g, pk, con, cuts[i], memberInfo, supportInfo, i);
         // Collect notch geometry data for CSG subtraction
         if (memberInfo && memberId) {
-          const [boxH, boxB] = memberSectionDims(memberInfo.profile, memberInfo.strongAxis);
+          const [boxH, boxB] = memberSectionDims(memberInfo.profile);
           if (boxH && boxB) {
             const notchGeo = notchGeometry(cuts[i], boxH, boxB, memberInfo, supportInfo);
             const localFrame = cutLocalFrame(memberInfo, cuts[i].member_end);
