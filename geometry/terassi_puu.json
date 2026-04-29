@@ -345,7 +345,6 @@
       "cuts": [
         {
           "kind": "birdsmouth_notch",
-          "member_end": "axis_end",
           "reference": "support_inner_edge",
           "offset_mm": 0,
           "heel_depth_mm": 85,
@@ -403,9 +402,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -447,9 +446,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -504,9 +503,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -539,9 +538,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -574,9 +573,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -609,9 +608,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 350
         }
@@ -644,9 +643,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 50,
           "length_mm": 450
         }
@@ -679,9 +678,9 @@
       },
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "depth_mm": 60,
           "length_mm": 440
         }

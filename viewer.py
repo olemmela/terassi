@@ -506,7 +506,6 @@ const SUPPORT_MODEL_LABELS = {
 const REFERENCE_LABELS = {
   axis_start: 'axis_start-pää',
   axis_end: 'axis_end-pää',
-  member_end: 'jäsenen ulkopää',
   support_centerline: 'tukikeskilinja',
   support_inner_edge: 'tuen sisäreuna',
   support_outer_edge: 'tuen ulkoreuna',
@@ -638,7 +637,7 @@ function connectionTooltipLines(con) {
     if (springSummary) lines.push(`rotaatio: ${springSummary}`);
   }
   const cuts = connectionCuts(con);
-  if (cuts.length) lines.push(`cuts: ${cuts.map(cut => cut.kind).join(', ')}`);
+  if (cuts.length) lines.push(`cuts: ${cuts.map(cut => cutLabel(cut)).join(', ')}`);
   return lines;
 }
 
@@ -935,26 +934,50 @@ function connectionCuts(con) {
     : (con.notch ? [con.notch] : []);
 }
 
+function cutLabel(cut) {
+  if (cut.kind === 'rect_notch' || cut.kind === 'bevel_notch') {
+    return `${cut.kind}(${cut.side})`;
+  }
+  if (cut.kind === 'end_bevel_cut') {
+    return `${cut.kind}(${cut.cut_from})`;
+  }
+  return cut.kind;
+}
+
 function cutOffsetMm(cut) {
   return cut.offset_mm ?? cut.x_from_support_edge_mm ?? 0;
 }
 
+function cutMemberEnd(cut, con, memberInfo) {
+  const ref = cut.reference;
+  if (ref === 'axis_start' || ref === 'axis_end') return ref;
+  if (!memberInfo) return null;
+  const axisPoint = projectPointToLine(pt(con.at), memberInfo.start3, memberInfo.end3);
+  return axisPoint.distanceToSquared(memberInfo.start3) <= axisPoint.distanceToSquared(memberInfo.end3)
+    ? 'axis_start'
+    : 'axis_end';
+}
+
 function resolveCutAnchor(cut, con, memberInfo, supportInfo) {
-  const frame = cutLocalFrame(memberInfo, cut.member_end);
+  const memberEnd = cutMemberEnd(cut, con, memberInfo);
+  const frame = cutLocalFrame(memberInfo, memberEnd);
   if (!frame) return null;
 
   const inwardDir = frame.xAx.clone();
   const axisPoint = projectPointToLine(pt(con.at), memberInfo.start3, memberInfo.end3);
-  const endPoint = cut.member_end === 'axis_end'
+  const endPoint = memberEnd === 'axis_end'
     ? memberInfo.end3.clone()
     : memberInfo.start3.clone();
-  const ref = cut.reference ?? 'support_inner_edge';
+  const ref = cut.reference;
   const supportHalf = projectedMemberHalfExtent(supportInfo, inwardDir);
 
   let anchor = axisPoint.clone();
   switch (ref) {
-    case 'member_end':
-      anchor = endPoint;
+    case 'axis_start':
+      anchor = memberInfo.start3.clone();
+      break;
+    case 'axis_end':
+      anchor = memberInfo.end3.clone();
       break;
     case 'support_outer_edge':
       anchor = axisPoint.clone().add(inwardDir.clone().multiplyScalar(-supportHalf));
@@ -980,8 +1003,8 @@ function extrudeNotchPolygon(points, widthMm) {
   return geo;
 }
 
-function birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
-  const frame = cutLocalFrame(memberInfo, notch.member_end);
+function birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo, con) {
+  const frame = cutLocalFrame(memberInfo, cutMemberEnd(notch, con, memberInfo));
   if (!frame) return null;
 
   let supportNormal = null;
@@ -1042,7 +1065,7 @@ function birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
   return extrudeNotchPolygon(poly, boxB);
 }
 
-function notchGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
+function notchGeometry(notch, boxH, boxB, memberInfo, supportInfo, con) {
   const bottom = -boxH / 2;
   const top = boxH / 2;
   if (notch.kind === 'rect_notch') {
@@ -1061,15 +1084,21 @@ function notchGeometry(notch, boxH, boxB, memberInfo, supportInfo) {
           [0, bottom + notch.depth_mm],
         ], boxB);
   }
-  if (notch.kind === 'bevel_bottom_notch') {
-    return extrudeNotchPolygon([
-      [0, bottom],
-      [notch.length_mm, bottom],
-      [0, bottom + notch.depth_mm],
-    ], boxB);
+  if (notch.kind === 'bevel_notch') {
+    return notch.side === 'top'
+      ? extrudeNotchPolygon([
+          [0, top],
+          [notch.length_mm, top],
+          [0, top - notch.depth_mm],
+        ], boxB)
+      : extrudeNotchPolygon([
+          [0, bottom],
+          [notch.length_mm, bottom],
+          [0, bottom + notch.depth_mm],
+        ], boxB);
   }
   if (notch.kind === 'birdsmouth_notch') {
-    return birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo);
+    return birdsmouthGeometry(notch, boxH, boxB, memberInfo, supportInfo, con);
   }
   if (notch.kind === 'end_bevel_cut') {
     return notch.cut_from === 'top'
@@ -1092,10 +1121,10 @@ function addNotchVisual(g, pk, con, notch, memberInfo, supportInfo, cutIndex = 0
   const [boxH, boxB] = memberSectionDims(memberInfo.profile);
   if (!boxH || !boxB) return;
 
-  const notchGeo = notchGeometry(notch, boxH, boxB, memberInfo, supportInfo);
+  const notchGeo = notchGeometry(notch, boxH, boxB, memberInfo, supportInfo, con);
   if (!notchGeo) return;
 
-  const localFrame = cutLocalFrame(memberInfo, notch.member_end);
+  const localFrame = cutLocalFrame(memberInfo, cutMemberEnd(notch, con, memberInfo));
   if (!localFrame) return;
   const anchorPoint = resolveCutAnchor(notch, con, memberInfo, supportInfo);
   if (!anchorPoint) return;
@@ -1366,8 +1395,8 @@ function addConnections(g, pk, connections, memberIndex) {
         if (memberInfo && memberId) {
           const [boxH, boxB] = memberSectionDims(memberInfo.profile);
           if (boxH && boxB) {
-            const notchGeo = notchGeometry(cuts[i], boxH, boxB, memberInfo, supportInfo);
-            const localFrame = cutLocalFrame(memberInfo, cuts[i].member_end);
+            const notchGeo = notchGeometry(cuts[i], boxH, boxB, memberInfo, supportInfo, con);
+            const localFrame = cutLocalFrame(memberInfo, cutMemberEnd(cuts[i], con, memberInfo));
             const anchorPoint = resolveCutAnchor(cuts[i], con, memberInfo, supportInfo);
             if (notchGeo && localFrame && anchorPoint) {
               if (!notchCutsMap.has(memberId)) notchCutsMap.set(memberId, []);

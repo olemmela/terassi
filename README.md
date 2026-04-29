@@ -64,7 +64,7 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Nykygeometrian mukaiset orsien niveltuet, sisäkattotuolien puolijäykkä sisäpään
   palkkikenkä sekä reunimmaisten kattotuolien puolijäykät `N 48×136` -liitokset
 - Orsien, nurkkaorten, sisäkattotuolien ja reunakattotuolien taivutus-, leikkaus- ja taipumatarkistukset
-- Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_bottom_notch`, `rect_notch`)
+- Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_notch`, `rect_notch`)
 - Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
 - Pilarireaktiot ja nostotarpeet
 
@@ -147,11 +147,12 @@ aurinkopaneelit, sivu- ja kolmiolasit, laudoitukset, aukot).
 vanha yksittäinen `notch` toimii yhä, mutta `notched_over`-liitokselle voi
 nyt antaa myös `cuts`-listan. Listan itemit voivat olla
 `rect_notch`, `birdsmouth_notch`, `end_bevel_cut` tai
-`bevel_bottom_notch`, ja ne voivat käyttää sijaintiviitteitä
+`bevel_notch`, ja ne voivat käyttää sijaintiviitteitä
 `support_inner_edge`, `support_outer_edge`, `support_centerline` tai
-`member_end` yhdessä `offset_mm`-kentän kanssa. `rect_notch` käyttää lisäksi
-`side`-kenttää (`top` tai `bottom`), jolloin suorakulmainen kolo voidaan
-mallintaa joko jäsenen ylä- tai alapintaan. `viewer.py` näyttää nämä
+`axis_start` / `axis_end` yhdessä `offset_mm`-kentän kanssa. `reference` on
+pakollinen kaikille cuteille. `rect_notch` ja
+`bevel_notch` käyttävät lisäksi `side`-kenttää (`top` tai `bottom`),
+jolloin loveus voidaan mallintaa joko jäsenen ylä- tai alapintaan. `viewer.py` näyttää nämä
 overlay-muotoina; `birdsmouth_notch` johdetaan viewerissä tukijäsenen
 geometriasta, joten seat/plumb-kulmat seuraavat oikeaa tukikulmaa.
 Lisäksi `connections.analysis` voi kuvata analyysikäyttäytymisen

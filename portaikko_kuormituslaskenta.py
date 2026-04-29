@@ -663,17 +663,20 @@ def analyse():
         raise ValueError("geometry/portaikko.json ei sisällä kattotuolien lovitusta LP225-palkilla")
 
     def cut_signature(cut):
-        return tuple((key, cut.get(key)) for key in ("kind", "member_end", "reference", "offset_mm", "depth_mm", "length_mm", "heel_depth_mm", "seat_length_mm", "side"))
+        return tuple((key, cut.get(key)) for key in ("kind", "reference", "offset_mm", "depth_mm", "length_mm", "heel_depth_mm", "seat_length_mm", "side"))
 
     rafter_notch_cuts = [conn["cuts"][0] for conn in rafter_notch_connections]
     if len({cut_signature(cut) for cut in rafter_notch_cuts}) != 1:
         raise ValueError("portaikko_kuormituslaskenta.py olettaa kaikille kattotuoleille saman loven LP225-tuella")
 
     rafter_notch_cut = rafter_notch_cuts[0]
-    if rafter_notch_cut.get("kind") != "bevel_bottom_notch":
-        raise ValueError("portaikko_kuormituslaskenta.py tukee kattotuolille vain bevel_bottom_notch-loven")
-    if rafter_notch_cut.get("member_end", "axis_end") != "axis_end":
-        raise ValueError("portaikko_kuormituslaskenta.py olettaa loven olevan kattotuolin axis_end-päässä")
+    if rafter_notch_cut.get("kind") != "bevel_notch":
+        raise ValueError("portaikko_kuormituslaskenta.py tukee kattotuolille vain bevel_notch-loven")
+    if rafter_notch_cut["reference"] != "axis_end":
+        raise ValueError("portaikko_kuormituslaskenta.py olettaa loven reference-ankkurin olevan kattotuolin axis_end-päässä")
+    rafter_notch_side = rafter_notch_cut.get("side")
+    if rafter_notch_side not in {"bottom", "top"}:
+        raise ValueError("portaikko_kuormituslaskenta.py odottaa bevel_notch-lovelle side-kentän")
 
     rafter_notch_depth_mm = float(rafter_notch_cut["depth_mm"])
     rafter_notch_length_mm = float(rafter_notch_cut["length_mm"])
@@ -1116,6 +1119,7 @@ def analyse():
             "beam_delta_limit_mm": beam_delta_limit_mm,
             "rafter_notch_depth_mm": rafter_notch_depth_mm,
             "rafter_notch_length_mm": rafter_notch_length_mm,
+            "rafter_notch_side": rafter_notch_side,
             "rafter_notch_h_at_beam_mm": rafter_notch_h_at_beam_mm,
             "rafter_notch_h_min_mm": rafter_notch_h_min_mm,
             "rafter_notch_depth_at_beam_mm": rafter_notch_depth_at_beam_mm,
@@ -1203,7 +1207,7 @@ def main():
     print(f"  fm,d = {sec['fm_d_C24']:.2f} N/mm²,  fv,d = {sec['fv_d_C24']:.2f} N/mm²")
     print(f"  Tukimalli                       {sec['rafter_support_model']}")
     print(
-        f"  Lovi LP225-tuella               bevel_bottom_notch {sec['rafter_notch_depth_mm']:.0f} × {sec['rafter_notch_length_mm']:.0f} mm,"
+        f"  Lovi LP225-tuella               bevel_notch {sec['rafter_notch_side']} {sec['rafter_notch_depth_mm']:.0f} × {sec['rafter_notch_length_mm']:.0f} mm,"
         f"  h_net@palkki = {sec['rafter_notch_h_at_beam_mm']:.1f} mm"
     )
     print(
@@ -1292,7 +1296,7 @@ def main():
     print(f"    joten suurin tributäärileveys on {geo['widest_tributary_m']*1000:.0f} mm kattotuolilla {geo['widest_rafter_id']}.")
     print("  * Kattotuolien seinäpää mallinnetaan piirustusten perusteella kiertymäjäykkänä,")
     print("    mutta LP225-pää nivellettyenä; tukimomentti muodostuu siis vain seinäpäähän.")
-    print("  * LP225-tuella oleva bevel_bottom_notch huomioidaan geometriasta lineaarisesti")
+    print(f"  * LP225-tuella oleva bevel_notch ({sec['rafter_notch_side']}) huomioidaan geometriasta lineaarisesti")
     print("    muuttuvana nettoh-/nettoW-/nettoA- ja EI-tarkistuksena koko loven pituudella.")
     print("  * Kaiteet/sivulasit jätetään pois tästä versiosta, kunnes niiden oikea")
     print("    geometria ja metallikaiteet on mallinnettu.")

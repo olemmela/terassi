@@ -62,7 +62,7 @@
   Poikkileikkauksen kierto      vasen: -6.7° | oikea: +6.7°
   Paneelikehikko                kuorma pisteenä -15 mm axis_end-päästä; omapaino viivakuormana
   MRd = 1.07 kNm,  VRd = 7.72 kN,  δ_lim vasen / oikea = 2.3 / 2.4 mm
-  Paatybevel ulokepaassa        bevel_bottom_notch vasen: 50 × 350 mm | oikea: 50 × 350 mm
+  Paatybevel ulokepaassa        bevel_notch bottom vasen: 50 × 350 mm | oikea: 50 × 350 mm
   Lovi reunatuella              ei lovea
 
   ID               b_trib   q_avg   R_edge  R_inner      Md     η_M     η_V   η_lovi     δ_sls
@@ -84,14 +84,14 @@
   Kriittinen orsi               orsi.oikea.0  (ULS DRIFT, η = 96.8%)
     q_avg / q_max               2.231 / 2.376 kN/m
     Reaktio reunakattotuolelle  3.98 kN,  sisäkattotuolille -1.43 kN
-    Governing lovi              axis_end_bevel / M_netto = 79.2%
+    Governing lovi              axis_end_bevel_bottom / M_netto = 79.2%
 
 ── NURKKAORRET Y-SUUNNASSA 98×48 C24 ────────────────────────────
   Kantotapa                     tuet geometrian mukaan toiseksi uloimpaan kattotuoliin ja ulompaan reunajaseneen
   Tributäärileveydet            left: 0.484 / 0.219 / 0.420 m | right: 0.484 / 0.219 / 0.442 m
   Poikkileikkauksen kierto      left: -6.2 … -3.5° | right: +3.5 … +6.2°
   Paneelikuorma                 kuorma pisteenä -15 mm axis_end-päästä; omapaino viivakuormana
-  Paatybevelit vinoissa orsissa rafter-tuet bevel_bottom_notch 50 × 350 mm; beam.outer bevel_bottom_notch 50 × 350 mm / 50 × 450 mm / 60 × 440 mm, h_net,min = 38 mm
+  Paatybevelit vinoissa orsissa rafter-tuet bevel_notch bottom 50 × 350 mm; beam.outer bevel_notch bottom 50 × 350 mm / 50 × 450 mm / 60 × 440 mm, h_net,min = 38 mm
 
   ID                    b_trib   q_avg     R_in    R_out      Md     η_M     η_V   η_lovi     δ_sls
   -------------------- ------- ------- -------- -------- ------- ------- ------- -------- ---------
@@ -104,7 +104,7 @@
   Kriittinen nurkkaorsi         orsi.vasen.67  (ULS A, η = 69.0%)
     q_avg / q_max               1.471 / 1.471 kN/m
     Reaktio sisatuelle          -1.02 kN,  ulkotuella 2.74 kN (kattotuoli.vasen)
-    Governing lovi              axis_end_bevel / M_netto = 52.9%
+    Governing lovi              axis_end_bevel_bottom / M_netto = 52.9%
 
 ── SISÄKATTOTUOLIT 198×48 C24 ───────────────────────────────────
   Suora paneelikaista           0.567 / 1.134 / 1.134 / 1.134 / 1.134 / 0.567 m

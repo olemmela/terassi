@@ -279,7 +279,7 @@
 
     "cut_reference": {
       "type": "string",
-      "enum": ["support_inner_edge", "support_outer_edge", "support_centerline", "member_end"]
+      "enum": ["axis_start", "axis_end", "support_inner_edge", "support_outer_edge", "support_centerline"]
     },
 
     "load_transfer_reference": {
@@ -289,11 +289,10 @@
 
     "rect_notch": {
       "type": "object",
-      "required": ["kind", "member_end", "side", "depth_mm", "length_mm"],
+      "required": ["kind", "side", "reference", "depth_mm", "length_mm"],
       "additionalProperties": false,
       "properties": {
         "kind":                   { "const": "rect_notch" },
-        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
         "side":                   { "type": "string", "enum": ["bottom", "top"] },
         "reference":              { "$ref": "#/$defs/cut_reference" },
         "offset_mm":              { "type": "number", "default": 0 },
@@ -305,11 +304,10 @@
 
     "birdsmouth_notch": {
       "type": "object",
-      "required": ["kind", "member_end", "heel_depth_mm", "seat_length_mm"],
+      "required": ["kind", "reference", "heel_depth_mm", "seat_length_mm"],
       "additionalProperties": false,
       "properties": {
         "kind":                   { "const": "birdsmouth_notch" },
-        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
         "reference":              { "$ref": "#/$defs/cut_reference" },
         "offset_mm":              { "type": "number", "default": 0 },
         "x_from_support_edge_mm": { "type": "number", "default": 0 },
@@ -320,11 +318,10 @@
 
     "end_bevel_cut": {
       "type": "object",
-      "required": ["kind", "member_end", "cut_from", "length_mm"],
+      "required": ["kind", "reference", "cut_from", "length_mm"],
       "additionalProperties": false,
       "properties": {
         "kind":                   { "const": "end_bevel_cut" },
-        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
         "reference":              { "$ref": "#/$defs/cut_reference" },
         "offset_mm":              { "type": "number", "default": 0 },
         "x_from_support_edge_mm": { "type": "number", "default": 0 },
@@ -333,13 +330,13 @@
       }
     },
 
-    "bevel_bottom_notch": {
+    "bevel_notch": {
       "type": "object",
-      "required": ["kind", "member_end", "depth_mm", "length_mm"],
+      "required": ["kind", "side", "reference", "depth_mm", "length_mm"],
       "additionalProperties": false,
       "properties": {
-        "kind":                   { "const": "bevel_bottom_notch" },
-        "member_end":             { "type": "string", "enum": ["axis_start", "axis_end"] },
+        "kind":                   { "const": "bevel_notch" },
+        "side":                   { "type": "string", "enum": ["bottom", "top"] },
         "reference":              { "$ref": "#/$defs/cut_reference" },
         "offset_mm":              { "type": "number", "default": 0 },
         "x_from_support_edge_mm": { "type": "number", "default": 0 },
@@ -353,7 +350,7 @@
         { "$ref": "#/$defs/rect_notch" },
         { "$ref": "#/$defs/birdsmouth_notch" },
         { "$ref": "#/$defs/end_bevel_cut" },
-        { "$ref": "#/$defs/bevel_bottom_notch" }
+        { "$ref": "#/$defs/bevel_notch" }
       ]
     },
 

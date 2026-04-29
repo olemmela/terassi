@@ -512,23 +512,23 @@ def rect_notch_info(connection_id):
 
 
 def bevel_notch_info(connection_id):
-    cut = connection_cut(connection_id, "bevel_bottom_notch")
+    cut = connection_cut(connection_id, "bevel_notch")
     if cut is None:
         return {
             "active": False,
             "depth_mm": 0.0,
             "length_mm": 0.0,
             "offset_mm": 0.0,
-            "member_end": None,
             "reference": None,
+            "side": None,
         }
     return {
         "active": True,
         "depth_mm": float(cut["depth_mm"]),
         "length_mm": float(cut["length_mm"]),
         "offset_mm": float(cut.get("offset_mm", 0.0)),
-        "member_end": cut["member_end"],
-        "reference": cut.get("reference", "member_end"),
+        "reference": cut["reference"],
+        "side": cut["side"],
     }
 
 roof = surface(GEO, "surf.solar_panels")
@@ -608,7 +608,7 @@ def unique_bevel_notch_specs(notch_infos):
     for info in notch_infos:
         if not info or not info.get("active"):
             continue
-        spec = (float(info["depth_mm"]), float(info["length_mm"]))
+        spec = (info.get("side"), float(info["depth_mm"]), float(info["length_mm"]))
         if spec in seen:
             continue
         seen.add(spec)
@@ -619,19 +619,37 @@ def format_bevel_notch_specs(notch_infos):
     specs = unique_bevel_notch_specs(notch_infos)
     if not specs:
         return "ei bevel-lovea"
-    return " / ".join(f"{depth_mm:.0f} × {length_mm:.0f} mm" for depth_mm, length_mm in specs)
+    sides = {side for side, _, _ in specs}
+    if len(sides) == 1:
+        side = specs[0][0]
+        return f"{side} " + " / ".join(f"{depth_mm:.0f} × {length_mm:.0f} mm" for _, depth_mm, length_mm in specs)
+    return " / ".join(f"{side} {depth_mm:.0f} × {length_mm:.0f} mm" for side, depth_mm, length_mm in specs)
 
 
 def format_labeled_bevel_notch_specs(notch_info_by_label):
     label_text = {"left": "vasen", "right": "oikea"}
-    parts = []
-    for label, info in notch_info_by_label.items():
-        if not info or not info.get("active"):
-            continue
-        parts.append(f"{label_text.get(label, label)}: {float(info['depth_mm']):.0f} × {float(info['length_mm']):.0f} mm")
-    if not parts:
+    active_items = [
+        (label_text.get(label, label), info)
+        for label, info in notch_info_by_label.items()
+        if info and info.get("active")
+    ]
+    if not active_items:
         return "ei bevel-lovea"
-    return "bevel_bottom_notch " + " | ".join(parts)
+    sides = {info.get("side") for _, info in active_items}
+    if len(sides) == 1:
+        return f"bevel_notch {next(iter(sides))} " + " | ".join(
+            f"{label}: {float(info['depth_mm']):.0f} × {float(info['length_mm']):.0f} mm"
+            for label, info in active_items
+        )
+    return "bevel_notch " + " | ".join(
+        f"{label}/{info['side']}: {float(info['depth_mm']):.0f} × {float(info['length_mm']):.0f} mm"
+        for label, info in active_items
+    )
+
+
+def bevel_notch_label(info):
+    side = info.get("side")
+    return f"{info['reference']}_bevel_{side}" if side else f"{info['reference']}_bevel"
 
 house_roof = reference(GEO, "ref.house.roof")
 house_roof_poly = house_roof["polygon"]
@@ -887,8 +905,8 @@ inactive_bevel_notch_info = {
     "depth_mm": 0.0,
     "length_mm": 0.0,
     "offset_mm": 0.0,
-    "member_end": None,
     "reference": None,
+    "side": None,
 }
 
 for side, members in corner_purlins_by_side.items():
@@ -1325,7 +1343,7 @@ def make_end_referenced_bevel_notch_depth_fn(info, end_coord_mm, inward_positive
             return 0.0
         return (end_coord_mm, end_coord_mm), depth_fn, False
 
-    if info["reference"] != "member_end":
+    if info["reference"] not in {"axis_start", "axis_end"}:
         raise ValueError(f"Unsupported bevel notch reference: {info['reference']}")
 
     offset_mm = info["offset_mm"]
@@ -1354,8 +1372,10 @@ def make_purlin_notch_depth_fn(member_obj, side):
     start_x_mm = float(member_obj["axis_start"]["x"])
     end_x_mm = float(member_obj["axis_end"]["x"])
     member_axis_positive_sign = 1.0 if end_x_mm >= start_x_mm else -1.0
-    notch_end_x_mm = start_x_mm if info["member_end"] == "axis_start" else end_x_mm
-    inward_positive_sign = member_axis_positive_sign if info["member_end"] == "axis_start" else -member_axis_positive_sign
+    if info["reference"] not in {"axis_start", "axis_end"}:
+        raise ValueError(f"Unsupported bevel notch reference: {info['reference']}")
+    notch_end_x_mm = start_x_mm if info["reference"] == "axis_start" else end_x_mm
+    inward_positive_sign = member_axis_positive_sign if info["reference"] == "axis_start" else -member_axis_positive_sign
     return make_end_referenced_bevel_notch_depth_fn(info, notch_end_x_mm, inward_positive_sign)
 
 
@@ -1383,8 +1403,10 @@ def make_slanted_support_notch_depth_fn(info, member_length_mm):
             return 0.0
         return (0.0, 0.0), depth_fn, False
 
-    notch_end_s_mm = 0.0 if info["member_end"] == "axis_start" else member_length_mm
-    inward_positive_sign = 1.0 if info["member_end"] == "axis_start" else -1.0
+    if info["reference"] not in {"axis_start", "axis_end"}:
+        raise ValueError(f"Unsupported bevel notch reference: {info['reference']}")
+    notch_end_s_mm = 0.0 if info["reference"] == "axis_start" else member_length_mm
+    inward_positive_sign = 1.0 if info["reference"] == "axis_start" else -1.0
     return make_end_referenced_bevel_notch_depth_fn(info, notch_end_s_mm, inward_positive_sign)
 
 
@@ -1640,7 +1662,7 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
             x_end_mm=inner_notch_zone_mm[1],
             step_mm=1.0,
         )
-        notch_candidates.append({"label": f"{purlin_inner_notch_info[side]['member_end']}_bevel", **inner_notch})
+        notch_candidates.append({"label": bevel_notch_label(purlin_inner_notch_info[side]), **inner_notch})
     if edge_notch_active:
         edge_notch = sample_net_section_utilization(
             response["elements"],
@@ -1782,7 +1804,7 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
             x_end_mm=inner_notch_zone_mm[1],
             step_mm=1.0,
         )
-        notch_candidates.append({"label": f"{inner_notch_info['member_end']}_bevel", **inner_notch})
+        notch_candidates.append({"label": bevel_notch_label(inner_notch_info), **inner_notch})
     if outer_notch_active:
         outer_notch = sample_net_section_utilization(
             response["elements"],
@@ -1794,7 +1816,7 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
             x_end_mm=outer_notch_zone_mm[1],
             step_mm=1.0,
         )
-        notch_candidates.append({"label": f"{corner_purlin_outer_notch_info[member_id]['member_end']}_bevel", **outer_notch})
+        notch_candidates.append({"label": bevel_notch_label(corner_purlin_outer_notch_info[member_id]), **outer_notch})
     notch = max(notch_candidates, key=lambda item: item["eta_gov"]["value_pct"]) if notch_candidates else None
     max_notch_depth_mm = max(
         ([inner_notch_info["depth_mm"]] if inner_notch_active else [])
@@ -2419,7 +2441,7 @@ if corner_purlin_design_results:
         ]
     if slanted_rafter_notches:
         slanted_notch_desc.append(
-            f"rafter-tuet bevel_bottom_notch {format_bevel_notch_specs(slanted_rafter_notches)}"
+            f"rafter-tuet bevel_notch {format_bevel_notch_specs(slanted_rafter_notches)}"
         )
     slanted_beam_notches = [
         info
@@ -2428,7 +2450,7 @@ if corner_purlin_design_results:
     ]
     if slanted_beam_notches:
         slanted_notch_desc.append(
-            f"beam.outer bevel_bottom_notch {format_bevel_notch_specs(slanted_beam_notches)}"
+            f"beam.outer bevel_notch {format_bevel_notch_specs(slanted_beam_notches)}"
         )
     if slanted_notch_desc:
         print(

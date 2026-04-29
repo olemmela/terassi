@@ -221,9 +221,9 @@
       "at": {"x": 7320, "y": 1675, "z": 2108},
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "offset_mm": 0,
           "depth_mm": 125,
           "length_mm": 430
@@ -240,9 +240,9 @@
       "at": {"x": 8300, "y": 1675, "z": 2108},
       "cuts": [
         {
-          "kind": "bevel_bottom_notch",
-          "member_end": "axis_end",
-          "reference": "member_end",
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
           "offset_mm": 0,
           "depth_mm": 125,
           "length_mm": 430
