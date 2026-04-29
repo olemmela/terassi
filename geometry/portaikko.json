@@ -173,7 +173,6 @@
         "profile": "LP225x90",
         "axis_start": {"x": 7200, "y": 1675, "z": 1970},
         "axis_end": {"x": 13300, "y": 1675, "z": 1970},
-        "strong_axis": "vertical",
         "existing": true
       }
     ],
@@ -183,7 +182,6 @@
         "profile": "175x50",
         "axis_start": {"x": 7320, "y": -1000, "z": 2730},
         "axis_end": {"x": 7320, "y": 1900, "z": 2060},
-        "strong_axis": "vertical",
         "existing": false
       },
       {
@@ -191,7 +189,6 @@
         "profile": "175x50",
         "axis_start": {"x": 8300, "y": -1000, "z": 2730},
         "axis_end": {"x": 8300, "y": 1900, "z": 2060},
-        "strong_axis": "vertical",
         "existing": false,
         "pattern": {
           "count": 6,

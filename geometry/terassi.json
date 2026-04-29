@@ -163,7 +163,6 @@
         "profile": "2xKP360x51",
         "axis_start": {"x": 0, "y": 1675, "z": 2750},
         "axis_end": {"x": 7200, "y": 1675, "z": 4350},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -172,7 +171,6 @@
         "ref": "pt.beam.inner.new.axis_start",
         "axis_start": {"x": 0, "y": 0, "z": 0},
         "axis_end": {"x": 7938, "y": 0, "z": 0},
-        "strong_axis": "vertical",
         "existing": false
       },
       {
@@ -180,7 +178,6 @@
         "profile": "LP225x140",
         "axis_start": {"x": -369, "y": 5275, "z": 2120},
         "axis_end": {"x": 7569, "y": 5275, "z": 2120},
-        "strong_axis": "vertical",
         "existing": false
       }
     ],
@@ -190,7 +187,6 @@
         "profile": "223x48",
         "axis_start": {"x": -380, "y": 1900, "z": 2630},
         "axis_end": {"x": -380, "y": 5749, "z": 2150},
-        "strong_axis": "vertical",
         "existing": false,
         "pattern": {
           "count": 8,

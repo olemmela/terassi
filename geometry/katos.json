@@ -180,7 +180,6 @@
         "profile": "KP450x51",
         "axis_start": {"x": 0, "y": 0, "z": 2800},
         "axis_end": {"x": 7200, "y": 0, "z": 4400},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -188,7 +187,6 @@
         "profile": "KP450x51",
         "axis_start": {"x": 0, "y": 900, "z": 2800},
         "axis_end": {"x": 7200, "y": 900, "z": 4400},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -196,7 +194,6 @@
         "profile": "2xKP360x51",
         "axis_start": {"x": 0, "y": 1675, "z": 2750},
         "axis_end": {"x": 7200, "y": 1675, "z": 4350},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -204,7 +201,6 @@
         "profile": "LP225x90",
         "axis_start": {"x": 125, "y": 0, "z": 2480},
         "axis_end": {"x": 125, "y": 1750, "z": 2480},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -212,7 +208,6 @@
         "profile": "LP225x90",
         "axis_start": {"x": 7075, "y": 0, "z": 4020},
         "axis_end": {"x": 7075, "y": 1750, "z": 4020},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -220,7 +215,6 @@
         "profile": "350x300",
         "axis_start": {"x": 0, "y": 5225, "z": -370},
         "axis_end": {"x": 7200, "y": 5225, "z": -370},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -228,7 +222,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 600, "y": -50, "z": -140},
         "axis_end": {"x": 600, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -236,7 +229,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 1800, "y": -50, "z": -140},
         "axis_end": {"x": 1800, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -244,7 +236,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 3000, "y": -50, "z": -140},
         "axis_end": {"x": 3000, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -252,7 +243,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 4200, "y": -50, "z": -140},
         "axis_end": {"x": 4200, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -260,7 +250,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 5400, "y": -50, "z": -140},
         "axis_end": {"x": 5400, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -268,7 +257,6 @@
         "profile": "1200x150",
         "axis_start": {"x": 6600, "y": -50, "z": -140},
         "axis_end": {"x": 6600, "y": 5150, "z": -200},
-        "strong_axis": "vertical",
         "existing": true
       }
     ],
@@ -278,7 +266,6 @@
         "profile": "50x100",
         "axis_start": {"x": 1200, "y": 1000, "z": 3250},
         "axis_end": {"x": 1200, "y": 2200, "z": 3250},
-        "strong_axis": "vertical",
         "existing": true,
         "pattern": {
           "count": 6,
@@ -291,7 +278,6 @@
         "profile": "50x100",
         "axis_start": {"x": -400, "y": 75, "z": 2900},
         "axis_end": {"x": 1600, "y": 75, "z": 3330},
-        "strong_axis": "vertical",
         "existing": true,
         "pattern": {
           "count": 2,
@@ -304,7 +290,6 @@
         "profile": "50x100",
         "axis_start": {"x": 5600, "y": 50, "z": 4230},
         "axis_end": {"x": 7600, "y": 50, "z": 4670},
-        "strong_axis": "vertical",
         "existing": true,
         "pattern": {
           "count": 2,
@@ -317,7 +302,6 @@
         "profile": "50x100",
         "axis_start": {"x": 340, "y": 1000, "z": 3050},
         "axis_end": {"x": -400, "y": 2200, "z": 2900},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -325,7 +309,6 @@
         "profile": "50x100",
         "axis_start": {"x": 500, "y": 1000, "z": 3090},
         "axis_end": {"x": 300, "y": 2200, "z": 3050},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -333,7 +316,6 @@
         "profile": "50x100",
         "axis_start": {"x": 6500, "y": 1000, "z": 4430},
         "axis_end": {"x": 7600, "y": 2200, "z": 4670},
-        "strong_axis": "vertical",
         "existing": true
       },
       {
@@ -341,7 +323,6 @@
         "profile": "50x100",
         "axis_start": {"x": 6350, "y": 1000, "z": 4400},
         "axis_end": {"x": 6800, "y": 2200, "z": 4500},
-        "strong_axis": "vertical",
         "existing": true
       }
     ]

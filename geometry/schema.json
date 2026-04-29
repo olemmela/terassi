@@ -140,12 +140,13 @@
       "required": ["id", "profile", "base", "top"],
       "additionalProperties": false,
       "properties": {
-        "id":       { "type": "string" },
-        "profile":  { "type": "string" },
-        "ref":      { "type": "string" },
-        "base":     { "$ref": "#/$defs/point" },
-        "top":      { "$ref": "#/$defs/point" },
-        "existing": { "type": "boolean", "default": false }
+        "id":                   { "type": "string" },
+        "profile":              { "type": "string" },
+        "ref":                  { "type": "string" },
+        "base":                 { "$ref": "#/$defs/point" },
+        "top":                  { "$ref": "#/$defs/point" },
+        "section_rotation_deg": { "type": "number", "default": 0 },
+        "existing":             { "type": "boolean", "default": false }
       }
     },
 
@@ -154,13 +155,13 @@
       "required": ["id", "profile", "axis_start", "axis_end"],
       "additionalProperties": false,
       "properties": {
-        "id":          { "type": "string" },
-        "profile":     { "type": "string" },
-        "ref":         { "type": "string" },
-        "axis_start":  { "$ref": "#/$defs/point" },
-        "axis_end":    { "$ref": "#/$defs/point" },
-        "strong_axis": { "type": "string", "enum": ["vertical", "horizontal"], "default": "vertical" },
-        "existing":    { "type": "boolean", "default": false },
+        "id":                   { "type": "string" },
+        "profile":              { "type": "string" },
+        "ref":                  { "type": "string" },
+        "axis_start":           { "$ref": "#/$defs/point" },
+        "axis_end":             { "$ref": "#/$defs/point" },
+        "section_rotation_deg": { "type": "number", "default": 0 },
+        "existing":             { "type": "boolean", "default": false },
         "pattern": {
           "type": "object",
           "required": ["count", "offset"],
