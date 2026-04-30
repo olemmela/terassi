@@ -21,12 +21,31 @@ import io
 import math
 from pathlib import Path
 
-from geometry_loader import load, member, surface, profile_b, profile_h
+from existing_beam_checks import (
+    aggregate_point_loads,
+    check_existing_lp225_x125_combined,
+    format_point_loads,
+    katos_existing_context,
+    simple_span_combined_moment_max,
+    simple_span_max_deflection_mm,
+    simple_span_max_shear,
+    simple_span_point_reactions,
+    uniform_line_member_support_reactions,
+)
+from geometry_loader import expanded_connections, expanded_members, load, member, surface, profile_b, profile_h
 
 # ============================================================
 # GEOMETRIA  (luetaan geometry/katos.json:ista)
 # ============================================================
 _GEO = load("katos.json")
+_PURLIN_MEMBERS = {member_obj["id"]: member_obj for member_obj in expanded_members(_GEO, "purlins")}
+_CONNECTIONS = {connection_obj["id"]: connection_obj for connection_obj in expanded_connections(_GEO)}
+_EXISTING_CTX = katos_existing_context()
+_ROOF_CTX = _EXISTING_CTX["roof"]
+_PURLIN_CTX = _EXISTING_CTX["purlins_main"]
+_RAYST_CTX = _EXISTING_CTX["purlins_kp450_side"]
+_BEAM1_CTX = _EXISTING_CTX["kp450_y900"]
+_KP360_CTX = _EXISTING_CTX["kp360"]
 
 _wall_poly = _GEO["reference_surfaces"][0]["polygon"]
 wall_width  = int(max(p["x"] for p in _wall_poly) - min(p["x"] for p in _wall_poly))
@@ -40,6 +59,8 @@ _roof_zspan = max(p["z"] for p in _roof_poly) - min(p["z"] for p in _roof_poly)
 slope_deg       = math.degrees(math.atan(_roof_zspan / _roof_xspan))
 slope_rad       = math.radians(slope_deg)
 roof_edge_y     = int(max(p["y"] for p in _roof_poly))  # 2200 mm
+roof_x0_mm      = min(p["x"] for p in _roof_poly)
+roof_x1_mm      = max(p["x"] for p in _roof_poly)
 
 beam1_y         = int(member(_GEO, "beams", "beam.kp450.y900")["axis_start"]["y"])  # 900 mm
 beam2_y         = int(member(_GEO, "beams", "beam.kp360x2")["axis_start"]["y"])     # 1675 mm
@@ -95,90 +116,420 @@ def load_script_module_quietly(script_name, module_name):
     return module
 
 
-def aggregate_point_loads(point_loads):
-    """Yhdistää samaan kohtaan osuvat pistekuormat."""
-    aggregated = {}
-    for x_m, p_kN in point_loads:
-        key = round(float(x_m), 9)
-        aggregated[key] = aggregated.get(key, 0.0) + float(p_kN)
-    return sorted(aggregated.items())
+def solve_linear_system(A, b):
+    """Ratkaisee pienen tiheän lineaarisen yhtälöryhmän Gaussin eliminaatiolla."""
+    A = [row[:] for row in A]
+    b = b[:]
+    n = len(b)
+    for i in range(n):
+        pivot = max(range(i, n), key=lambda r: abs(A[r][i]))
+        if abs(A[pivot][i]) < 1e-12:
+            raise ValueError("Singular matrix in purlin analysis")
+        if pivot != i:
+            A[i], A[pivot] = A[pivot], A[i]
+            b[i], b[pivot] = b[pivot], b[i]
+        pivot_val = A[i][i]
+        for j in range(i, n):
+            A[i][j] /= pivot_val
+        b[i] /= pivot_val
+        for r in range(n):
+            if r == i:
+                continue
+            factor = A[r][i]
+            if abs(factor) < 1e-18:
+                continue
+            for j in range(i, n):
+                A[r][j] -= factor * A[i][j]
+            b[r] -= factor * b[i]
+    return b
 
 
-def simple_span_point_reactions(span_m, point_loads):
-    """Pistekuormien lisäreaktiot yksinkertaisesti tuetulle jänteelle."""
-    point_loads = aggregate_point_loads(point_loads)
-    r_left = sum(p_kN * (span_m - x_m) / span_m for x_m, p_kN in point_loads)
-    r_right = sum(p_kN * x_m / span_m for x_m, p_kN in point_loads)
-    return r_left, r_right
+def refine_nodes_mm(points_mm, max_len_mm):
+    pts = sorted(set(float(x_mm) for x_mm in points_mm))
+    refined = [pts[0]]
+    for a_mm, b_mm in zip(pts, pts[1:]):
+        n = max(1, int(math.ceil((b_mm - a_mm) / max_len_mm)))
+        step_mm = (b_mm - a_mm) / n
+        for i in range(1, n + 1):
+            refined.append(b_mm if i == n else a_mm + i * step_mm)
+    return refined
 
 
-def simple_span_combined_moment_max(span_m, udl_kNm, point_loads):
-    """Maksimitaivutusmomentti UDL + pistekuormat, notko +."""
-    point_loads = aggregate_point_loads(point_loads)
-    point_load_map = dict(point_loads)
-    r_left_points, _ = simple_span_point_reactions(span_m, point_loads)
-
-    def moment_at(x_m):
-        moment_udl = udl_kNm * x_m * (span_m - x_m) / 2.0
-        moment_points = r_left_points * x_m
-        for a_m, p_kN in point_loads:
-            if a_m <= x_m + 1e-12:
-                moment_points -= p_kN * (x_m - a_m)
-        return moment_udl + moment_points
-
-    candidates = {0.0, span_m}
-    segment_points = [0.0] + [x_m for x_m, _ in point_loads] + [span_m]
-    running_point_load = 0.0
-
-    for x0_m, x1_m in zip(segment_points, segment_points[1:]):
-        candidates.add(x0_m)
-        candidates.add(x1_m)
-        if abs(udl_kNm) > 1e-12:
-            x_zero_m = (udl_kNm * span_m / 2.0 + r_left_points - running_point_load) / udl_kNm
-            if x0_m - 1e-12 <= x_zero_m <= x1_m + 1e-12:
-                candidates.add(max(x0_m, min(x1_m, x_zero_m)))
-        if x1_m in point_load_map:
-            running_point_load += point_load_map[x1_m]
-
-    moment_candidates = [(x_m, moment_at(x_m)) for x_m in sorted(candidates)]
-    return max(moment_candidates, key=lambda item: item[1])
+def segment_key(a_mm, b_mm):
+    return (round(float(a_mm), 6), round(float(b_mm), 6))
 
 
-def simple_span_max_deflection_mm(span_mm, EI_Nmm2, udl_kNm=0.0, point_loads=None, sample_count=2001):
-    """Maksimitaipuma UDL + pistekuormat yksinkertaisesti tuetulla jänteellä."""
-    if point_loads is None:
-        point_loads = []
-    point_loads = aggregate_point_loads(point_loads)
-    q_Nmm = udl_kNm  # 1 kN/m = 1 N/mm
-    point_loads_mm = [(x_m * 1000.0, p_kN * 1000.0) for x_m, p_kN in point_loads]
+def beam_solver(nodes_mm, supports_mm, point_loads_kN=None, uniform_loads_kN_per_mm=None, EI_Nmm2=1.0, EI_by_segment_Nmm2=None):
+    """Euler-Bernoulli-palkkiverkko: pistekuormat + tasainen viivakuorma elementeille."""
+    if point_loads_kN is None:
+        point_loads_kN = []
+    if uniform_loads_kN_per_mm is None:
+        uniform_loads_kN_per_mm = []
 
-    max_delta_mm = 0.0
-    x_at_max_mm = 0.0
-    for i in range(sample_count):
-        x_mm = span_mm * i / (sample_count - 1)
-        delta_mm = q_Nmm * x_mm * (span_mm**3 - 2.0 * span_mm * x_mm**2 + x_mm**3) / (24.0 * EI_Nmm2)
-        for a_mm, p_N in point_loads_mm:
-            b_mm = span_mm - a_mm
-            if x_mm <= a_mm + 1e-9:
-                delta_mm += p_N * b_mm * x_mm * (span_mm**2 - b_mm**2 - x_mm**2) / (6.0 * span_mm * EI_Nmm2)
-            else:
-                delta_mm += p_N * a_mm * (span_mm - x_mm) * (
-                    span_mm**2 - a_mm**2 - (span_mm - x_mm)**2
-                ) / (6.0 * span_mm * EI_Nmm2)
-        if delta_mm > max_delta_mm:
-            max_delta_mm = delta_mm
-            x_at_max_mm = x_mm
-    return max_delta_mm, x_at_max_mm
-
-
-def format_point_loads(point_loads):
-    """Muotoilee pistekuormat tulostusta varten."""
-    if not point_loads:
-        return "ei pistekuormia"
-    return ", ".join(
-        f"{p_kN:.1f} kN @ x={x_m * 1000.0:.0f} mm"
-        for x_m, p_kN in point_loads
+    nodes = sorted(
+        {float(x_mm) for x_mm in nodes_mm}
+        | {float(x_mm) for x_mm in supports_mm}
+        | {float(x_mm) for x_mm, _ in point_loads_kN}
+        | {float(a_mm) for a_mm, _, _ in uniform_loads_kN_per_mm}
+        | {float(b_mm) for _, b_mm, _ in uniform_loads_kN_per_mm}
     )
+    n_nodes = len(nodes)
+    node_index = {x_mm: i for i, x_mm in enumerate(nodes)}
+    n_dof = 2 * n_nodes
+    K = [[0.0] * n_dof for _ in range(n_dof)]
+    F = [0.0] * n_dof
+    element_data = []
+
+    for x_mm, p_kN in point_loads_kN:
+        F[2 * node_index[float(x_mm)]] -= p_kN * 1000.0
+
+    q_by_segment = {
+        segment_key(a_mm, b_mm): float(q_kN_per_mm)
+        for a_mm, b_mm, q_kN_per_mm in uniform_loads_kN_per_mm
+    }
+
+    for elem_i in range(n_nodes - 1):
+        x0_mm = nodes[elem_i]
+        x1_mm = nodes[elem_i + 1]
+        L_elem_mm = x1_mm - x0_mm
+        EI_elem_Nmm2 = EI_Nmm2 if EI_by_segment_Nmm2 is None else EI_by_segment_Nmm2[elem_i]
+        fac = EI_elem_Nmm2 / (L_elem_mm**3)
+        k = [
+            [12.0 * fac, 6.0 * L_elem_mm * fac, -12.0 * fac, 6.0 * L_elem_mm * fac],
+            [6.0 * L_elem_mm * fac, 4.0 * L_elem_mm * L_elem_mm * fac, -6.0 * L_elem_mm * fac, 2.0 * L_elem_mm * L_elem_mm * fac],
+            [-12.0 * fac, -6.0 * L_elem_mm * fac, 12.0 * fac, -6.0 * L_elem_mm * fac],
+            [6.0 * L_elem_mm * fac, 2.0 * L_elem_mm * L_elem_mm * fac, -6.0 * L_elem_mm * fac, 4.0 * L_elem_mm * L_elem_mm * fac],
+        ]
+        dofs = [2 * elem_i, 2 * elem_i + 1, 2 * (elem_i + 1), 2 * (elem_i + 1) + 1]
+        for a_i, I in enumerate(dofs):
+            for b_i, J in enumerate(dofs):
+                K[I][J] += k[a_i][b_i]
+
+        q_kN_per_mm = q_by_segment.get(segment_key(x0_mm, x1_mm), 0.0)
+        if abs(q_kN_per_mm) > 0.0:
+            w_N_per_mm = q_kN_per_mm * 1000.0
+            fe = [
+                -w_N_per_mm * L_elem_mm / 2.0,
+                -w_N_per_mm * L_elem_mm * L_elem_mm / 12.0,
+                -w_N_per_mm * L_elem_mm / 2.0,
+                w_N_per_mm * L_elem_mm * L_elem_mm / 12.0,
+            ]
+            for a_i, I in enumerate(dofs):
+                F[I] += fe[a_i]
+        else:
+            fe = [0.0, 0.0, 0.0, 0.0]
+
+        element_data.append(
+            {
+                "x0_mm": x0_mm,
+                "x1_mm": x1_mm,
+                "dofs": dofs,
+                "k": k,
+                "fe": fe,
+                "q_kN_per_mm": q_kN_per_mm,
+            }
+        )
+
+    fixed = sorted({2 * node_index[float(x_mm)] for x_mm in supports_mm})
+    free = [i for i in range(n_dof) if i not in fixed]
+    Kff = [[K[i][j] for j in free] for i in free]
+    Ff = [F[i] for i in free]
+    uf = solve_linear_system(Kff, Ff)
+
+    u = [0.0] * n_dof
+    for dof_i, value in zip(free, uf):
+        u[dof_i] = value
+
+    Ku = [sum(K[i][j] * u[j] for j in range(n_dof)) for i in range(n_dof)]
+    R = [Ku[i] - F[i] for i in range(n_dof)]
+
+    elements = []
+    for elem in element_data:
+        u_elem = [u[dof] for dof in elem["dofs"]]
+        end_forces = [
+            sum(elem["k"][row_i][col_i] * u_elem[col_i] for col_i in range(4)) - elem["fe"][row_i]
+            for row_i in range(4)
+        ]
+        elements.append(
+            {
+                "x0_mm": elem["x0_mm"],
+                "x1_mm": elem["x1_mm"],
+                "q_kN_per_mm": elem["q_kN_per_mm"],
+                "end_forces": end_forces,
+            }
+        )
+
+    return {
+        "nodes_mm": nodes,
+        "reactions_kN": {float(x_mm): R[2 * node_index[float(x_mm)]] / 1000.0 for x_mm in supports_mm},
+        "disp_mm": {x_mm: u[2 * node_index[x_mm]] for x_mm in nodes},
+        "rot_rad": {x_mm: u[2 * node_index[x_mm] + 1] for x_mm in nodes},
+        "elements": elements,
+    }
+
+
+def uniform_loads_for_nodes(nodes_mm, q_kN_per_mm):
+    return [(a_mm, b_mm, q_kN_per_mm) for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])]
+
+
+def element_section_state(elem, x_mm):
+    x0_mm = float(elem["x0_mm"])
+    x1_mm = float(elem["x1_mm"])
+    xi_mm = max(0.0, min(float(x_mm), x1_mm) - x0_mm)
+    q_N_per_mm = float(elem["q_kN_per_mm"]) * 1000.0
+    V1_N, M1_Nmm = float(elem["end_forces"][0]), float(elem["end_forces"][1])
+    return {
+        "V_kN": (V1_N - q_N_per_mm * xi_mm) / 1000.0,
+        "M_kNm": (-M1_Nmm + V1_N * xi_mm - 0.5 * q_N_per_mm * xi_mm**2) / 1.0e6,
+    }
+
+
+def section_state_at_x_mm(elements, x_mm, tol=1e-9):
+    candidates = []
+    for elem in elements:
+        if float(elem["x0_mm"]) - tol <= x_mm <= float(elem["x1_mm"]) + tol:
+            candidates.append(element_section_state(elem, x_mm))
+    if not candidates:
+        raise ValueError(f"x={x_mm} ei osu mihinkään elementtiin")
+    moment = max(candidates, key=lambda item: abs(item["M_kNm"]))["M_kNm"]
+    shear = max(candidates, key=lambda item: abs(item["V_kN"]))["V_kN"]
+    return {"M_kNm": moment, "V_kN": shear}
+
+
+def sample_internal_forces(elements):
+    max_pos = (-1e18, None)
+    max_neg = (1e18, None)
+    max_shear = (0.0, None)
+
+    def update_moment(value_kNm, x_mm):
+        nonlocal max_pos, max_neg
+        if value_kNm > max_pos[0]:
+            max_pos = (value_kNm, x_mm)
+        if value_kNm < max_neg[0]:
+            max_neg = (value_kNm, x_mm)
+
+    def update_shear(value_kN, x_mm):
+        nonlocal max_shear
+        if abs(value_kN) > abs(max_shear[0]):
+            max_shear = (value_kN, x_mm)
+
+    for elem in elements:
+        x0_mm = float(elem["x0_mm"])
+        x1_mm = float(elem["x1_mm"])
+        L_elem_mm = x1_mm - x0_mm
+        q_N_per_mm = float(elem["q_kN_per_mm"]) * 1000.0
+        V1_N = float(elem["end_forces"][0])
+
+        left_state = element_section_state(elem, x0_mm)
+        right_state = element_section_state(elem, x1_mm)
+        update_moment(left_state["M_kNm"], x0_mm)
+        update_moment(right_state["M_kNm"], x1_mm)
+        update_shear(left_state["V_kN"], x0_mm)
+        update_shear(right_state["V_kN"], x1_mm)
+
+        if abs(q_N_per_mm) > 1e-18:
+            xi_zero_mm = V1_N / q_N_per_mm
+            if 0.0 < xi_zero_mm < L_elem_mm:
+                x_zero_mm = x0_mm + xi_zero_mm
+                update_moment(element_section_state(elem, x_zero_mm)["M_kNm"], x_zero_mm)
+
+    return {
+        "M_pos": {"value_kNm": max_pos[0], "x_mm": max_pos[1]},
+        "M_neg": {"value_kNm": max_neg[0], "x_mm": max_neg[1]},
+        "V_abs": {"value_kN": max_shear[0], "x_mm": max_shear[1]},
+    }
+
+
+def sample_max_deflection_mm(nodes_mm, disp_mm, rot_rad, step_mm=2.0):
+    max_abs = (0.0, None)
+    for x0_mm, x1_mm in zip(nodes_mm, nodes_mm[1:]):
+        L_elem_mm = x1_mm - x0_mm
+        v1 = disp_mm[x0_mm]
+        t1 = rot_rad[x0_mm]
+        v2 = disp_mm[x1_mm]
+        t2 = rot_rad[x1_mm]
+        xi_mm = 0.0
+        while xi_mm <= L_elem_mm + 1e-9:
+            s = xi_mm / L_elem_mm
+            N1 = 1.0 - 3.0 * s**2 + 2.0 * s**3
+            N2 = L_elem_mm * (s - 2.0 * s**2 + s**3)
+            N3 = 3.0 * s**2 - 2.0 * s**3
+            N4 = L_elem_mm * (-s**2 + s**3)
+            v_mm = N1 * v1 + N2 * t1 + N3 * v2 + N4 * t2
+            if abs(v_mm) > abs(max_abs[0]):
+                max_abs = (v_mm, x0_mm + xi_mm)
+            xi_mm += step_mm
+    return {"value_mm": max_abs[0], "x_mm": max_abs[1]}
+
+
+def member_section_rotation_deg(member_obj):
+    return float(member_obj.get("section_rotation_deg", 0.0))
+
+
+def member_rect_props(b_mm, h_mm, section_rotation_deg=0.0):
+    theta = math.radians(float(section_rotation_deg))
+    cos_theta = math.cos(theta)
+    sin_theta = math.sin(theta)
+    I_strong_mm4 = b_mm * h_mm**3 / 12.0
+    I_weak_mm4 = h_mm * b_mm**3 / 12.0
+    I_vertical_mm4 = I_strong_mm4 * cos_theta**2 + I_weak_mm4 * sin_theta**2
+    c_vertical_mm = max(1e-9, 0.5 * (abs(h_mm * cos_theta) + abs(b_mm * sin_theta)))
+    return {
+        "W_mm3": I_vertical_mm4 / c_vertical_mm,
+        "A_mm2": b_mm * h_mm,
+        "I_mm4": I_vertical_mm4,
+    }
+
+
+def governing_moment(internal):
+    if internal["M_pos"]["value_kNm"] >= -internal["M_neg"]["value_kNm"]:
+        return {"sign": "+", **internal["M_pos"], "raw_value_kNm": internal["M_pos"]["value_kNm"]}
+    return {
+        "sign": "−",
+        "value_kNm": -internal["M_neg"]["value_kNm"],
+        "x_mm": internal["M_neg"]["x_mm"],
+        "raw_value_kNm": internal["M_neg"]["value_kNm"],
+    }
+
+
+def sample_net_section_utilization(elements, member_obj, section_h_mm_at_x, fm_d_Nmm2, fv_d_Nmm2, x_start_mm, x_end_mm, step_mm=1.0):
+    x_lo_mm = min(float(x_start_mm), float(x_end_mm))
+    x_hi_mm = max(float(x_start_mm), float(x_end_mm))
+    max_eta_M = {"value_pct": 0.0, "x_mm": None, "M_kNm": 0.0, "h_mm": None}
+    max_eta_V = {"value_pct": 0.0, "x_mm": None, "V_kN": 0.0, "h_mm": None}
+    b_mm = profile_b(member_obj)
+    section_rotation = member_section_rotation_deg(member_obj)
+
+    x_mm = x_lo_mm
+    while x_mm <= x_hi_mm + 1e-9:
+        h_mm = max(1e-9, float(section_h_mm_at_x(x_mm)))
+        state = section_state_at_x_mm(elements, x_mm)
+        props = member_rect_props(b_mm, h_mm, section_rotation)
+        MRd_kNm = fm_d_Nmm2 * props["W_mm3"] / 1.0e6
+        VRd_kN = fv_d_Nmm2 * props["A_mm2"] / 1.5e3
+        eta_M_pct = abs(state["M_kNm"]) / MRd_kNm * 100.0
+        eta_V_pct = abs(state["V_kN"]) / VRd_kN * 100.0
+
+        if eta_M_pct > max_eta_M["value_pct"]:
+            max_eta_M = {"value_pct": eta_M_pct, "x_mm": x_mm, "M_kNm": state["M_kNm"], "h_mm": h_mm}
+        if eta_V_pct > max_eta_V["value_pct"]:
+            max_eta_V = {"value_pct": eta_V_pct, "x_mm": x_mm, "V_kN": state["V_kN"], "h_mm": h_mm}
+        x_mm += step_mm
+
+    eta_gov = max(
+        ({"mode": "M_netto", **max_eta_M}, {"mode": "V_netto", **max_eta_V}),
+        key=lambda item: item["value_pct"],
+    )
+    return {"eta_M": max_eta_M, "eta_V": max_eta_V, "eta_gov": eta_gov}
+
+
+def sample_min_section_height_mm(section_h_mm_at_x, x_start_mm, x_end_mm, step_mm=1.0):
+    x_lo_mm = min(float(x_start_mm), float(x_end_mm))
+    x_hi_mm = max(float(x_start_mm), float(x_end_mm))
+    min_h_mm = float(section_h_mm_at_x(x_lo_mm))
+    x_at_min_mm = x_lo_mm
+    x_mm = x_lo_mm
+    while x_mm <= x_hi_mm + 1e-9:
+        h_mm = float(section_h_mm_at_x(x_mm))
+        if h_mm < min_h_mm:
+            min_h_mm = h_mm
+            x_at_min_mm = x_mm
+        x_mm += step_mm
+    return {"h_mm": min_h_mm, "x_mm": x_at_min_mm}
+
+
+def combined_section_h(full_h_mm, depth_functions):
+    def section_h(coord_mm):
+        return max(1e-9, full_h_mm - sum(max(0.0, fn(coord_mm)) for fn in depth_functions))
+    return section_h
+
+
+def connection_cut(connection_id, kind):
+    for cut in _CONNECTIONS[connection_id].get("cuts", []):
+        if cut.get("kind") == kind:
+            return cut
+    return None
+
+
+def bevel_notch_info(connection_id):
+    cut = connection_cut(connection_id, "bevel_notch")
+    if cut is None:
+        return {
+            "active": False,
+            "depth_mm": 0.0,
+            "length_mm": 0.0,
+            "offset_mm": 0.0,
+            "reference": None,
+        }
+    return {
+        "active": True,
+        "depth_mm": float(cut["depth_mm"]),
+        "length_mm": float(cut["length_mm"]),
+        "offset_mm": float(cut.get("offset_mm", 0.0)),
+        "reference": cut["reference"],
+    }
+
+
+def make_end_referenced_bevel_notch_depth_fn(info, end_coord_mm, inward_positive_sign, coord_min_mm, coord_max_mm):
+    if not info["active"]:
+        def depth_fn(_coord_mm):
+            return 0.0
+        return (end_coord_mm, end_coord_mm), depth_fn, False
+
+    offset_mm = info["offset_mm"]
+    length_mm = info["length_mm"]
+    zone_start_mm = max(coord_min_mm, min(coord_max_mm, end_coord_mm + inward_positive_sign * offset_mm))
+    zone_end_mm = max(coord_min_mm, min(coord_max_mm, end_coord_mm + inward_positive_sign * (offset_mm + length_mm)))
+    zone = tuple(sorted((zone_start_mm, zone_end_mm)))
+
+    def depth_fn(coord_mm):
+        local_mm = inward_positive_sign * (coord_mm - end_coord_mm)
+        if local_mm < offset_mm - 1e-9 or local_mm > offset_mm + length_mm + 1e-9:
+            return 0.0
+        if length_mm <= 1e-9:
+            return info["depth_mm"]
+        return info["depth_mm"] * (1.0 - (local_mm - offset_mm) / length_mm)
+
+    return zone, depth_fn, True
+
+
+def make_support_referenced_bevel_notch_depth_fn(info, support_coord_mm, coord_min_mm, coord_max_mm):
+    if not info["active"]:
+        def depth_fn(_coord_mm):
+            return 0.0
+        return (support_coord_mm, support_coord_mm), depth_fn, False
+
+    offset_mm = info["offset_mm"]
+    length_mm = info["length_mm"]
+    zone = (
+        max(coord_min_mm, min(coord_max_mm, support_coord_mm + offset_mm)),
+        max(coord_min_mm, min(coord_max_mm, support_coord_mm + offset_mm + length_mm)),
+    )
+    zone = tuple(sorted(zone))
+
+    def depth_fn(coord_mm):
+        local_mm = coord_mm - support_coord_mm
+        if local_mm < offset_mm - 1e-9 or local_mm > offset_mm + length_mm + 1e-9:
+            return 0.0
+        if length_mm <= 1e-9:
+            return info["depth_mm"]
+        return info["depth_mm"] * (1.0 - (local_mm - offset_mm) / length_mm)
+
+    return zone, depth_fn, True
+
+
+def make_connection_bevel_notch_depth_fn(info, support_coord_mm, member_length_mm):
+    if not info["active"]:
+        def depth_fn(_coord_mm):
+            return 0.0
+        return (support_coord_mm, support_coord_mm), depth_fn, False
+    if info["reference"] == "axis_start":
+        return make_end_referenced_bevel_notch_depth_fn(info, 0.0, 1.0, 0.0, member_length_mm)
+    if info["reference"] == "axis_end":
+        return make_end_referenced_bevel_notch_depth_fn(info, member_length_mm, -1.0, 0.0, member_length_mm)
+    if info["reference"] in {"support_centerline", "support_inner_edge", "support_outer_edge"}:
+        return make_support_referenced_bevel_notch_depth_fn(info, support_coord_mm, 0.0, member_length_mm)
+    raise ValueError(f"Unsupported bevel notch reference for purlin check: {info['reference']}")
 
 # ============================================================
 # PALKKIEN POIKKILEIKKAUKSET  (Kerto-S LVL)
@@ -191,17 +542,26 @@ h1 = profile_h(member(_GEO, "beams", "beam.kp450.wall"))
 b2 = profile_b(member(_GEO, "beams", "beam.kp360x2"))
 h2 = profile_h(member(_GEO, "beams", "beam.kp360x2"))
 
+# Jäykkyydet taipuma- ja pistekuormalaskentaa varten
+E_mean = 13800.0   # N/mm² Kerto-S E-moduuli (E0,mean)
+I1     = b1 * h1**3 / 12.0     # mm⁴
+I2     = b2 * h2**3 / 12.0     # mm⁴
+EI1    = E_mean * I1            # N·mm²
+EI2    = E_mean * I2            # N·mm²
+
 # ============================================================
 # TRIBUTÄÄRIALUEET (y-suunta, kohtisuora palkin akselille)
 # ============================================================
-# Seinäliitos ottaa kuorman alueelta y=0 ... (0+beam1_y)/2
-trib1_start_mm = (0.0 + beam1_y) / 2.0          # 450 mm
-trib1_end_mm   = (beam1_y + beam2_y) / 2.0       # 1287.5 mm
-trib_w1        = (trib1_end_mm - trib1_start_mm) / 1000.0  # m
+# Seinäliitos ottaa edelleen kuorman alueelta y=0 ... 450 mm suoraan.
+# KP450×51 @ y=900 mm kantaa suoran kattokaistan y=450 ... purlin.tuki.
+# 2×KP360×51 kuormittuu katon osalta vain orsireaktioiden kautta.
+trib1_start_mm = _BEAM1_CTX["direct_tributary_start_y_mm"]
+trib1_end_mm   = _BEAM1_CTX["direct_tributary_end_y_mm"]
+trib_w1        = _BEAM1_CTX["direct_tributary_width_m"]
 
-trib2_start_mm = trib1_end_mm                    # 1287.5 mm
-trib2_end_mm   = float(roof_edge_y)              # = 2200 mm (katon reuna)
-trib_w2        = (trib2_end_mm - trib2_start_mm) / 1000.0  # m
+trib2_start_mm = _KP360_CTX["direct_tributary_start_y_mm"]
+trib2_end_mm   = _KP360_CTX["direct_tributary_end_y_mm"]
+trib_w2        = _KP360_CTX["direct_tributary_width_m"]
 
 # ============================================================
 # PYSYVÄT KUORMAT
@@ -214,10 +574,13 @@ gamma_lvl = 480.0 * 9.81 / 1000.0   # kN/m³ ≈ 4.71
 
 g_beam1 = b1 / 1000.0 * h1 / 1000.0 * gamma_lvl   # kN/m (KP450x51 omapaino)
 g_beam2 = b2 / 1000.0 * h2 / 1000.0 * gamma_lvl   # kN/m (2xKP360x51 omapaino)
+gamma_c24 = 420.0 * 9.81 / 1000.0
+g_purlin = ruode_b / 1000.0 * ruode_h / 1000.0 * gamma_c24  # kN/m (50x100 C24)
 
-# Pysyvä viivakuorma palkeille (kate + palkki)
-gk1 = gk_roofing * trib_w1 + g_beam1   # kN/m
-gk2 = gk_roofing * trib_w2 + g_beam2   # kN/m
+# Pysyvä suora viivakuorma palkeille (kate + palkki).
+# Orsien kautta siirtyvät kuormat lisätään erillisinä pistekuormina.
+gk1 = _BEAM1_CTX["gk_direct_kNm"]   # kN/m
+gk2 = _KP360_CTX["gk_direct_kNm"]   # kN/m
 
 # ============================================================
 # LUMIKUORMA  (EN 1991-1-3, FI NA)
@@ -236,9 +599,9 @@ Ce   = 1.0    # altistumiskerroin (normaali)
 Ct   = 1.0    # lämpökerroin (kylmä katto)
 s_roof = mu1 * Ce * Ct * sk   # kN/m² vaakatasolle projisoituna
 
-# Lumikuorman viivakuorma palkeille
-qk_snow1 = s_roof * trib_w1   # kN/m
-qk_snow2 = s_roof * trib_w2   # kN/m
+# Lumikuorman suora viivakuorma palkeille
+qk_snow1 = _BEAM1_CTX["q_snow_direct_kNm"]   # kN/m
+qk_snow2 = _KP360_CTX["q_snow_direct_kNm"]   # kN/m
 
 # ============================================================
 # TUULIKUORMA  (EN 1991-1-4, FI NA)
@@ -286,10 +649,10 @@ cp_net_up   = cp_up_lo + t * (cp_up_hi - cp_up_lo)   # ylöspäin
 w_wind_down = cp_net_down * qp_z   # kN/m² (alaspäin, pahin yhdistelmä lumen kanssa)
 w_wind_up   = cp_net_up   * qp_z   # kN/m² (ylöspäin, imukuorma)
 
-qk_wind_down1 = w_wind_down * trib_w1
-qk_wind_down2 = w_wind_down * trib_w2
-qk_wind_up1   = w_wind_up   * trib_w1
-qk_wind_up2   = w_wind_up   * trib_w2
+qk_wind_down1 = _BEAM1_CTX["q_wind_down_direct_kNm"]
+qk_wind_down2 = _KP360_CTX["q_wind_down_direct_kNm"]
+qk_wind_up1   = _BEAM1_CTX["q_wind_up_direct_kNm"]
+qk_wind_up2   = _KP360_CTX["q_wind_up_direct_kNm"]
 
 # ============================================================
 # KUORMAYHDISTELMÄT  (EN 1990 kaava 6.10)
@@ -298,23 +661,88 @@ gammaG = 1.35    # pysyvien kuormien mitoituskerroin
 gammaQ = 1.50    # muuttuvien kuormien mitoituskerroin
 psi0_W = 0.6     # tuulikuorman yhdistelmäarvokerroin (lumi hallitsee)
 
-# ULS - taivuttava kuorma (alaspäin)
-qd1 = gammaG * gk1 + gammaQ * qk_snow1 + gammaQ * psi0_W * qk_wind_down1
-qd2 = gammaG * gk2 + gammaQ * qk_snow2 + gammaQ * psi0_W * qk_wind_down2
+# ULS - suora viivakuorma (alaspäin). Orsien reaktiot lisätään pistekuormina.
+qd1 = _BEAM1_CTX["qd_uls_direct_kNm"]
+qd2 = _KP360_CTX["qd_uls_direct_kNm"]
 
-# Tukireaktiot (ULS) – palkin uloke ja katon räystäs mukaan
-# Palkin UDL jatkuu ulokkeelle (a_oh), katon räystään kuorma siirtyy
-# räystäsruoteiden kautta palkin päihin (eave).  Räystäälle ei tule
-# palkin omapainoa, vain kattokuorma.
+def point_loads_local_m(point_loads_abs_x_mm):
+    return [((x_mm - float(min(_col_xs))) / 1000.0, p_kN) for x_mm, p_kN in aggregate_point_loads(point_loads_abs_x_mm)]
+
+
+def purlin_reaction_point_loads(area_load_kNm2, self_factor, target_beam_id):
+    point_loads_abs_x_mm = []
+    for row in _PURLIN_CTX["members"]:
+        line_load_kNm = area_load_kNm2 * float(row["area_load_factor_m"]) + self_factor * g_purlin
+        reaction_inner_kN, reaction_outer_kN = uniform_line_member_support_reactions(
+            0.0,
+            float(row["member_length_mm"]),
+            float(row["support_inner_s_mm"]),
+            float(row["support_outer_s_mm"]),
+            line_load_kNm,
+        )
+        if target_beam_id == "beam.kp450.y900":
+            point_loads_abs_x_mm.append((row["reaction_inner_x_mm"], reaction_inner_kN))
+        elif target_beam_id == "beam.kp360x2":
+            point_loads_abs_x_mm.append((row["reaction_outer_x_mm"], reaction_outer_kN))
+        else:
+            raise ValueError(f"Unsupported target beam for purlin reactions: {target_beam_id}")
+    return aggregate_point_loads(point_loads_abs_x_mm)
+
+
+def simple_span_beam_response(udl_kNm, point_loads_abs_x_mm, deflection_udl_kNm, EI_Nmm2, deflection_point_loads_abs_x_mm=None):
+    point_loads_abs_x_mm = aggregate_point_loads(point_loads_abs_x_mm)
+    point_loads_local = point_loads_local_m(point_loads_abs_x_mm)
+    x_md_m, moment_kNm = simple_span_combined_moment_max(L_m, udl_kNm, point_loads_local)
+    shear_kN, shear_x_m = simple_span_max_shear(L_m, udl_kNm, point_loads_local)
+    delta_point_loads_abs_x_mm = point_loads_abs_x_mm if deflection_point_loads_abs_x_mm is None else aggregate_point_loads(deflection_point_loads_abs_x_mm)
+    delta_point_loads_local = point_loads_local_m(delta_point_loads_abs_x_mm)
+    delta_mm, delta_x_mm = simple_span_max_deflection_mm(
+        L_mm,
+        EI_Nmm2,
+        udl_kNm=deflection_udl_kNm,
+        point_loads_local_m=delta_point_loads_local,
+    )
+    return {
+        "point_loads_abs_x_mm": point_loads_abs_x_mm,
+        "point_loads_local_m": point_loads_local,
+        "M_gov": {"value_kNm": abs(moment_kNm), "x_m": x_md_m, "raw_value_kNm": moment_kNm},
+        "V_abs": {"value_kN": abs(shear_kN), "x_m": shear_x_m, "raw_value_kN": shear_kN},
+        "delta": {"value_mm": abs(delta_mm), "x_mm": delta_x_mm, "raw_value_mm": delta_mm},
+        "added_reactions_kN": simple_span_point_reactions(L_m, point_loads_local),
+    }
+
+
+# Tukireaktiot (ULS) – palkin uloke ja katon räystäs mukana suoralle kattokaistalle.
 _a_oh_m  = a_oh_left_mm / 1000.0     # m (symmetrinen)
 _eave_m  = eave_left_mm / 1000.0     # m (symmetrinen)
-q_roof_d = gammaG * gk_roofing + gammaQ * s_roof + gammaQ * psi0_W * w_wind_down  # kN/m²
-R1 = symmetric_support_reaction(qd1, L_m, _a_oh_m, q_roof_d, trib_w1, _eave_m)   # kN per tuki
-R2 = symmetric_support_reaction(qd2, L_m, _a_oh_m, q_roof_d, trib_w2, _eave_m)   # kN per tuki
+q_roof_d = _ROOF_CTX["q_roof_uls_kNm2"]
 
-# Taivutusmomentti (yksinkertaisesti tuettu, UDL, kaltevuuskorjaus)
-Md1 = qd1 * L_m**2 / 8.0 * moment_factor   # kNm
-Md2 = qd2 * L_m**2 / 8.0 * moment_factor   # kNm
+beam1_purlin_point_loads_uls_abs_x_mm = aggregate_point_loads(_BEAM1_CTX["base_point_loads_uls_abs_x_mm"])
+beam1_purlin_point_loads_sls_abs_x_mm = aggregate_point_loads(_BEAM1_CTX["base_point_loads_sls_abs_x_mm"])
+beam1_purlin_point_loads_uplift_abs_x_mm = aggregate_point_loads(_BEAM1_CTX["base_point_loads_uplift_abs_x_mm"])
+beam2_purlin_point_loads_uls_abs_x_mm = aggregate_point_loads(_KP360_CTX["base_point_loads_uls_abs_x_mm"])
+beam2_purlin_point_loads_sls_abs_x_mm = aggregate_point_loads(_KP360_CTX["base_point_loads_sls_abs_x_mm"])
+beam2_purlin_point_loads_uplift_abs_x_mm = aggregate_point_loads(_KP360_CTX["base_point_loads_uplift_abs_x_mm"])
+
+R1_left = _BEAM1_CTX["reactions_uls_kN"][float(min(_col_xs))]
+R1_right = _BEAM1_CTX["reactions_uls_kN"][float(max(_col_xs))]
+R2_left = _KP360_CTX["reactions_uls_kN"][float(min(_col_xs))]
+R2_right = _KP360_CTX["reactions_uls_kN"][float(max(_col_xs))]
+R1 = max(R1_left, R1_right)
+R2 = max(R2_left, R2_right)
+
+beam1_response_uls = simple_span_beam_response(qd1, beam1_purlin_point_loads_uls_abs_x_mm, _BEAM1_CTX["q_sls_direct_kNm"], EI1, beam1_purlin_point_loads_sls_abs_x_mm)
+beam2_response_uls = simple_span_beam_response(qd2, beam2_purlin_point_loads_uls_abs_x_mm, _KP360_CTX["q_sls_direct_kNm"], EI2, beam2_purlin_point_loads_sls_abs_x_mm)
+qd1_eq = _BEAM1_CTX["q_eq_uls_kNm"]
+qd2_eq = _KP360_CTX["q_eq_uls_kNm"]
+qk_sls1_eq = _BEAM1_CTX["q_eq_sls_kNm"]
+qk_sls2_eq = _KP360_CTX["q_eq_sls_kNm"]
+qmin1_eq = _BEAM1_CTX["q_eq_uplift_kNm"]
+qmin2_eq = _KP360_CTX["q_eq_uplift_kNm"]
+
+# Taivutusmomentti / leikkaus / taipuma combined-kuormituksesta
+Md1 = beam1_response_uls["M_gov"]["value_kNm"]
+Md2 = beam2_response_uls["M_gov"]["value_kNm"]
 
 # ============================================================
 # PALKIN KANTOKYKY  (EN 1995-1-1, Kerto-S LVL)
@@ -395,7 +823,7 @@ sc2_r,  lam2_r,  kc2_r,  eta_ltb2_r  = ltb_check(b2, h2, E_005_lvl, fm_k, fm_d, 
 
 # Sivutukivoima per ruode (kiinnitystarkistusta varten, arvio)
 # Voima aiheutuu katon kallistuman vuoksi syntyvästä komponentista:
-q_z1_ltb   = qd1 * math.sin(slope_rad)              # kN/m (vaaka-komponentti)
+q_z1_ltb   = qd1_eq * math.sin(slope_rad)           # kN/m (vaaka-komponentti)
 F_sivutuki = q_z1_ltb * (ruode_jako_mm / 1000.0)    # kN per ruode (ULS)
 
 # Suurin sallittu UDL ennen taivutuskapasiteetin ylittymistä (100 %)
@@ -410,8 +838,8 @@ fv_d  = kmod * fv_k / gammaM   # N/mm²
 # Leikkauskestävyys (suorakulmainen poikkileikkaus)
 VRd1 = fv_d * (b1 * h1) / 1.5e3   # kN  (3/2 kerroin parabooliselle jakaumalle)
 VRd2 = fv_d * (b2 * h2) / 1.5e3   # kN
-Vd1  = qd1 * L_m / 2.0            # kN (palkin sisäinen päätyleikkaus jänteen puolella)
-Vd2  = qd2 * L_m / 2.0            # kN
+Vd1  = beam1_response_uls["V_abs"]["value_kN"]   # kN
+Vd2  = beam2_response_uls["V_abs"]["value_kN"]   # kN
 eta_V1 = Vd1 / VRd1 * 100.0
 eta_V2 = Vd2 / VRd2 * 100.0
 
@@ -424,9 +852,9 @@ I2     = b2 * h2**3 / 12.0     # mm⁴
 EI1    = E_mean * I1            # N·mm²
 EI2    = E_mean * I2            # N·mm²
 
-# SLS ominaiskuorma (pysyvä + lumi, γ=1.0)
-qk_sls1 = gk1 + qk_snow1   # kN/m (sis. palkin omapaino)
-qk_sls2 = gk2 + qk_snow2   # kN/m
+# SLS ominaiskuorma (pysyvä + lumi, γ=1.0) – suora viivakuorma.
+qk_sls1 = _BEAM1_CTX["q_sls_direct_kNm"]   # kN/m
+qk_sls2 = _KP360_CTX["q_sls_direct_kNm"]   # kN/m
 L_mm_eff = L_mm   # käytetään nettoväliä
 
 def deflection_mm(q_kNm, L_mm_, EI_Nmm2):
@@ -434,8 +862,8 @@ def deflection_mm(q_kNm, L_mm_, EI_Nmm2):
     q_Nmm = q_kNm   # kN/m = N/mm
     return 5.0 * q_Nmm * L_mm_**4 / (384.0 * EI_Nmm2)
 
-delta1 = deflection_mm(qk_sls1, L_mm_eff, EI1)   # mm
-delta2 = deflection_mm(qk_sls2, L_mm_eff, EI2)    # mm
+delta1 = beam1_response_uls["delta"]["value_mm"]   # mm
+delta2 = beam2_response_uls["delta"]["value_mm"]   # mm
 delta_lim = L_mm_eff / 300.0   # mm  (L/300)
 
 # ============================================================
@@ -451,22 +879,23 @@ delta_lim = L_mm_eff / 300.0   # mm  (L/300)
 # Pistekuorma P = KP450x51 tukireaktio (toinen pää).
 
 _lp_beam = member(_GEO, "beams", "beam.lp225.x125")
+_lp_check = check_existing_lp225_x125_combined(context=_EXISTING_CTX)
 b_lp = profile_b(_lp_beam)   # mm – LP225x90 leveys
 h_lp = profile_h(_lp_beam)   # mm – LP225x90 korkeus
-L_lp_mm       = float(beam2_y)  # mm – jänneväli: seinä → pilari = 1675 mm
+L_lp_mm       = _EXISTING_CTX["lp225_x125"]["support_right_y_mm"]  # mm – jänneväli: seinä → pilari
 L_lp_m        = L_lp_mm / 1000.0
-a_lp_mm       = float(beam1_y)  # mm – pistekuorman sijainti seinältä = 900 mm
+a_lp_mm       = _EXISTING_CTX["lp225_x125"]["base_point_y_mm"]  # mm – pistekuorman sijainti seinältä
 a_lp_m        = a_lp_mm / 1000.0
 
 # KP450x51 tukireaktio (sis. palkin uloke ja katon räystäs)
-P_kp1 = R1                         # kN (yksi päätytuki)
+P_kp1 = _EXISTING_CTX["lp225_x125"]["base_point_uls_kN"]  # kN (yksi päätytuki)
 
 # LP225x90 tukireaktiot pistekuormasta P
-R_seinä_lp = P_kp1 * (L_lp_m - a_lp_m) / L_lp_m   # kN
-R_pilari_lp = P_kp1 * a_lp_m / L_lp_m              # kN
+R_seinä_lp = _lp_check["reactions_kN"][0.0]       # kN
+R_pilari_lp = _lp_check["reactions_kN"][L_lp_mm]  # kN
 
 # Maksimitaivutusmomentti (pistekuorma a:n kohdalla)
-Md_lp = R_seinä_lp * a_lp_m                         # kNm
+Md_lp = _lp_check["M_gov"]["value_kNm"]             # kNm
 
 # LP225x90 kantokyky (liimapuu GL30c)
 fm_k_lp  = 30.0    # N/mm² GL30c
@@ -481,7 +910,7 @@ eta_lp   = Md_lp / MRd_lp * 100.0         # %
 fv_k_lp  = 3.5     # N/mm² GL30c
 fv_d_lp  = kmod_lp * fv_k_lp / gammaM_lp
 VRd_lp   = fv_d_lp * (b_lp * h_lp) / 1.5e3
-Vd_lp    = max(R_seinä_lp, R_pilari_lp)
+Vd_lp    = abs(_lp_check["V_abs"]["value_kN"])
 eta_V_lp = Vd_lp / VRd_lp * 100.0
 
 # ============================================================
@@ -541,37 +970,236 @@ psi0_snow_accomp = 0.7   # lumi liitännäiskuormana
 # KP450x51 – huolto dominant:
 # UDL-osa (pysyvä + lumi ψ0):
 q_g_s_psi1  = 1.35 * gk1 + 1.5 * psi0_snow_accomp * qk_snow1
-# Pistekuorma midspanissa: M_Q = 1.5 * Qk * L/4
-M_huolto_Q1 = 1.5 * Qk_huolto * L_m / 4.0   # kNm
-# Hajakuorma osa (Kategoria H, jos enemmän kuin ψ0*lumi):
 q_H_1 = 1.5 * qk_H * trib_w1               # kN/m
-M_huolto1 = (q_g_s_psi1 + q_H_1) * L_m**2 / 8.0 * moment_factor + M_huolto_Q1
+beam1_huolto_purlin_point_loads_abs_x_mm = purlin_reaction_point_loads(
+    1.35 * gk_roofing + 1.5 * psi0_snow_accomp * s_roof + 1.5 * qk_H,
+    gammaG,
+    "beam.kp450.y900",
+)
+beam1_huolto_response = simple_span_beam_response(
+    q_g_s_psi1 + q_H_1,
+    [*beam1_huolto_purlin_point_loads_abs_x_mm, (float(min(_col_xs)) + 0.5 * L_mm, 1.5 * Qk_huolto)],
+    q_g_s_psi1 + q_H_1,
+    EI1,
+)
+M_huolto1 = beam1_huolto_response["M_gov"]["value_kNm"]
 eta_huolto1 = M_huolto1 / MRd1 * 100.0
 
 # 2×KP360×51 – huolto dominant:
 q_g_s_psi2  = 1.35 * gk2 + 1.5 * psi0_snow_accomp * qk_snow2
-M_huolto_Q2 = 1.5 * Qk_huolto * L_m / 4.0
 q_H_2 = 1.5 * qk_H * trib_w2
-M_huolto2 = (q_g_s_psi2 + q_H_2) * L_m**2 / 8.0 * moment_factor + M_huolto_Q2
+beam2_huolto_purlin_point_loads_abs_x_mm = purlin_reaction_point_loads(
+    1.35 * gk_roofing + 1.5 * psi0_snow_accomp * s_roof + 1.5 * qk_H,
+    gammaG,
+    "beam.kp360x2",
+)
+beam2_huolto_response = simple_span_beam_response(
+    q_g_s_psi2 + q_H_2,
+    [*beam2_huolto_purlin_point_loads_abs_x_mm, (float(min(_col_xs)) + 0.5 * L_mm, 1.5 * Qk_huolto)],
+    q_g_s_psi2 + q_H_2,
+    EI2,
+)
+M_huolto2 = beam2_huolto_response["M_gov"]["value_kNm"]
 eta_huolto2 = M_huolto2 / MRd2 * 100.0
 
 # ── 2) Tuulen nostokuorma – minimikapasiteetti ───────────
 # EN 1990 kaava 6.10 min: 0.9*Gk + 1.5*Wk (nosto ylöspäin)
 # Jos qmin < 0 → tukireaktio on nostava → kiinnitys tarvitaan
 gammaG_min = 0.9   # suotuisa pysyvä
-qmin1 = gammaG_min * gk1 + 1.5 * qk_wind_up1   # kN/m (neg = nosto)
-qmin2 = gammaG_min * gk2 + 1.5 * qk_wind_up2
-q_roof_min = gammaG_min * gk_roofing + 1.5 * w_wind_up   # kN/m² (räystäsalue, ei palkin omapainoa)
+qmin1 = _BEAM1_CTX["q_uplift_direct_kNm"]   # kN/m (neg = nosto)
+qmin2 = _KP360_CTX["q_uplift_direct_kNm"]
+q_roof_min = _ROOF_CTX["q_roof_uplift_kNm2"]   # kN/m²
 
-# Nostoreaktio tukipisteessä (sis. uloke + räystäs)
-R_uplift1 = symmetric_support_reaction(qmin1, L_m, _a_oh_m, q_roof_min, trib_w1, _eave_m)   # kN (neg = nosto)
-R_uplift2 = symmetric_support_reaction(qmin2, L_m, _a_oh_m, q_roof_min, trib_w2, _eave_m)   # kN
+# Nostoreaktio tukipisteessä (sis. uloke + räystäs + orsireaktiot)
+R_uplift1_left = _BEAM1_CTX["reactions_uplift_kN"][float(min(_col_xs))]
+R_uplift1_right = _BEAM1_CTX["reactions_uplift_kN"][float(max(_col_xs))]
+R_uplift2_left = _KP360_CTX["reactions_uplift_kN"][float(min(_col_xs))]
+R_uplift2_right = _KP360_CTX["reactions_uplift_kN"][float(max(_col_xs))]
+R_uplift1 = min(R_uplift1_left, R_uplift1_right)
+R_uplift2 = min(R_uplift2_left, R_uplift2_right)
 
 # ── 3) Lumikuorman epätasainen jakautuma (EN 1991-1-3 §6.2) ──
 # Yksilappinen katto: epätasaiset tapaukset eivät pääsääntöisesti koske
 # yksinkertaista yksilappeista katosta (ei murtumisvaaraa toiselle lappee).
 # Huomioitava vain jos rakenne on U- tai L-muotoinen tai vieressä korkeampi rak.
 # → Merkitään tiedoksi, ei lasketa erikseen.
+
+# ============================================================
+# ORSITARKISTUKSET  (50x100 C24, lovi huomioitu)
+# ============================================================
+E_mean_C24 = 11000.0
+fm_d_C24 = 0.65 * 24.0 / 1.3
+fv_d_C24 = 0.65 * 4.0 / 1.3
+PURLIN_ANALYSIS_STEP_MM = 100.0
+PURLIN_NOTCH_SAMPLE_STEP_MM = 1.0
+PURLIN_HUOLTO_POINT_CASE = 1.5 * Qk_huolto
+PURLIN_HUOLTO_AREA_CASE = 1.35 * gk_roofing + 1.5 * psi0_snow_accomp * s_roof + 1.5 * qk_H
+PURLIN_RAYST_NOTE = "jatkuva KP450-sivutuki"
+
+
+def purlin_governing_eta(result):
+    notch_eta = 0.0 if result["notch"] is None else result["notch"]["eta_gov"]["value_pct"]
+    return max(result["eta_M"], result["eta_V"], notch_eta)
+
+
+def analyse_purlin_member_case(row, member_obj, roof_area_kNm2, self_factor, point_loads_kN=None):
+    if point_loads_kN is None:
+        point_loads_kN = []
+    member_length_mm = float(row["member_length_mm"])
+    support_inner_s_mm = float(row["support_inner_s_mm"])
+    support_outer_s_mm = float(row["support_outer_s_mm"])
+    member_b_mm = profile_b(member_obj)
+    member_h_mm = profile_h(member_obj)
+    member_props = member_rect_props(member_b_mm, member_h_mm, member_section_rotation_deg(member_obj))
+    member_MRd_kNm = fm_d_C24 * member_props["W_mm3"] / 1.0e6
+    member_VRd_kN = fv_d_C24 * member_props["A_mm2"] / 1.5e3
+
+    inner_notch_info = bevel_notch_info(row["inner_connection_id"])
+    outer_notch_info = bevel_notch_info(row["outer_connection_id"])
+    inner_zone_mm, inner_depth_fn, inner_notch_active = make_connection_bevel_notch_depth_fn(
+        inner_notch_info,
+        support_inner_s_mm,
+        member_length_mm,
+    )
+    outer_zone_mm, outer_depth_fn, outer_notch_active = make_connection_bevel_notch_depth_fn(
+        outer_notch_info,
+        support_outer_s_mm,
+        member_length_mm,
+    )
+    depth_functions = []
+    if inner_notch_active:
+        depth_functions.append(inner_depth_fn)
+    if outer_notch_active:
+        depth_functions.append(outer_depth_fn)
+    section_h_fn = combined_section_h(member_h_mm, depth_functions)
+
+    node_points = [0.0, member_length_mm, support_inner_s_mm, support_outer_s_mm]
+    if inner_notch_active:
+        node_points.extend(inner_zone_mm)
+    if outer_notch_active:
+        node_points.extend(outer_zone_mm)
+    node_points.extend(x_mm for x_mm, _ in point_loads_kN)
+    nodes_mm = refine_nodes_mm(node_points, PURLIN_ANALYSIS_STEP_MM)
+
+    line_load_kNm = roof_area_kNm2 * float(row["area_load_factor_m"]) + self_factor * g_purlin
+    uniform_loads = uniform_loads_for_nodes(nodes_mm, line_load_kNm / 1000.0)
+    EI_by_segment_Nmm2 = [
+        E_mean_C24
+        * member_rect_props(
+            member_b_mm,
+            section_h_fn(0.5 * (a_mm + b_mm)),
+            member_section_rotation_deg(member_obj),
+        )["I_mm4"]
+        for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])
+    ]
+    response = beam_solver(
+        nodes_mm,
+        [support_inner_s_mm, support_outer_s_mm],
+        point_loads_kN=point_loads_kN,
+        uniform_loads_kN_per_mm=uniform_loads,
+        EI_by_segment_Nmm2=EI_by_segment_Nmm2,
+    )
+    internal = sample_internal_forces(response["elements"])
+    delta = sample_max_deflection_mm(response["nodes_mm"], response["disp_mm"], response["rot_rad"], step_mm=2.0)
+    moment_gov = governing_moment(internal)
+
+    notch_candidates = []
+    if inner_notch_active:
+        notch_candidates.append(
+            {
+                "label": "sisalovi",
+                **sample_net_section_utilization(
+                    response["elements"],
+                    member_obj,
+                    section_h_fn,
+                    fm_d_C24,
+                    fv_d_C24,
+                    inner_zone_mm[0],
+                    inner_zone_mm[1],
+                    step_mm=PURLIN_NOTCH_SAMPLE_STEP_MM,
+                ),
+            }
+        )
+    if outer_notch_active:
+        notch_candidates.append(
+            {
+                "label": "ulkolovi",
+                **sample_net_section_utilization(
+                    response["elements"],
+                    member_obj,
+                    section_h_fn,
+                    fm_d_C24,
+                    fv_d_C24,
+                    outer_zone_mm[0],
+                    outer_zone_mm[1],
+                    step_mm=PURLIN_NOTCH_SAMPLE_STEP_MM,
+                ),
+            }
+        )
+    notch = max(notch_candidates, key=lambda item: item["eta_gov"]["value_pct"]) if notch_candidates else None
+    min_h = sample_min_section_height_mm(section_h_fn, 0.0, member_length_mm, step_mm=PURLIN_NOTCH_SAMPLE_STEP_MM)
+
+    return {
+        "id": row["id"],
+        "kind": row["kind"],
+        "member_length_mm": member_length_mm,
+        "span_mm": support_outer_s_mm - support_inner_s_mm,
+        "overhang_mm": max(0.0, member_length_mm - support_outer_s_mm),
+        "tributary_width_m": float(row["tributary_width_m"]),
+        "tributary_area_m2": float(row["tributary_area_m2"]),
+        "area_load_factor_m": float(row["area_load_factor_m"]),
+        "line_load_kNm": line_load_kNm,
+        "point_load_total_kN": sum(p_kN for _, p_kN in point_loads_kN),
+        "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
+        "delta_lim_mm": max(1e-9, (support_outer_s_mm - support_inner_s_mm) / 300.0),
+        "MRd_kNm": member_MRd_kNm,
+        "VRd_kN": member_VRd_kN,
+        "R_inner_kN": response["reactions_kN"][support_inner_s_mm],
+        "R_outer_kN": response["reactions_kN"][support_outer_s_mm],
+        "eta_M": moment_gov["value_kNm"] / member_MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / member_VRd_kN * 100.0,
+        "notch": notch,
+        "inner_notch_active": inner_notch_active,
+        "outer_notch_active": outer_notch_active,
+        "inner_notch_zone_mm": inner_zone_mm if inner_notch_active else None,
+        "outer_notch_zone_mm": outer_zone_mm if outer_notch_active else None,
+        "h_net_min_mm": min_h["h_mm"],
+        "h_net_min_x_mm": min_h["x_mm"],
+    }
+
+
+def analyse_purlin_design(row):
+    member_obj = _PURLIN_MEMBERS[row["id"]]
+    midspan_s_mm = float(row["support_inner_s_mm"]) + 0.5 * (float(row["support_outer_s_mm"]) - float(row["support_inner_s_mm"]))
+    cases = {
+        "LUMI": analyse_purlin_member_case(row, member_obj, q_roof_d, gammaG),
+        "HUOLTO": analyse_purlin_member_case(
+            row,
+            member_obj,
+            PURLIN_HUOLTO_AREA_CASE,
+            gammaG,
+            point_loads_kN=[(midspan_s_mm, PURLIN_HUOLTO_POINT_CASE)],
+        ),
+        "SLS": analyse_purlin_member_case(row, member_obj, gk_roofing + s_roof, 1.0),
+        "UPLIFT": analyse_purlin_member_case(row, member_obj, q_roof_min, 0.9),
+    }
+    governing_case = max(("LUMI", "HUOLTO"), key=lambda case_key: purlin_governing_eta(cases[case_key]))
+    governing = dict(cases[governing_case])
+    governing["case_key"] = governing_case
+    governing["eta_gov"] = purlin_governing_eta(governing)
+    governing["sls_delta_mm"] = abs(cases["SLS"]["delta"]["value_mm"])
+    governing["sls_case_key"] = "SLS"
+    governing["uplift_inner_kN"] = cases["UPLIFT"]["R_inner_kN"]
+    governing["uplift_outer_kN"] = cases["UPLIFT"]["R_outer_kN"]
+    return governing
+
+
+purlin_design_results = [analyse_purlin_design(row) for row in _PURLIN_CTX["members"]]
+purlin_design_results_main = [row for row in purlin_design_results if row["kind"] == "main"]
+purlin_design_results_diag = [row for row in purlin_design_results if row["kind"] == "diag"]
+critical_purlin = max(purlin_design_results, key=lambda row: row["eta_gov"]) if purlin_design_results else None
 
 # ============================================================
 # TULOSTUS
@@ -596,15 +1224,22 @@ print(f"  KP450×51 sijainti              {beam1_y} mm seinästä")
 print(f"  2×KP360×51 sijainti            {beam2_y} mm seinästä (tolpat)")
 
 print("\n── TRIBUTÄÄRIALUEET ───────────────────────────────────")
-print(f"  KP450×51  :  y = {trib1_start_mm:.0f} ... {trib1_end_mm:.0f} mm  →  b_trib = {trib_w1*1000:.1f} mm")
-print(f"  2×KP360×51:  y = {trib2_start_mm:.0f} ... {trib2_end_mm:.0f} mm  →  b_trib = {trib_w2*1000:.1f} mm")
+print(f"  KP450×51 suora kattokaista     y = {trib1_start_mm:.0f} ... {trib1_end_mm:.0f} mm  →  b = {trib_w1*1000:.1f} mm")
+print(f"  2×KP360×51 suora kattokaista   ei suoraa kattokaistaa  →  b = {trib_w2*1000:.1f} mm")
+print(
+    f"  50×100 kuormaorret             {_PURLIN_CTX['count']} kpl "
+    f"({ _PURLIN_CTX['count_main']} pääortta + {_PURLIN_CTX['count_diag']} vino-ortta), "
+    f"tuet y = {_PURLIN_CTX['support_inner_y_mm']:.0f} / {_PURLIN_CTX['support_outer_y_mm']:.0f} mm"
+)
+if _RAYST_CTX["count"]:
+    print(f"  KP450:n sivujatkeet (rayst)    {_RAYST_CTX['count']} kpl, jatkuvana KP450-palkkien kyljissä")
 
 print("\n── LUMIKUORMA ─────────────────────────────────────────")
 print(f"  Maanpintaominaiskuorma  sk     {sk:.1f} kN/m²  (Eteläsuomi)")
 print(f"  Muotokerroin μ1 (α={slope_deg:.0f}°)     {mu1:.1f}  (0°–30° katto)")
 print(f"  Lumikuorma katolla  s          {s_roof:.2f} kN/m²")
-print(f"  KP450×51   q_lumi              {qk_snow1:.3f} kN/m")
-print(f"  2×KP360×51 q_lumi              {qk_snow2:.3f} kN/m")
+print(f"  KP450×51   q_lumi, suora       {qk_snow1:.3f} kN/m")
+print(f"  2×KP360×51 q_lumi, suora       {qk_snow2:.3f} kN/m")
 
 print("\n── TUULIKUORMA ────────────────────────────────────────")
 print(f"  Perusnopeus vb0                {vb0:.0f} m/s  (vyöhyke I, Eteläsuomi)")
@@ -617,26 +1252,57 @@ print(f"  Nettopainekerroin alaspäin     cp,net = {cp_net_down:.2f}  (interpolo
 print(f"  Nettopainekerroin ylöspäin     cp,net = {cp_net_up:.2f}")
 print(f"  Tuulikuorma katolla (alas)     {w_wind_down:.3f} kN/m²")
 print(f"  Tuulikuorma katolla (ylös)     {w_wind_up:.3f} kN/m²")
-print(f"  KP450×51   q_tuuli (alas)      {qk_wind_down1:.3f} kN/m")
-print(f"  2×KP360×51 q_tuuli (alas)      {qk_wind_down2:.3f} kN/m")
+print(f"  KP450×51   q_tuuli, suora      {qk_wind_down1:.3f} kN/m")
+print(f"  2×KP360×51 q_tuuli, suora      {qk_wind_down2:.3f} kN/m")
 
 print("\n── PYSYVÄT KUORMAT ────────────────────────────────────")
 print(f"  Kate + ruoteet  gk             {gk_roofing:.2f} kN/m²")
 print(f"  Kertopuun tiheys               {gamma_lvl:.2f} kN/m³")
+print(f"  C24-orren tiheys               {gamma_c24:.2f} kN/m³")
 print(f"  KP450×51   omapaino            {g_beam1:.3f} kN/m")
 print(f"  2×KP360×51 omapaino            {g_beam2:.3f} kN/m")
-print(f"  KP450×51   Gk (kate+palkki)    {gk1:.3f} kN/m")
-print(f"  2×KP360×51 Gk (kate+palkki)    {gk2:.3f} kN/m")
+print(f"  50×100 orsi omapaino           {g_purlin:.3f} kN/m")
+print(f"  KP450×51   Gk, suora           {gk1:.3f} kN/m")
+print(f"  2×KP360×51 Gk, suora           {gk2:.3f} kN/m")
 
 print("\n── MITOITUSKUORMAT ULS  (1.35G + 1.5S + 1.5·0.6·W) ──")
-print(f"  KP450×51   qd                  {qd1:.3f} kN/m")
-print(f"  2×KP360×51 qd                  {qd2:.3f} kN/m")
+print(f"  KP450×51   qd, suora           {qd1:.3f} kN/m")
+print(f"  2×KP360×51 qd, suora           {qd2:.3f} kN/m")
+print(f"  KP450×51   q_eq, combined      {qd1_eq:.3f} kN/m")
+print(f"  2×KP360×51 q_eq, combined      {qd2_eq:.3f} kN/m")
 
-print("\n── TUKIREAKTIOT ULS  (sis. uloke + räystäs) ───────────")
-print(f"  KP450×51   Rd,tuki             {R1:.2f} kN")
-print(f"  2×KP360×51 Rd,tuki             {R2:.2f} kN")
+print("\n── ORSIREAKTIOT PÄÄPALKEILLE ULS ──────────────────────")
+print(f"  KP450×51   pistekuormat        {format_point_loads(beam1_purlin_point_loads_uls_abs_x_mm)}")
+print(f"  2×KP360×51 pistekuormat        {format_point_loads(beam2_purlin_point_loads_uls_abs_x_mm)}")
 
-print("\n── TAIVUTUSMOMENTTI  Md = qd·L²/8  (ei kaltevuuskorjausta) ──")
+print("\n── ORSITARKISTUKSET 50×100 C24 (LOVI HUOMIOITU) ──────")
+print("  ID               tyyppi tapaus  b_trib   q_avg   span  uloke  h_net      Md    η_M    η_V η_lovi   δ_sls")
+print("  ---------------- ------ ------ ------- ------- ------ ------ ------ ------- ------ ------ ------- -------")
+for row in purlin_design_results:
+    notch_eta = 0.0 if row["notch"] is None else row["notch"]["eta_gov"]["value_pct"]
+    type_label = "vino" if row["kind"] == "diag" else "paa"
+    print(
+        f"  {row['id']:<16} {type_label:<6} {row['case_key']:<6} "
+        f"{row['tributary_width_m']*1000:>7.0f} {row['line_load_kNm']:>7.3f} "
+        f"{row['span_mm']:>6.0f} {row['overhang_mm']:>6.0f} {row['h_net_min_mm']:>6.1f} "
+        f"{row['M_gov']['value_kNm']:>7.2f} {row['eta_M']:>6.1f}% {row['eta_V']:>6.1f}% "
+        f"{notch_eta:>7.1f}% {row['sls_delta_mm']:>7.2f}"
+    )
+if critical_purlin is not None:
+    critical_notch_eta = 0.0 if critical_purlin["notch"] is None else critical_purlin["notch"]["eta_gov"]["value_pct"]
+    print(
+        f"  Governing orsi: {critical_purlin['id']} ({critical_purlin['case_key']})  "
+        f"eta = {critical_purlin['eta_gov']:.1f}%  "
+        f"(M {critical_purlin['eta_M']:.1f}%, V {critical_purlin['eta_V']:.1f}%, lovi {critical_notch_eta:.1f}%)"
+    )
+if _RAYST_CTX["count"]:
+    print(f"  Rayst-orret: {_RAYST_CTX['count']} kpl, kuorma siirtyy jatkuvana KP450-sivutukena -> ei erillista jannepalkkitarkistusta.")
+
+print("\n── TUKIREAKTIOT ULS  (suora kaista + orret) ───────────")
+print(f"  KP450×51   Rd,tuki vas/oik     {R1_left:.2f} / {R1_right:.2f} kN")
+print(f"  2×KP360×51 Rd,tuki vas/oik     {R2_left:.2f} / {R2_right:.2f} kN")
+
+print("\n── TAIVUTUSMOMENTTI  combined-kuormituksesta ──────────")
 print(f"  Kaltevuuskorjaus (moment_factor)  {moment_factor:.4f}  (kaltevuus jänteen suunnassa → 1.0)")
 print(f"  KP450×51   Md                  {Md1:.2f} kNm")
 print(f"  2×KP360×51 Md                  {Md2:.2f} kNm")
@@ -699,16 +1365,18 @@ print(f"  {'LP225×90 (taivutus)':<20} {Md_lp:>7.2f}kNm {MRd_lp:>7.2f}kNm {eta_l
 print(f"  {'LP225×90 (leikkaus)':<20} {Vd_lp:>8.2f}kN {VRd_lp:>8.2f}kN {eta_V_lp:>11.1f}%  {'OK ✓' if eta_V_lp <= 100 else '*** YLITTYY ***'}")
 print()
 print(f"  Suurin sallittu mitoitusviivakuorma (taivutus 100%):")
-print(f"    KP450×51      qd,max = {qd_max1:.3f} kN/m  (nyt {qd1:.3f} kN/m)")
-print(f"    2×KP360×51    qd,max = {qd_max2:.3f} kN/m  (nyt {qd2:.3f} kN/m)")
+print(f"    KP450×51      qd,max = {qd_max1:.3f} kN/m  (q_eq,combined {qd1_eq:.3f} kN/m)")
+print(f"    2×KP360×51    qd,max = {qd_max2:.3f} kN/m  (q_eq,combined {qd2_eq:.3f} kN/m)")
 print()
 print("  HUOMIOT:")
 print("  * Lumikuorma sk = 2.0 kN/m² (Tuusula, FI NA vyöhyke II / YM asetus 6/16).")
 print("  * Vuoden 2005 RakMk B1 -laskennassa käytetty 2.2 kN/m² vastasi silloista normia.")
-print("  * LP225x90 laskennassa vain KP450x51 pistekuorma (päätykannake).")
-print("  * Tributäärileveys perustuu yksinkertaiseen vaikutusaluemenetelmään.")
+print("  * LP225x90 saa päätypistekuorman KP450×51-palkin yhdistetystä tukireaktiosta.")
+print("  * KP450×51 kantaa suoran kattokaistan + pää- ja vino-orsien sisäreaktiot; 2×KP360×51 kuormittuu katon osalta näiden orsien kautta.")
+print("  * Rayst-orret on mallinnettu KP450-palkkien sivujatkeina, ei erillisinä KP360-siirtopisteinä.")
+print("  * Pää- ja vino-orret on tarkistettu 50x400 mm bevel bottom notch -lovella geometrian notched_over-liitoksista.")
 print("  * Räystäskuormat (x-suunta) huomioitu tukireaktioissa (LP225, pilarit).")
-print("  * Leikkaustarkistuksen Vd = qd·L/2 on palkin sisäinen leikkaus, ei koko tukireaktio.")
+print("  * Leikkaus ja taipuma on laskettu combined-kuormituksesta (suora viivakuorma + orsipistekuormat).")
 print("  * Tuulikuorman nettopainekerroin interpoloitu EC1-1-4 taulukosta 7.7")
 print("    (vapaasti seisova katos – konservatiivinen yksinkertaistus seinään kiinnitetylle).")
 print("  * LTB-tarkistus (§6.3.3) edellyttää ruoteiden riittävää kiinnitystä palkkeihin.")
@@ -747,8 +1415,10 @@ def uplift_status(R):
     if R < 0:
         return f"NOSTO {abs(R):.2f} kN → KIINNITYS!"
     return f"Puristus {R:.2f} kN  OK ✓"
-print(f"  {'KP450×51':<18} {qmin1:>12.3f} {R_uplift1:>12.2f} kN  {uplift_status(R_uplift1)}")
-print(f"  {'2×KP360×51':<18} {qmin2:>12.3f} {R_uplift2:>12.2f} kN  {uplift_status(R_uplift2)}")
+print(f"  {'KP450×51':<18} {qmin1_eq:>12.3f} {R_uplift1:>12.2f} kN  {uplift_status(R_uplift1)}")
+print(f"  {'2×KP360×51':<18} {qmin2_eq:>12.3f} {R_uplift2:>12.2f} kN  {uplift_status(R_uplift2)}")
+print(f"    vasen/oikea KP450×51         {R_uplift1_left:>12.2f} / {R_uplift1_right:>5.2f} kN")
+print(f"    vasen/oikea 2×KP360×51       {R_uplift2_left:>12.2f} / {R_uplift2_right:>5.2f} kN")
 
 print("\n── LUMIKUORMAN EPÄTASAINEN JAKAUTUMA ───────────────────")
 print("  EN 1991-1-3 §6.2: yksilappinen katto")
@@ -768,387 +1438,4 @@ if R_uplift1 < 0 or R_uplift2 < 0:
     print()
     print("  *** TÄRKEÄÄ: Tuulen nostokuorma aiheuttaa negatiiviset tukireaktiot!")
     print("  *** Palkkien kiinnitykset (ankkurointi) tulee mitoittaa nostolle.")
-print(dw)
-
-# ── Lisäkapasiteetti -osio ──────────────────────────────────────────────────
-print()
-print(dw)
-print("  ANALYYSI: 2×KP360×51 VÄLITUEKSI UUDELLE KATOKSELLE")
-print(dw)
-print()
-print(f"  Käyttämätön taivutuskapasiteetti: {delta_MRd2:.1f} kNm  ({100-eta2:.1f}% jäljellä)")
-print()
-print("  Periaate: poikittaiset rimat/palkit y-suunnassa kiinnittävät")
-print("  uuden ulomman palkin 2×KP360×51:een → jänneväli lyhenee.")
-print()
-print(f"  {'─'*56}")
-print(f"  VAIHTOEHTO A  –  1 välituki  (x = L/2 = {span_A:.0f} mm)")
-print(f"  {'─'*56}")
-print(f"    2×KP360×51 ottaa pistekuorman:   P_max = {P_A:.1f} kN")
-print(f"    Uuden palkin jänneväli:           L = {span_A:.0f} mm")
-print(f"    → 6700mm palkki lyhenee {(1-span_A/L_mm)*100:.0f}%")
-print(f"    Jos uusi palkki = 2×KP360×51:")
-print(f"      Sallittu UDL (taivutus 100%):  q_max = {q_new_A:.1f} kN/m")
-print(f"      ≈ kattokuorma (trib ~{trib_new:.1f}m):    {q_roof_new_A:.1f} kN/m²")
-print(f"      (vertailu: lumi+tuuli nyt ≈ {s_roof+w_wind_down:.2f} kN/m²)")
-print()
-print(f"  {'─'*56}")
-print(f"  VAIHTOEHTO B  –  2 välitukea  (x = L/3 = {span_B:.0f} mm)")
-print(f"  {'─'*56}")
-print(f"    2×KP360×51 ottaa per tuki:        P_max = {P_B_each:.1f} kN")
-print(f"    Yhteensä molemmat tuet:           P_tot = {P_B_total:.1f} kN")
-print(f"    Uuden palkin jänneväli:           L = {span_B:.0f} mm")
-print(f"    → 6700mm palkki lyhenee {(1-span_B/L_mm)*100:.0f}%")
-print(f"    Jos uusi palkki = 2×KP360×51:")
-print(f"      Sallittu UDL (taivutus 100%):  q_max = {q_new_B:.1f} kN/m")
-print(f"      ≈ kattokuorma (trib ~{trib_new:.1f}m):    {q_roof_new_B:.1f} kN/m²")
-print()
-print("  JOHTOPÄÄTÖS:")
-print(f"    Nykyinen kattokuorma palkeilla: lumi+pysyvä ≈ {s_roof+gk_roofing:.2f} kN/m²")
-print(f"    → Vaihtoehto A riittää mainiosti uudelle katokselle.")
-print(f"    → Vaihtoehto B antaa runsaan ylikapasiteetin.")
-print(f"    Poikittaisrimat (y-suunta) mitoitetaan erikseen pistekuormille")
-print(f"    P = {P_A:.1f} kN (A) tai {P_B_each:.1f} kN/tuki (B), jänneväli {int(beam2_y)} mm.")
-print(dw)
-
-# ============================================================
-# TERASSIN PÄÄTYPALKKI → 2×KP360×51 VÄLITUKI TARKISTUS
-# ============================================================
-_TERRACE = load_script_module_quietly("terassilasitus_rakenne_vaihtoehdot.py", "terrace_transfer_loads")
-_terrace_base_support_xs_mm = list(_TERRACE.inner_support_xs_mm)
-_terrace_case_defs = [
-    ("1 välituki  (x = L/2)", [
-        _terrace_base_support_xs_mm[0],
-        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 2.0,
-        _terrace_base_support_xs_mm[-1],
-    ]),
-    ("2 välitukea (x = L/3, 2L/3)", [
-        _terrace_base_support_xs_mm[0],
-        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 3.0,
-        _terrace_base_support_xs_mm[0] + 2.0 * _TERRACE.L_paaty_mm / 3.0,
-        _terrace_base_support_xs_mm[-1],
-    ]),
-    ("3 välitukea (x = L/4..3L/4)", [
-        _terrace_base_support_xs_mm[0],
-        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 4.0,
-        _terrace_base_support_xs_mm[0] + _TERRACE.L_paaty_mm / 2.0,
-        _terrace_base_support_xs_mm[0] + 3.0 * _TERRACE.L_paaty_mm / 4.0,
-        _terrace_base_support_xs_mm[-1],
-    ]),
-]
-_kp360_left_support_x_mm = float(min(_col_xs))
-
-terrace_transfer_cases = []
-for case_label, support_case_xs_mm in _terrace_case_defs:
-    case_reactions_uls = _TERRACE.beam_support_reactions(
-        _TERRACE.inner_beam_start_x_mm,
-        _TERRACE.inner_beam_end_x_mm,
-        support_case_xs_mm,
-        _TERRACE.gov_inner_point_loads_uls,
-    )
-    case_reactions_char = _TERRACE.beam_support_reactions(
-        _TERRACE.inner_beam_start_x_mm,
-        _TERRACE.inner_beam_end_x_mm,
-        support_case_xs_mm,
-        _TERRACE.gov_inner_point_loads_char,
-    )
-    point_loads_uls = [
-        ((x_mm - _kp360_left_support_x_mm) / 1000.0, case_reactions_uls[x_mm])
-        for x_mm in support_case_xs_mm[1:-1]
-    ]
-    point_loads_char = [
-        ((x_mm - _kp360_left_support_x_mm) / 1000.0, case_reactions_char[x_mm])
-        for x_mm in support_case_xs_mm[1:-1]
-    ]
-    added_reactions_uls = simple_span_point_reactions(L_m, point_loads_uls)
-    x_md_comb_m, Md_comb = simple_span_combined_moment_max(L_m, qd2, point_loads_uls)
-    Vd_comb = max(Vd2 + added_reactions_uls[0], Vd2 + added_reactions_uls[1])
-    delta_comb, x_delta_comb_mm = simple_span_max_deflection_mm(L_mm, EI2, qk_sls2, point_loads_char)
-    terrace_transfer_cases.append({
-        "label": case_label,
-        "point_loads_char": point_loads_char,
-        "point_loads_uls": point_loads_uls,
-        "added_reactions_uls": added_reactions_uls,
-        "support_totals_uls": (R2 + added_reactions_uls[0], R2 + added_reactions_uls[1]),
-        "Md_comb": Md_comb,
-        "x_md_comb_m": x_md_comb_m,
-        "Vd_comb": Vd_comb,
-        "delta_comb": delta_comb,
-        "delta_added": delta_comb - delta2,
-        "x_delta_comb_mm": x_delta_comb_mm,
-        "eta_M": Md_comb / MRd2 * 100.0,
-        "eta_V": Vd_comb / VRd2 * 100.0,
-    })
-
-case_1 = terrace_transfer_cases[0]
-case_2 = terrace_transfer_cases[1]
-case_3 = terrace_transfer_cases[2]
-
-P1_uls = case_1["point_loads_uls"][0][1]
-P1_char = case_1["point_loads_char"][0][1]
-
-Md_comb1 = case_1["Md_comb"]
-Vd_comb1 = case_1["Vd_comb"]
-eta_M_comb1 = case_1["eta_M"]
-eta_V_comb1 = case_1["eta_V"]
-delta_comb1 = case_1["delta_comb"]
-delta_P1 = case_1["delta_added"]
-
-Md_comb2 = case_2["Md_comb"]
-Vd_comb2 = case_2["Vd_comb"]
-eta_M_comb2 = case_2["eta_M"]
-eta_V_comb2 = case_2["eta_V"]
-delta_comb2 = case_2["delta_comb"]
-delta_P2 = case_2["delta_added"]
-
-Md_comb3 = case_3["Md_comb"]
-Vd_comb3 = case_3["Vd_comb"]
-eta_M_comb3 = case_3["eta_M"]
-eta_V_comb3 = case_3["eta_V"]
-delta_comb3 = case_3["delta_comb"]
-delta_P3 = case_3["delta_added"]
-
-# Varmuusmarginaali L/250 (löysempi kriteeri, rakennusteknisesti hyväksyttävä
-# ei-kriittiselle rakenteelle)
-delta_lim_250 = L_mm / 250.0
-
-print()
-print(dw)
-print("  TERASSIN PÄÄTYPALKKI – VÄLITUKI 2×KP360×51 TARKISTUS")
-print(dw)
-print(f"  Päätypalkki q_eq (hall. tapaus): {_TERRACE.q_beam_gov_char:.2f} kN/m ominais / {_TERRACE.q_beam_gov_uls:.2f} kN/m ULS")
-print(f"  Terassin välitukikuormat luetaan suoraan korjatusta terassilaskelmasta ({_TERRACE.gov_beam_case}).")
-print()
-print(f"  2×KP360×51 nykyinen kuorma: Md={Md2:.1f} kNm  Vd,span={Vd2:.1f} kN  Rd,tuki={R2:.1f} kN  MRd={MRd2:.1f} kNm  VRd={VRd2:.1f} kN")
-print(f"  Nykyinen käyttöaste: η_M={eta2:.1f}%  η_V={eta_V2:.1f}%  (käyttämätön kapasiteetti: {delta_MRd2:.1f} kNm)")
-print(f"  Taipumarajat: L/300={delta_lim:.0f}mm  |  L/250={delta_lim_250:.0f}mm")
-print()
-
-for case in terrace_transfer_cases:
-    ok_M = case["eta_M"] <= 100
-    ok_V = case["eta_V"] <= 100
-    ok_d = case["delta_comb"] <= delta_lim
-    ok_d2 = case["delta_comb"] <= delta_lim_250
-    d_str = f"{'OK ✓' if ok_d else ('OK (L/250) ✓' if ok_d2 else '*** YLITTYY ***')}"
-    left_total, right_total = case["support_totals_uls"]
-    left_add, right_add = case["added_reactions_uls"]
-    print(f"  ── {case['label']}")
-    print(f"     Terassilta siirtyvät pistekuormat:")
-    print(f"       ominais  {format_point_loads(case['point_loads_char'])}")
-    print(f"       ULS      {format_point_loads(case['point_loads_uls'])}")
-    print(f"     Lisäreaktio 2×KP360-tuilla (ULS): vasen {left_add:.1f} kN, oikea {right_add:.1f} kN")
-    print(f"     Kokonaisreaktio 2×KP360-tuilla (ULS, katos+terassi): vasen {left_total:.1f} kN, oikea {right_total:.1f} kN")
-    print(
-        f"     η_M={case['eta_M']:.0f}%  {'OK ✓' if ok_M else '✗'}   "
-        f"η_V={case['eta_V']:.0f}%  {'OK ✓' if ok_V else '✗'}   "
-        f"δ={case['delta_comb']:.1f}mm (+{case['delta_added']:.1f})  {d_str}"
-    )
-    print()
-
-print("  Huomio: tarkat siirtokuormat eivät jakaudu täysin symmetrisesti,")
-print("  koska terassin päätypalkin tukipisteet tulevat suoraan korjatusta geometriasta.")
-print()
-
-# ── D) Vinotuki-kolmio seinästä päätypalkkin midspaniin ──────────────────
-# Geometria: seinä → päätypalkki midspan
-#   Vaakaetäisyys  = 1800mm  (seinä → uusi päätypalkki: pilarit 1675mm + 125mm etureuna)
-#   Pystyetäisyys  = 1080mm  (mitattu: vinotuen yläreuna KP450×51 midspanissa = 3850mm,
-#                             LP225 yläpinta ≈ 2770mm  →  3850 − 2770 = 1080mm)
-# Kolmio = vinotuki (veto) + vaakaside (puristus) + seinä (pysty)
-# Tulos: palkkiin vain pystykuorma, seinälle vain pystykuorma
-L_d_horiz = 1.800   # m  (1675mm pilarikeskiö + 125mm = palkin etureuna)
-h_d_vert  = 1.080   # m  (mitattu: 3850mm − LP225 yläpinta ~2770mm = 1080mm)
-L_diag    = math.sqrt(L_d_horiz**2 + h_d_vert**2)
-alpha_d   = math.atan(h_d_vert / L_d_horiz)
-
-# Tukivoima kolmioon = 1 välituen tarkka pistekuorma terassilaskelmasta
-P_d_uls  = P1_uls
-P_d_char = P1_char
-
-# Vinotuki (vetosauvaksi terässauva/laatta)
-F_diag_uls  = P_d_uls  * L_diag / h_d_vert   # kN
-F_diag_char = P_d_char * L_diag / h_d_vert
-# Vaakaside midspan → seinä (puristusputki)
-N_horiz_uls  = P_d_uls  * L_d_horiz / h_d_vert  # kN
-N_horiz_char = P_d_char * L_d_horiz / h_d_vert
-
-# Teräksinen vetosauvavaihtoehto S355 (pulttivaraus)
-fy_S355 = 355.0    # N/mm²
-A_M20   = 245.0    # mm² (M20 kierretangon juuripinta-ala)
-NRd_M20 = A_M20 * fy_S355 / 1000.0  # kN
-eta_M20 = F_diag_uls / NRd_M20 * 100.0
-
-# Vaakasauva: SHS 50×50×4, L=1800mm
-A_SHS   = 50**2 - 42**2    # mm²  = 736
-I_SHS   = (50**4 - 42**4) / 12.0
-i_SHS   = math.sqrt(I_SHS / A_SHS)
-lam_SHS = 1800.0 / i_SHS
-chi_SHS = 0.75   # nurjahduskerroin χ, λ≈90
-NRd_SHS = chi_SHS * A_SHS * fy_S355 / 1000.0
-eta_SHS = N_horiz_uls / NRd_SHS * 100.0
-
-# Puuvaihtoehto kolmiosauvoille: GL30c 140×140mm
-ft0k_gl  = 19.5     # N/mm²  GL30c
-fc0k_gl  = 24.5     # N/mm²  GL30c
-E005_gl  = 10800.0  # N/mm²  GL30c (5% fraktiili)
-E0m_gl   = 13000.0  # N/mm²  GL30c E0,mean
-kmod_gl  = 0.8      # keskipitkäaikainen (lumi), SC1
-gM_gl    = 1.25     # γM liimapuu
-b_tri    = h_tri = 140.0   # mm  (GL30c 140×140)
-A_tri    = b_tri * h_tri
-ft0d_gl  = kmod_gl * ft0k_gl / gM_gl   # N/mm²
-fc0d_gl  = kmod_gl * fc0k_gl / gM_gl   # N/mm²
-# Nettopinta-ala vinotukin vetoliitoksessa (M16 pultti, reikä 18mm)
-A_net_gl = (b_tri - 18.0) * h_tri
-NRd_tens_gl = ft0d_gl * A_net_gl / 1000.0
-eta_tens_gl = F_diag_uls / NRd_tens_gl * 100.0
-# Vaakaside: PURISTUS + nurjahdus (EN 1995-1-1 §6.3.2)
-i_tri    = h_tri / math.sqrt(12.0)
-lam_tri  = 1800.0 / i_tri
-lam_rel_tri = (lam_tri / math.pi) * math.sqrt(fc0k_gl / E005_gl)
-bc_gl    = 0.1   # liimapuu
-k_bkl    = 0.5 * (1.0 + bc_gl * (lam_rel_tri - 0.3) + lam_rel_tri**2)
-kc_gl    = 1.0 / (k_bkl + math.sqrt(k_bkl**2 - lam_rel_tri**2))
-NRd_comp_gl = kc_gl * fc0d_gl * A_tri / 1000.0
-eta_comp_gl = N_horiz_uls / NRd_comp_gl * 100.0
-
-# KP450×51(seinä) paikallinen tarkistus: vinotuki kiinnittyy seinäpalkkiin
-# beam.kp450.wall on pultattu seinään 900mm välein → jatkuvapalkki
-# Tributäärialue: y=0 ... trib1_start_mm (= 450mm), ERI palkki kuin beam.kp450.y900
-s_mm = int(next(c for c in _GEO["connections"] if c["id"] == "con.kp450wall.to.house")["spacing_mm"])
-s_m  = s_mm / 1000.0
-trib_wall_m = trib1_start_mm / 1000.0   # 0.45 m
-gk_wall     = gk_roofing * trib_wall_m + g_beam1   # kN/m
-qd_wall     = (gammaG * gk_wall
-               + gammaQ * s_roof * trib_wall_m
-               + gammaQ * psi0_W * w_wind_down * trib_wall_m)  # kN/m
-
-# Jatkuvapalkin kenttämomentti (sisäjänne, UDL): M ≈ qd × s² / 14
-Md_wall_udl = qd_wall * s_m**2 / 14.0   # kNm
-
-# Vinotukin pistekuorma paikallisesti: M = P × s / 4 (yksinkert. tuettu, konserv.)
-dMd_wall    = P_d_uls * s_m / 4.0       # kNm
-Md_wall_comb = Md_wall_udl + dMd_wall    # kNm
-eta_wall_comb = Md_wall_comb / MRd1 * 100.0
-
-# Kolmio-vaihtoehto: 2×KP360×51 EI saa terassin kuormia ollenkaan
-print(f"  A) Vinotuki-kolmio seinästä päätypalkkin midspaniin:")
-print(f"     Geometria: seinä→palkki {L_d_horiz*1000:.0f}mm vaaka, {h_d_vert*1000:.0f}mm pysty")
-print(f"     Vinotuki pituus: {L_diag*1000:.0f}mm, α={math.degrees(alpha_d):.1f}° vaakaan")
-print(f"")
-print(f"     Kolmio (veto + puristus + seinä):")
-print(f"       Vinotuki  (VETO):   F_char={F_diag_char:.1f}kN  F_uls={F_diag_uls:.1f}kN")
-print(f"       Vaakaside (PURST.): N_char={N_horiz_char:.1f}kN  N_uls={N_horiz_uls:.1f}kN  L={L_d_horiz*1000:.0f}mm")
-print(f"       Seinäkiinnitys:     vain V={P_d_uls:.1f}kN alas  (ei vaakavoimaa seinälle!)")
-print(f"       Palkkiin:           vain V={P_d_uls:.1f}kN ylös  (ei heikon akselin taivutusta!)")
-print(f"")
-print(f"     Materiaalivaihtoehdot:")
-print(f"     ┌─ Teräs S355 ──────────────────────────────────────────────────")
-print(f"     │  Vinotuki: M20 kierretanko → η={eta_M20:.0f}%  {'OK ✓' if eta_M20 <= 100 else '✗'}")
-print(f"     │    NRd={NRd_M20:.0f}kN, A_net=245mm²")
-print(f"     │  Vaakaside: SHS 50×50×4, L=1800mm → η={eta_SHS:.0f}%  {'OK ✓' if eta_SHS <= 100 else '✗'}")
-print(f"     │    NRd≈{NRd_SHS:.0f}kN, λ={lam_SHS:.0f}")
-print(f"     ├─ GL30c liimapuu 140×140mm ─────────────────────────────────── ← valittu")
-print(f"     │  ft,0,d={ft0d_gl:.1f}N/mm²  fc,0,d={fc0d_gl:.1f}N/mm²  (kmod={kmod_gl}, γM={gM_gl})")
-print(f"     │  Vinotuki (VETO, netto M16, A={A_net_gl:.0f}mm²): NRd={NRd_tens_gl:.0f}kN  η={eta_tens_gl:.0f}%  {'OK ✓' if eta_tens_gl<=100 else '✗'}")
-print(f"     │  Vaakaside (PURISTUS, λ={lam_tri:.0f}, λ_rel={lam_rel_tri:.2f}, kc={kc_gl:.2f}):")
-print(f"     │    NRd={NRd_comp_gl:.0f}kN  η={eta_comp_gl:.0f}%  {'OK ✓' if eta_comp_gl<=100 else '✗'}")
-print(f"     └───────────────────────────────────────────────────────────────")
-print(f"")
-print(f"     *** SEINÄKIINNITYS – KP450×51(seinä) PAIKALLINEN TARKISTUS ***")
-print(f"     beam.kp450.wall: pulttiväli {s_mm}mm, tribut. {trib_wall_m*1000:.0f}mm, qd_wall={qd_wall:.3f} kN/m")
-print(f"     Jatkuvapalkki (sisäjänne): Md_udl = qd×s²/14 = {Md_wall_udl:.2f} kNm")
-print(f"     Vinotukin pistekuorma:     ΔMd   = P×s/4    = {dMd_wall:.2f} kNm")
-print(f"     Yhdistetty:                Md    = {Md_wall_comb:.2f} kNm  MRd={MRd1:.2f} kNm  η={eta_wall_comb:.1f}%  {'OK ✓' if eta_wall_comb<=100 else '✗'}")
-s_mm = int(next(c for c in _GEO["connections"] if c["id"] == "con.kp450wall.to.house")["spacing_mm"])
-eta_loc = eta_wall_comb
-# M10 pulttikapasiteetti (teräs 8.8, EN 1993-1-8 § 3.6)
-A_s_M10  = 58.0    # mm² – M10 juuripinta-ala
-fub_M10  = 800.0   # N/mm² – 8.8
-gamM2    = 1.25    # γM2
-Fv_Rd_M10 = 0.6 * fub_M10 * A_s_M10 / gamM2 / 1000.0  # kN, 1 leikkaustaso
-Fv_bolt  = P_d_uls / 2.0     # max leikkausvoima vinotukin lähipultille
-eta_bolt = Fv_bolt / Fv_Rd_M10 * 100.0
-# Kerto-S reunapuristus (EN 1995-1-1 §8.2, d=10mm, t=51mm)
-fh_k_M10 = 0.082 * (1.0 - 0.01*10.0) * 480.0   # N/mm²
-fh_d_M10 = 0.65 * fh_k_M10 / 1.2                # kmod=0.65, γM=1.2
-Fv_Rd_lvl = fh_d_M10 * 10.0 * 51.0 / 1000.0     # kN, reunapuristus yhdessä puupinnassa
-eta_lvl  = Fv_bolt / Fv_Rd_lvl * 100.0
-print(f"     M10 (8.8) leikkaus: Fv,Rd={Fv_Rd_M10:.1f}kN  kuorma/pultti≈{Fv_bolt:.1f}kN  η={eta_bolt:.0f}%  {'OK ✓' if eta_bolt<=100 else '✗'}")
-print(f"     Kerto-S reunapuristus: fh,d={fh_d_M10:.1f}N/mm²  Fv,Rd={Fv_Rd_lvl:.1f}kN  η={eta_lvl:.0f}%  {'OK ✓' if eta_lvl<=100 else '→ tarkista ankkurivalmistajan arvot'}")
-print(f"")
-print(f"     JOHTOPÄÄTÖS: KP450×51(seinä) taivutus η={eta_wall_comb:.1f}% {'OK ✓' if eta_wall_comb<=100 else '✗'}")
-print(f"     Suositus: lisää kuormanjakolevy (t≥10mm teräs) vinotukin liitokseen")
-print(f"     → levy jakaa kuorman 2 vierekkäiselle M10-pultille, jännemitta puolittuu")
-print(f"     Seinäankkurit: tarkista valmistajan kantavuus (vetämä+leikkaus per pultti ≈{P_d_uls/2:.1f}kN)")
-print(f"     2×KP360×51: ei terassikuormia → η_M={eta2:.1f}% ✓")
-print()
-
-# ── B) Yhdistelmä: vinotuki-kolmio + 2×KP360×51 (redundantti järjestelmä) ─
-# Kumpikin tuki on jousi, kuorma jakautuu jäykkyyksien suhteessa
-# Kolmio-jousijäykkyys (virtuaalityö, aksiaaliset jäsenet):
-E_tri_mat = E0m_gl     # N/mm² GL30c E0,mean
-f_d      = L_diag / h_d_vert
-f_h      = L_d_horiz / h_d_vert
-L_d_mm   = L_diag * 1000.0
-L_h_mm   = L_d_horiz * 1000.0
-dv_unit  = (f_d**2 * L_d_mm)/(E_tri_mat * A_tri) + (f_h**2 * L_h_mm)/(E_tri_mat * A_tri)
-k_tri    = 1.0 / dv_unit / 1000.0   # kN/mm
-
-# 2×KP360×51 jousijäykkyys kuormituspisteessä (1 välituen tarkka sijainti)
-_kp360_load_x_mm = case_1["point_loads_char"][0][0] * 1000.0
-_kp360_load_b_mm = L_mm - _kp360_load_x_mm
-k_kp360 = 3.0 * EI2 * L_mm / (1000.0 * _kp360_load_x_mm**2 * _kp360_load_b_mm**2)   # kN/mm
-
-k_comb   = k_tri + k_kp360
-r_tri    = k_tri   / k_comb
-r_kp360  = k_kp360 / k_comb
-
-P_E_tri_uls   = r_tri   * P1_uls;   P_E_tri_char  = r_tri   * P1_char
-P_E_kp_uls    = r_kp360 * P1_uls;   P_E_kp_char   = r_kp360 * P1_char
-
-# Kolmiojäsenet (pienennetyllä kuormalla)
-F_E_diag_uls  = P_E_tri_uls  * L_diag / h_d_vert
-N_E_horiz_uls = P_E_tri_uls  * L_d_horiz / h_d_vert
-eta_gl_tens_E = F_E_diag_uls  / NRd_tens_gl * 100.0
-eta_gl_comp_E = N_E_horiz_uls / NRd_comp_gl * 100.0
-
-# KP360 yhdistetty kuorma (tarkka kuormituspiste terassilaskelmasta)
-point_load_E_uls = [(case_1["point_loads_uls"][0][0], P_E_kp_uls)]
-point_load_E_char = [(case_1["point_loads_char"][0][0], P_E_kp_char)]
-_added_reactions_E = simple_span_point_reactions(L_m, point_load_E_uls)
-_x_md_comb_E_m, Md_comb_E = simple_span_combined_moment_max(L_m, qd2, point_load_E_uls)
-Vd_comb_E = max(Vd2 + _added_reactions_E[0], Vd2 + _added_reactions_E[1])
-eta_M_E   = Md_comb_E / MRd2 * 100.0
-eta_V_E   = Vd_comb_E / VRd2 * 100.0
-delta_E, _x_delta_E_mm = simple_span_max_deflection_mm(L_mm, EI2, qk_sls2, point_load_E_char)
-delta_PE  = delta_E - delta2
-
-print(f"  B) Yhdistelmä: vinotuki-kolmio + 2×KP360×51 (redundantti järjestelmä):")
-print(f"     Jousijäykkyydet: k_kolmio={k_tri:.1f}kN/mm, k_KP360={k_kp360:.2f}kN/mm  →  k_yht={k_comb:.1f}kN/mm")
-print(f"     Kuormanjako: kolmio {r_tri*100:.0f}% / KP360 {r_kp360*100:.0f}%  (total P={P1_char:.1f}kN char)")
-print(f"")
-print(f"     GL30c 140×140 kolmiojäsenet (P_kolmio={P_E_tri_uls:.1f}kN ULS):")
-print(f"       Vinotuki  (VETO):   F_uls={F_E_diag_uls:.1f}kN  η={eta_gl_tens_E:.0f}%  {'OK ✓' if eta_gl_tens_E<=100 else '✗'}")
-print(f"       Vaakaside (PURST.): N_uls={N_E_horiz_uls:.1f}kN  η={eta_gl_comp_E:.0f}%  {'OK ✓' if eta_gl_comp_E<=100 else '✗'}")
-print(f"     2×KP360×51 (P_kp={P_E_kp_uls:.1f}kN ULS):")
-print(f"       η_M={eta_M_E:.0f}%  {'OK ✓' if eta_M_E<=100 else '✗'}   η_V={eta_V_E:.0f}%  {'OK ✓' if eta_V_E<=100 else '✗'}   δ={delta_E:.1f}mm  {'OK ✓' if delta_E<=delta_lim else '✗'}")
-print(f"     → KP360 toimii varajärjestelmänä (redundanssi), molemmat mitoitettu ✓")
-print()
-
-print("  JOHTOPÄÄTÖS:")
-for label, eta_M, eta_V, delta, delta_ok, eta_M_ok, eta_V_ok in [
-    ("1 välituki (KP360)", eta_M_comb1, eta_V_comb1, delta_comb1, delta_comb1 <= delta_lim_250, eta_M_comb1 <= 100, eta_V_comb1 <= 100),
-    ("2 välitukea (KP360)", eta_M_comb2, eta_V_comb2, delta_comb2, delta_comb2 <= delta_lim_250, eta_M_comb2 <= 100, eta_V_comb2 <= 100),
-    ("3 välitukea (KP360)", eta_M_comb3, eta_V_comb3, delta_comb3, delta_comb3 <= delta_lim_250, eta_M_comb3 <= 100, eta_V_comb3 <= 100),
-]:
-    all_ok = eta_M_ok and eta_V_ok and delta_ok
-    status = "✓" if all_ok else "✗"
-    fails = []
-    if not eta_M_ok: fails.append(f"taivutus {eta_M:.0f}%")
-    if not eta_V_ok: fails.append(f"leikkaus {eta_V:.0f}%")
-    if not delta_ok: fails.append(f"taipuma {delta:.1f}mm > {delta_lim_250:.0f}mm (L/250)")
-    detail = "  ".join(fails) if fails else "kaikki OK"
-    print(f"    {label}: η_M={eta_M:.0f}%  η_V={eta_V:.0f}%  δ={delta:.1f}mm/{delta_lim_250:.0f}mm  {status}  {detail}")
-print(f"    Vinotuki-kolmio (1 välituki): päätypalkki tuettu, KP360 vapaa ✓")
 print(dw)

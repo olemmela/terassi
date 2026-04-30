@@ -267,6 +267,7 @@
         "axis_start": {"x": 1200, "y": 1000, "z": 3250},
         "axis_end": {"x": 1200, "y": 2200, "z": 3250},
         "existing": true,
+        "section_rotation_deg": 12,
         "pattern": {
           "count": 6,
           "offset": {"x": 900, "y": 0, "z": 200},
@@ -301,7 +302,8 @@
         "id": "diag.45.left",
         "profile": "50x100",
         "axis_start": {"x": 340, "y": 1000, "z": 3050},
-        "axis_end": {"x": -400, "y": 2200, "z": 2900},
+        "axis_end": {"x": -380, "y": 2200, "z": 2900},
+        "section_rotation_deg": 12,
         "existing": true
       },
       {
@@ -309,13 +311,15 @@
         "profile": "50x100",
         "axis_start": {"x": 500, "y": 1000, "z": 3090},
         "axis_end": {"x": 300, "y": 2200, "z": 3050},
+        "section_rotation_deg": 12,
         "existing": true
       },
       {
         "id": "diag.45.right",
         "profile": "50x100",
         "axis_start": {"x": 6500, "y": 1000, "z": 4430},
-        "axis_end": {"x": 7600, "y": 2200, "z": 4670},
+        "axis_end": {"x": 7600, "y": 2190, "z": 4670},
+        "section_rotation_deg": 12,
         "existing": true
       },
       {
@@ -323,6 +327,7 @@
         "profile": "50x100",
         "axis_start": {"x": 6350, "y": 1000, "z": 4400},
         "axis_end": {"x": 6800, "y": 2200, "z": 4500},
+        "section_rotation_deg": 12,
         "existing": true
       }
     ]
@@ -408,6 +413,213 @@
         "beam.lp225.x7075"
       ],
       "at": {"x": 7075, "y": 1675, "z": 4133}
+    },
+    {
+      "id": "con.purlin.on.kp450.y900",
+      "type": "supported_on",
+      "members": [
+        "purlin.50x100",
+        "beam.kp450.y900"
+      ],
+      "at": {"x": 1200, "y": 1000, "z": 3250},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.purlin.on.kp360x2",
+      "type": "notched_over",
+      "members": [
+        "purlin.50x100",
+        "beam.kp360x2"
+      ],
+      "at": {"x": 1200, "y": 1675, "z": 3250},
+      "cuts": [
+        {
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
+          "depth_mm": 50,
+          "length_mm": 400
+        }
+      ],
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.purlin.rayst.left.0.on.kp450.wall",
+      "type": "continuous",
+      "members": [
+        "purlin.rayst.left.0",
+        "beam.kp450.wall"
+      ]
+    },
+    {
+      "id": "con.purlin.rayst.left.1.on.kp450.y900",
+      "type": "continuous",
+      "members": [
+        "purlin.rayst.left.1",
+        "beam.kp450.y900"
+      ]
+    },
+    {
+      "id": "con.purlin.rayst.right.0.on.kp450.wall",
+      "type": "continuous",
+      "members": [
+        "purlin.rayst.right.0",
+        "beam.kp450.wall"
+      ]
+    },
+    {
+      "id": "con.purlin.rayst.right.1.on.kp450.y900",
+      "type": "continuous",
+      "members": [
+        "purlin.rayst.right.1",
+        "beam.kp450.y900"
+      ]
+    },
+    {
+      "id": "con.diag.45.left.on.kp450.y900",
+      "type": "supported_on",
+      "members": [
+        "diag.45.left",
+        "beam.kp450.y900"
+      ],
+      "at": {"x": 340, "y": 1000, "z": 3050},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.45.left.on.kp360x2",
+      "type": "notched_over",
+      "members": [
+        "diag.45.left",
+        "beam.kp360x2"
+      ],
+      "at": {"x": -65, "y": 1675, "z": 2966},
+      "cuts": [
+        {
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
+          "depth_mm": 50,
+          "length_mm": 400
+        }
+      ],
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.67.left.on.kp450.y900",
+      "type": "supported_on",
+      "members": [
+        "diag.67.left",
+        "beam.kp450.y900"
+      ],
+      "at": {"x": 500, "y": 1000, "z": 3090},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.67.left.on.kp360x2",
+      "type": "notched_over",
+      "members": [
+        "diag.67.left",
+        "beam.kp360x2"
+      ],
+      "at": {"x": 388, "y": 1675, "z": 3068},
+      "cuts": [
+        {
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
+          "depth_mm": 50,
+          "length_mm": 400
+        }
+      ],
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.45.right.on.kp450.y900",
+      "type": "supported_on",
+      "members": [
+        "diag.45.right",
+        "beam.kp450.y900"
+      ],
+      "at": {"x": 6500, "y": 1000, "z": 4430},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.45.right.on.kp360x2",
+      "type": "notched_over",
+      "members": [
+        "diag.45.right",
+        "beam.kp360x2"
+      ],
+      "at": {"x": 7124, "y": 1675, "z": 4566},
+      "cuts": [
+        {
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
+          "depth_mm": 50,
+          "length_mm": 400
+        }
+      ],
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.67.right.on.kp450.y900",
+      "type": "supported_on",
+      "members": [
+        "diag.67.right",
+        "beam.kp450.y900"
+      ],
+      "at": {"x": 6350, "y": 1000, "z": 4400},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.diag.67.right.on.kp360x2",
+      "type": "notched_over",
+      "members": [
+        "diag.67.right",
+        "beam.kp360x2"
+      ],
+      "at": {"x": 6603, "y": 1675, "z": 4456},
+      "cuts": [
+        {
+          "kind": "bevel_notch",
+          "side": "bottom",
+          "reference": "axis_end",
+          "depth_mm": 50,
+          "length_mm": 400
+        }
+      ],
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
     },
     {
       "id": "con.hollow.0.on.house_wall",
@@ -639,7 +851,13 @@
         "beam.kp450.wall",
         "beam.kp450.y900",
         "beam.kp360x2",
-        "purlin.50x100"
+        "purlin.50x100",
+        "purlin.rayst.left",
+        "purlin.rayst.right",
+        "diag.45.left",
+        "diag.67.left",
+        "diag.45.right",
+        "diag.67.right"
       ],
       "placement": {
         "anchor": {"x": -400, "y": 0, "z": 2950},

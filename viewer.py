@@ -315,6 +315,7 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld" style="background:rgba(60,140,60,.6)"></div>Kattopinta</div>
       <div class="li"><div class="ld" style="background:rgba(150,130,100,.3)"></div>Viitepinta</div>
       <div class="li"><div class="ld" style="background:#ff4444;border-radius:50%"></div>Tuki (supported_on)</div>
+      <div class="li"><div class="ld" style="background:#66aaff;border-radius:50%"></div>Siirtolinkki (transfer_link)</div>
       <div class="li"><div class="ld" style="background:#66ccff;border-radius:50%"></div>Toistuva tuki (pattern)</div>
       <div class="li"><div class="ld" style="background:#66ffee;border-radius:50%"></div>Jatkuva liitos</div>
       <div class="li"><div class="ld" style="background:#ff66cc;border-radius:50%"></div>Loveus / leikkaus</div>
@@ -489,6 +490,7 @@ const CCOL = {
   supported_by_pattern: 0x66ccff,
   continuous: 0x66ffee,
   notched_over:  0xff66cc,
+  transfer_link: 0x66aaff,
   wall_bolted:   0xff8800,
   column_base:   0xffcc00,
   lateral_brace: 0xaa44ff,

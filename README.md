@@ -23,13 +23,19 @@ Laskee kuormat ja mitoitustarkistukset nykyiselle yksikalteiselle katokselle (ka
 - Lumikuorma (EN 1991-1-3, FI NA, vyöhyke II, `sk = 2,0 kN/m²`)
 - Tuulikuorma (EN 1991-1-4, nettopainekertoimet yksikalteiselle katokselle)
 - Kuormayhdistelmät EN 1990 kaavan 6.10 mukaan
+- `geometry/katos.json`:n pää- ja vino-orsien geometriasta luetut 50×100-orsien
+  tukipisteet KP450- ja KP360-palkeille sekä `rayst`-orsien jatkuvat KP450-sivuliitokset
+- Katon ulomman vyöhykkeen kuormansiirron KP360-palkille pää- ja vino-orsien
+  viivakuorman tukireaktioina, ei suorana tributäärikaistana
+- Pää- ja vino-orsien oman taivutus-, leikkaus-, taipuma- ja nettoh/lovi-tarkistuksen
+  `notched_over`-liitosten `bevel_notch`-metadatasta
+- `rayst`-orsien käsittelyn jatkuvana KP450-sivutukena, ei erillisenä jännepalkkina
 - Taivutus- ja leikkaustarkistukset (EN 1995-1-1, Kerto-S)
 - Lateraalinurjahdus (LTB) EN 1995-1-1 §6.3.3
 - Taipumatarkistus (SLS, L/300)
 - Huoltokuorma (EN 1991-1-1, kategoria H)
 - Tuulen nostokuorma ja kiinnitystarkistus
 - LP225×90-päätykannakkeen mitoitus
-- 2×KP360×51:n jäljellä oleva kapasiteetti laajennusta varten
 
 ---
 
@@ -67,6 +73,40 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_notch`, `rect_notch`)
 - Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
 - Pilarireaktiot ja nostotarpeet
+
+---
+
+### `terassilasitus_kuormituslaskenta_v2.py` – beam to beam -variantin kuormitus- ja liitoslaskenta
+
+Laskee `geometry/terassi_puu2.json`-vaihtoehdon kuormat ja mitoitustarkistukset,
+jossa uusi sisäpalkki `LP315×115` kulkee olemassa olevan `2×KP360×51`-palkin alla
+ja vasen reunakattotuoli tukeutuu olemassa olevaan `beam.lp225.x125`-palkkiin samalla
+kun sisäpalkin vasemman pään kuormaa siirretään KP360-palkille diskreeteillä
+kaistalevyliitoksilla.
+
+**Rakennejärjestelmä:**
+- Sisäkattotuolit `198×48` C24 y-suunnassa
+- Reunakattotuolit `LP225×115` GL30c y-suunnassa
+- Orret / purlins `98×48` C24 x-suunnassa reunakaistoille
+- Vinot nurkka- ja reunaorret `98×48` C24 kulma-alueilla
+- Sisäpalkki `LP315×115` (GL30c), ulkopalkki `LP225×115` (GL30c)
+- Olemassa oleva `LP225×90` vasemmalla reunatuella ja `2×KP360×51` siirtovyöhykkeen alla
+- Olemassa oleva `2×KP360×51` (Kerto-S LVL) mallinnettuna lisäkuormaa kantavana siirtopalkkina
+
+**Laskenta sisältää lisäksi:**
+- Sisäpalkin ja olemassa olevan `2×KP360×51`-palkin kytketyn 1D-beam-mallin
+- `transfer_link`-liitospisteistä luettujen kaistalevyjen jousijäykkyyden
+- Kaistalevyjen M12-pulttien ja puun reunapuristuksen kapasiteettitarkistukset
+- Kaistalevyjen teräslevyn in-plane shear -tarkistuksen
+- Siirtovyöhykkeen perusteella johdetun ekvivalentin vasemman tukipisteen ja
+  sisäpalkin efektiivisen jännevälin
+- Vasen reunakattotuoli → `beam.lp225.x125` ja oikea reunakattotuoli → `col.existing.inner.x7075`
+- Olemassa olevien `LP225×90`- ja `2×KP360×51`-palkkien combined-checkin
+  samoilla peruskuormilla kuin `kuormituslaskenta.py`
+- Geometriasta luetun sisäpalkin ainoan suoran pilarituen sekä vasemman pään
+  transfer_link-pohjaisen kuormansiirron existing-rungolle
+- Sisäpalkin `beam.inner.new` -> `beam.existing.kp360x2` sovitusloven
+  nettoh-tarkistuksen sekä transfer_linkien `h_net`-marginaalin lovialueella
 
 ---
 
@@ -133,6 +173,7 @@ on kuvattu yksiselitteisessä, LLM-ystävällisessä JSON-muodossa:
 - `geometry/katos.json` – nykyisen 12° katoksen geometria
 - `geometry/terassi.json` – lasitetun terassin geometria
 - `geometry/terassi_puu.json` – lopullisen puuratkaisun geometria
+- `geometry/terassi_puu2.json` – variantti beam-to-beam-siirtovyöhykkeellä
 - `geometry/portaikko.json` – portaikon katoksen geometria
 
 **Koordinaatisto:** yhteinen globaali origo talon ulkoseinän nurkassa
@@ -162,6 +203,13 @@ pistekuormana, viivakuormana vai osaviivakuormana; säännöt osoittavat
 kohdejäseniin eksplisiittisesti `member_refs`-listalla. Tämä on toistaiseksi
 otettu käyttöön lopullisen puurakenteen laskurissa
 `terassilasitus_kuormituslaskenta.py` tiedostolle `geometry/terassi_puu.json`.
+Lisäksi `connections` voi käyttää tyyppiä `transfer_link`, jonka `transfer`-aliosio
+kuvaa beam-to-beam -siirtolinkin (esim. kaistalevyn) geometrian ja kiinnityksen:
+`strip_width_mm`, `plate_height_mm`, `outer_plate_thickness_mm`,
+`inner_plate_thickness_mm`, `fastener_d_mm`, `fastener_grade` ja
+`fastener_count_per_member`. Tätä käyttää puu2-variantin laskuri
+`terassilasitus_kuormituslaskenta_v2.py` tiedostolle
+`geometry/terassi_puu2.json`.
 Kuormansiirron `reference` käyttää eksplisiittisiä jäsenviitteitä
 `axis_start` / `axis_end` tai tukiviitteitä `support_*`; `offset_mm` tulkitaan
 jäsenen paikallisen akselin suunnassa (positiivinen = `axis_start → axis_end`).
@@ -209,6 +257,7 @@ python -c "import json; from pathlib import Path; \
 ```bash
 python kuormituslaskenta.py
 python terassilasitus_kuormituslaskenta.py
+python terassilasitus_kuormituslaskenta_v2.py
 python terassilasitus_rakenne_vaihtoehdot.py
 python portaikko_kuormituslaskenta.py
 ```

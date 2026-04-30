@@ -265,6 +265,66 @@ def expanded_members(geo, group):
     return expanded
 
 
+def _connection_pattern_specs(geo):
+    specs = {}
+    for group in ("beams", "rafters", "purlins"):
+        for member_obj in geo.get("members", {}).get(group, []):
+            pattern = member_obj.get("pattern")
+            if not pattern:
+                continue
+            id_template = pattern.get("id_template", member_obj["id"] + ".{i}")
+            specs[member_obj["id"]] = {
+                "count": int(pattern["count"]),
+                "offset": dict(pattern["offset"]),
+                "id_template": id_template,
+                "first_instance_id": id_template.replace("{i}", "0"),
+            }
+    return specs
+
+
+def _should_expand_connection_member(connection_obj, pattern_member, spec):
+    # If the pattern root is also the first expanded ID (e.g. kattotuoli.0),
+    # an explicit connection may intentionally target only that one instance.
+    if pattern_member == spec["first_instance_id"] and pattern_member in connection_obj.get("id", ""):
+        return False
+    return True
+
+
+def expanded_connections(geo):
+    """Palauttaa connections-listan pattern-jäsenet yksittäisiksi instansseiksi laajennettuna."""
+    specs = _connection_pattern_specs(geo)
+    expanded = []
+    for connection_obj in geo.get("connections", []):
+        pattern_member = next(
+            (
+                member_id
+                for member_id in connection_obj.get("members", [])
+                if member_id in specs and _should_expand_connection_member(connection_obj, member_id, specs[member_id])
+            ),
+            None,
+        )
+        if pattern_member is None:
+            expanded.append(copy.deepcopy(connection_obj))
+            continue
+
+        spec = specs[pattern_member]
+        offset = spec["offset"]
+        id_template = spec["id_template"]
+        for i in range(spec["count"]):
+            clone = copy.deepcopy(connection_obj)
+            clone["id"] = f"{connection_obj['id']}.{i}"
+            clone["members"] = [
+                id_template.replace("{i}", str(i)) if member_id == pattern_member else member_id
+                for member_id in connection_obj["members"]
+            ]
+            if "at" in clone:
+                clone["at"]["x"] += offset["x"] * i
+                clone["at"]["y"] += offset["y"] * i
+                clone["at"]["z"] += offset["z"] * i
+            expanded.append(clone)
+    return expanded
+
+
 def profile_b(m):
     """Profiilin kokonaisleveys ottaen huomioon rinnakkaisten palkkien lukumäärän."""
     p = m["profile"]
