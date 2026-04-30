@@ -164,6 +164,24 @@ geometriasta `geometry/portaikko.json` (leveys 6 100 mm, kaltevuus 12° y-suunta
 
 ---
 
+### `beam_analysis.py` – Jaettu FE-palkkianalyysin ydinkirjasto
+
+Yhteinen Euler-Bernoulli-palkin FE-apurikerros laskureille. Sisältää
+lineaariratkaisijan, node refinement -apun, elementtikohtaiset viivakuormat,
+sisäisten voimien näytteistyksen sekä taipumalaskennan. Sama moduuli tukee
+sekä rotaatiojousia että kiinteitä kiertymärajoituksia.
+
+---
+
+### `timber_member_checks.py` – Jaetut puujäsenen poikkileikkaus- ja nettoh-tarkistukset
+
+Yhteinen apumoduuli puujäsenten poikkileikkausominaisuuksille, nettoh-/
+lovitarkistuksille ja momentin hallitsevan pisteen poiminnalle. Tätä käyttävät
+nyt `kuormituslaskenta.py`, `terassilasitus_kuormituslaskenta.py`,
+`terassilasitus_kuormituslaskenta_v2.py` ja `portaikko_kuormituslaskenta.py`.
+
+---
+
 ### `geometry/` – Rakennelmien geometria JSON-muodossa
 
 Laskelmien **geometria** (pilarit, palkit, kattotuolit, liitokset ja lasitukset)

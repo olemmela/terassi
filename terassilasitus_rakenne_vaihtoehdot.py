@@ -22,6 +22,7 @@ Kantavat rakenteet:
 
 import math
 
+from beam_analysis import solve_linear_system
 from geometry_loader import load, member, surface, reference, profile_b, profile_h
 
 
@@ -48,34 +49,6 @@ def tributary_widths_m(x_positions_mm, edge_start_mm, edge_end_mm):
         right_mm = edge_end_mm if i == len(x_positions_mm) - 1 else 0.5 * (x_mm + x_positions_mm[i + 1])
         widths.append((right_mm - left_mm) / 1000.0)
     return widths
-
-
-def solve_linear_system(A, b):
-    """Ratkaisee pienen tiheän lineaarisen yhtälöryhmän Gaussin eliminaatiolla."""
-    A = [row[:] for row in A]
-    b = b[:]
-    n = len(b)
-    for i in range(n):
-        pivot = max(range(i, n), key=lambda r: abs(A[r][i]))
-        if abs(A[pivot][i]) < 1e-12:
-            raise ValueError("Singular matrix in beam analysis")
-        if pivot != i:
-            A[i], A[pivot] = A[pivot], A[i]
-            b[i], b[pivot] = b[pivot], b[i]
-        pivot_val = A[i][i]
-        for j in range(i, n):
-            A[i][j] /= pivot_val
-        b[i] /= pivot_val
-        for r in range(n):
-            if r == i:
-                continue
-            factor = A[r][i]
-            if abs(factor) < 1e-18:
-                continue
-            for j in range(i, n):
-                A[r][j] -= factor * A[i][j]
-            b[r] -= factor * b[i]
-    return b
 
 
 def beam_support_reactions(beam_start_mm, beam_end_mm, support_xs_mm, point_loads):
