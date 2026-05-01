@@ -250,11 +250,27 @@ pistekuormana, viivakuormana vai osaviivakuormana; säännöt osoittavat
 kohdejäseniin eksplisiittisesti `member_refs`-listalla. Tämä on toistaiseksi
 otettu käyttöön lopullisen puurakenteen laskurissa
 `terassilasitus_kuormituslaskenta.py` tiedostolle `geometry/terassi_puu.json`.
+Lisäksi `connections[*].detail` voi kuvata fyysisen liitosdetaljin, jota ei
+vielä käytetä suoraan laskennassa. Tällä hetkellä käytössä on
+`plate_bracket`, jolla voidaan tallentaa esimerkiksi LP225×90-tuennan
+erilliset teräslevyt (`plates`) ja niiden reikä-/liitospisteet (`points`):
+kumpaan jäseneen latat on valettu (`host_member`), latan leveys/paksuus,
+näkyvä + upotettu pituus, levyjen poikittaisoffsetit tukikeskilinjasta sekä
+levykohtaiset pisteet.
+`viewer.py` näyttää ja piirtää nämä liitospisteen yhteyteen ilman että ne
+osallistuvat varsinaiseen kuormituslaskentaan.
 Lisäksi `connections` voi käyttää tyyppiä `transfer_link`, jonka `transfer`-aliosio
 kuvaa beam-to-beam -siirtolinkin (esim. kaistalevyn) geometrian ja kiinnityksen:
 `strip_width_mm`, `plate_height_mm`, `outer_plate_thickness_mm`,
 `inner_plate_thickness_mm`, `fastener_d_mm`, `fastener_grade` ja
-`fastener_count_per_member`. Tätä käyttää puu2-variantin laskuri
+`fastener_count_per_member`. Optionaalinen `fasteners`-lista voi lisäksi kuvata
+eksplisiittiset pulttipaikat suhteessa levyn keskipisteeseen (`offset_along_strip_mm`,
+`offset_height_mm`) ja mille jäsenelle kukin pultti kuuluu (`member_ref`).
+`viewer.py` näyttää nämä kaistalevyt nyt myös 3D-näkymässä itse levyinä ja
+pultit levyn läpi, ei vain liitospisteinä. Levyt ja transfer_link-pultit
+näkyvät aina, vaikka liitospisteiden näyttö olisi pois päältä; varsinaiset
+liitospistepallot seuraavat edelleen liitospistenäkymän kytkintä. Myös
+`plate_bracket`-detailien pultti-/reikämarkerit näkyvät aina. Tätä käyttää puu2-variantin laskuri
 `terassilasitus_kuormituslaskenta_v2.py` tiedostolle
 `geometry/terassi_puu2.json`.
 Kuormansiirron `reference` käyttää eksplisiittisiä jäsenviitteitä

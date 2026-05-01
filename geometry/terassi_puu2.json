@@ -382,7 +382,35 @@
         "beam.lp225.x125",
         "col.existing.inner.x125"
       ],
-      "at": {"x": 125, "y": 1675, "z": 2350}
+      "at": {"x": 125, "y": 1675, "z": 2350},
+      "detail": {
+        "kind": "plate_bracket",
+        "host_member": "support_member",
+        "plate_width_mm": 100,
+        "plate_thickness_mm": 10,
+        "visible_length_mm": 150,
+        "embedded_length_mm": 600,
+        "plates": [
+          {"id": "plate.0", "offset_across_center_mm": -55},
+          {"id": "plate.1", "offset_across_center_mm": 55}
+        ],
+        "points": [
+          {
+            "id": "hole.0",
+            "kind": "hole_center",
+            "plate_id": "plate.0",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          },
+          {
+            "id": "hole.1",
+            "kind": "hole_center",
+            "plate_id": "plate.1",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          }
+        ]
+      }
     },
     {
       "id": "con.kattotuoli.vasen.on.lp225.x125",
@@ -789,7 +817,11 @@
         "inner_plate_thickness_mm": 5,
         "fastener_d_mm": 12,
         "fastener_grade": "8.8",
-        "fastener_count_per_member": 2
+        "fastener_count_per_member": 1,
+        "fasteners": [
+          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
+          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
+        ]
       }
     },
     {
@@ -809,7 +841,11 @@
         "inner_plate_thickness_mm": 5,
         "fastener_d_mm": 12,
         "fastener_grade": "8.8",
-        "fastener_count_per_member": 2
+        "fastener_count_per_member": 1,
+        "fasteners": [
+          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
+          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
+        ]
       }
     },
     {
@@ -829,7 +865,11 @@
         "inner_plate_thickness_mm": 5,
         "fastener_d_mm": 12,
         "fastener_grade": "8.8",
-        "fastener_count_per_member": 2
+        "fastener_count_per_member": 1,
+        "fasteners": [
+          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
+          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
+        ]
       }
     },
     {
@@ -849,7 +889,11 @@
         "inner_plate_thickness_mm": 5,
         "fastener_d_mm": 12,
         "fastener_grade": "8.8",
-        "fastener_count_per_member": 2
+        "fastener_count_per_member": 1,
+        "fasteners": [
+          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
+          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
+        ]
       }
     },
     {

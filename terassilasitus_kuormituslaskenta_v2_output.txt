@@ -19,7 +19,7 @@
   Ulkopalkin tuet               x = 125 / 3600 / 7075 mm
   Sisäpalkin suorat tuet        x = 6950 mm
   KP360-siirtolinkit            4 kpl @ x = 290 / 490 / 690 / 890 mm
-  Kaistalevy / pultitus         ulko 10 mm + sisa 5 mm, 80 × 280 mm, 2 × M12 8.8 / jasen
+  Kaistalevy / pultitus         ulko 10 mm + sisa 5 mm, 80 × 280 mm, 1 × M12 8.8 / jasen
 
 ── KUORMAT ───────────────────────────────────────────────────────
   Paneelit                      7×2 = 14 kpl, 3.43 kN
@@ -151,30 +151,30 @@
 ── SISÄPALKKI LP315x115 ─────────────────────────────────────
   MRd = 36.51 kNm,  VRd = 54.10 kN
   Hallitseva tapaus             ULS A
-  Md,max                        23.38 kNm @ x = 4156 mm
-  Vd,max                        15.57 kN
-  Pilarireaktiot suorilla tuilla  10.63 kN @ x = 6950 mm
+  Md,max                        24.35 kNm @ x = 4156 mm
+  Vd,max                        15.22 kN
+  Pilarireaktiot suorilla tuilla  10.98 kN @ x = 6950 mm
   Aktiiviset omat tuet          x = 6950 mm
-  Ekvivalentti vasen tukipiste  x ≈ 832 mm  ->  L_eff ≈ 6118 mm
-  Siirtyvä voima 2xKP360x51:lle   25.32 kN
-  Taipuma SLS / DRIFT           14.74 / 16.30 / 20.4 mm  OK ✓
+  Ekvivalentti vasen tukipiste  x ≈ 825 mm  ->  L_eff ≈ 6125 mm
+  Siirtyvä voima 2xKP360x51:lle   20.76 kN
+  Taipuma SLS / DRIFT           15.59 / 17.23 / 20.4 mm  OK ✓
   Sovituslovi beam.existing.kp360x2:lla  top 180 × 800 mm, h_net,min = 135 mm @ x = 170 mm
-  Loven nettoh-tarkistus        ULS A, V_netto = 32.5% @ x = 290 mm
-  Tulos                         η_M = 64.0%,  η_V = 28.8%,  η_lovi = 32.5%  OK ✓
+  Loven nettoh-tarkistus        ULS A, V_netto = 29.9% @ x = 890 mm
+  Tulos                         η_M = 66.7%,  η_V = 28.1%,  η_lovi = 29.9%  OK ✓
 
 ── SIIRTOVYÖHYKE LP315x115 -> 2xKP360x51 ─────────────────
   Hallitseva tapaus             ULS A
-  Siirtyvä voima yhteensa       25.32 kN
-  Ekvivalentti vasen tukipiste  x = 832 mm  ->  L_eff = 6118 mm
-  Kriittinen kaistalevy         Kaistalevy 4 / 4, Fd = 17.93 kN, η_fast = 15.9%, η_levy = 7.3%
+  Siirtyvä voima yhteensa       20.76 kN
+  Ekvivalentti vasen tukipiste  x = 825 mm  ->  L_eff = 6125 mm
+  Kriittinen kaistalevy         Kaistalevy 4 / 4, Fd = 14.06 kN, η_fast = 24.9%, η_levy = 5.7%
   Lovialueen pienin h_net/linkki Kaistalevy 1 / 4, h_net = 162 mm, levy = 280 mm, Δh = -118 mm  YLITTYY ✗
 
   ID                             x        k       Fd    η_fast    η_levy   h_net      Δh   M12/tarve
   ------------------------- ------ -------- -------- --------- --------- ------- ------- -----------
-  Kaistalevy 1 / 4             290    11.31     9.00      8.0%      3.7%     162    -118    2/    1
-  Kaistalevy 2 / 4             490    11.31     1.43      1.3%      0.6%     207     -73    2/    1
-  Kaistalevy 3 / 4             690    11.31     7.39      6.5%      3.0%     252     -28    2/    1
-  Kaistalevy 4 / 4             890    11.31    17.93     15.9%      7.3%     297     +17    2/    1
+  Kaistalevy 1 / 4             290     5.65     6.22     11.0%      2.5%     162    -118    1/    1
+  Kaistalevy 2 / 4             490     5.65     0.00      0.0%      0.0%     207     -73    1/    1
+  Kaistalevy 3 / 4             690     5.65     6.70     11.9%      2.7%     252     -28    1/    1
+  Kaistalevy 4 / 4             890     5.65    14.06     24.9%      5.7%     297     +17    1/    1
 
 ── OLEMASSA OLEVA LP225x90 @ x125 ───────────────────────
   Hallitseva tapaus             ULS A
@@ -186,11 +186,11 @@
 ── OLEMASSA OLEVA 2xKP360x51 (vanha katos + puu2) ───────────────
   MRd = 64.63 kNm,  VRd = 73.44 kN
   Hallitseva tapaus             ULS A
-  Md,max                        29.71 kNm @ x = 3000 mm
-  Vd,max                        32.94 kN
-  Pilarireaktiot yhteensa       26.76 / 16.59 kN
-  Taipuma SLS / DRIFT           16.87 / 23.2 mm  OK ✓
-  Tulos                         η_M = 56.6%,  η_V = 55.2%,  η_LTB = 56.6%  OK ✓
+  Md,max                        28.32 kNm @ x = 3000 mm
+  Vd,max                        30.15 kN
+  Pilarireaktiot yhteensa       26.75 / 16.25 kN
+  Taipuma SLS / DRIFT           16.02 / 23.2 mm  OK ✓
+  Tulos                         η_M = 53.9%,  η_V = 50.5%,  η_LTB = 53.9%  OK ✓
 
 ── PILARIKUORMAT JA NOSTO ───────────────────────────────────────
   Ulkopalkin reaktiot ULS A / UPLIFT [kN]:
@@ -198,18 +198,18 @@
     x = 3600 mm               25.48 /  -5.05
     x = 7075 mm               15.36 /  -2.94
   Sisäpalkin reaktiot ULS A / UPLIFT [kN]:
-    x = 6950 mm               10.63 /  -1.66
+    x = 6950 mm               10.98 /  -1.73
   KP360 yhteisreaktiot ULS A / UPLIFT [kN]:
-    x =  125 mm               26.76 /  -3.16
-    x = 7075 mm               16.59 /  -1.58
+    x =  125 mm               26.75 /  -3.16
+    x = 7075 mm               16.25 /  -1.52
   LP225 x125 pilarireaktio ULS DRIFT / UPLIFT [kN]: 13.73 / -2.48
   LP225 x7075 perusreaktio ULS DRIFT / UPLIFT [kN]: 4.87 / -0.44
   Sisatukien kokonaiskuormat ULS DRIFT / UPLIFT [kN]:
-    x =  125 mm               39.86 /  -5.64
-    x = 7075 mm               45.41 /  -5.68
+    x =  125 mm               39.85 /  -5.64
+    x = 7075 mm               45.42 /  -5.68
   Suurin ulkopilaripuristus         25.48 kN
   Suurin ulkopilarin nostotarve     5.05 kN
-  Suurin sisatukipuristus           45.41 kN
+  Suurin sisatukipuristus           45.42 kN
   Suurin sisatuen nostotarve        5.68 kN
 
 ── KOKONAISPILARIKUORMAT TERASSIN JALKEEN ───────────────────────
@@ -223,7 +223,7 @@
 
   Pilari                 Ryhma          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
-  col.x125               sisäpilari     34.43     53.97      2.54  Puristus 2.54 kN  OK ✓
+  col.x125               sisäpilari     34.43     53.96      2.55  Puristus 2.55 kN  OK ✓
   col.x7075              sisäpilari     40.50     60.90      4.64  Puristus 4.64 kN  OK ✓
   col.x125.outer.bottom  ulkopilari     47.44     68.56     22.23  Puristus 22.23 kN  OK ✓
   col.x3600.outer.bottom ulkopilari     87.06    125.59     39.80  Puristus 39.80 kN  OK ✓

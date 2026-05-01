@@ -514,6 +514,9 @@ const REFERENCE_LABELS = {
 };
 const HIGHLIGHT_MEMBER_COLOR = 0xffee66;
 const SUPPORT_LINE_SHIFT_COLOR = 0x99ff33;
+const CONNECTION_DETAIL_PLATE_COLOR = 0xb0b7c3;
+const CONNECTION_DETAIL_POINT_COLOR = 0xffe066;
+const CONNECTION_DETAIL_BOLT_COLOR = 0xf7c948;
 
 // ── Scene groups (yksi per ladattu geometria) ─────────────────────────────────
 const geoGroups = new Map(); // name → THREE.Group
@@ -637,6 +640,45 @@ function connectionTooltipLines(con) {
     }
     const springSummary = rotationSpringSummary(analysis);
     if (springSummary) lines.push(`rotaatio: ${springSummary}`);
+  }
+  const transfer = con.transfer;
+  if (con.type === 'transfer_link' && transfer) {
+    if (transfer.description) lines.push(`selite: ${transfer.description}`);
+    const plateParts = [];
+    if ((transfer.outer_plate_thickness_mm ?? 0) > 0) plateParts.push(`ulko ${transfer.outer_plate_thickness_mm} mm`);
+    if ((transfer.inner_plate_thickness_mm ?? 0) > 0) plateParts.push(`sisa ${transfer.inner_plate_thickness_mm} mm`);
+    if (plateParts.length) lines.push(`kaistalevyt: ${plateParts.join(' + ')}`);
+    lines.push(`levykoko: ${transfer.strip_width_mm} x ${transfer.plate_height_mm} mm`);
+    lines.push(`pultitus: ${transfer.fastener_count_per_member} x M${transfer.fastener_d_mm} ${transfer.fastener_grade} / jasen`);
+    if (Array.isArray(transfer.fasteners) && transfer.fasteners.length) {
+      lines.push(`pulttipaikat: ${transfer.fasteners.length} kpl`);
+    }
+  }
+  const detail = con.detail;
+  if (detail?.kind === 'plate_bracket') {
+    const hostMember = detail.host_member === 'support_member'
+      ? 'tuessa'
+      : 'kannatetussa jäsenessä';
+    lines.push(`liitosdetaili: levykannake (${hostMember})`);
+    lines.push(`latat: ${detail.plates?.length ?? 0} x ${detail.plate_width_mm}x${detail.plate_thickness_mm} mm`);
+    lines.push(`näkyvä / upotus: ${detail.visible_length_mm} + ${detail.embedded_length_mm} mm`);
+    if ((detail.plates?.length ?? 0) === 2) {
+      const sortedOffsets = [...detail.plates]
+        .map(plate => Number(plate.offset_across_center_mm ?? 0))
+        .sort((a, b) => a - b);
+      const derivedGapMm = sortedOffsets[1] - sortedOffsets[0] - detail.plate_thickness_mm;
+      lines.push(`laskennallinen vapaa väli: ${derivedGapMm} mm`);
+    }
+    for (const plate of detail.plates ?? []) {
+      lines.push(`  levy ${plate.id}: offset ${plate.offset_across_center_mm ?? 0} mm`);
+    }
+    for (const point of detail.points ?? []) {
+      const diameter = point.diameter_mm != null ? `d${point.diameter_mm}` : point.kind;
+      lines.push(
+        `  piste ${point.id}: ${point.plate_id}, ${diameter}, ` +
+        `${point.distance_from_visible_end_mm} mm näkyvästä päästä`
+      );
+    }
   }
   const cuts = connectionCuts(con);
   if (cuts.length) lines.push(`cuts: ${cuts.map(cut => cutLabel(cut)).join(', ')}`);
@@ -928,6 +970,296 @@ function projectedMemberHalfExtent(memberInfo, axisDir) {
   return Math.abs(dir.dot(frame.dir)) * halfLen
     + Math.abs(dir.dot(frame.yAx)) * (boxH / 2)
     + Math.abs(dir.dot(frame.zAx)) * (boxB / 2);
+}
+
+function transferLinkVisualGeometry(con, memberIndex) {
+  if (!con.at || con.type !== 'transfer_link' || !con.transfer) return null;
+  const memberA = con.members?.[0] ? memberIndex.get(con.members[0]) : null;
+  const memberB = con.members?.[1] ? memberIndex.get(con.members[1]) : null;
+  if (!memberA || !memberB) return null;
+
+  const frameA = memberFrame(memberA.start3, memberA.end3, memberA.sectionRotationDeg);
+  const frameB = memberFrame(memberB.start3, memberB.end3, memberB.sectionRotationDeg);
+  if (!frameA || !frameB) return null;
+
+  const [, widthA] = memberSectionDims(memberA.profile);
+  const [, widthB] = memberSectionDims(memberB.profile);
+  const referenceMember = (widthA ?? 0) >= (widthB ?? 0) ? memberA : memberB;
+  const referenceFrame = referenceMember === memberA ? frameA : frameB;
+  const referenceWidthMm = Math.max(widthA ?? 0, widthB ?? 0);
+  if (referenceWidthMm <= 1e-9) return null;
+
+  const anchor = pt(con.at);
+  return {
+    anchor,
+    axisDir: referenceFrame.dir.clone(),
+    heightAxis: referenceFrame.yAx.clone(),
+    normalAxis: referenceFrame.zAx.clone(),
+    faceOffsetMm: referenceWidthMm / 2,
+    referenceMemberId: referenceMember.member?.id ?? null,
+  };
+}
+
+function addTransferLinkVisuals(g, pk, con, memberIndex, tooltipLines) {
+  const geom = transferLinkVisualGeometry(con, memberIndex);
+  if (!geom) return;
+  const transfer = con.transfer;
+  const plateSpecs = [
+    { key: 'outer', thicknessMm: Number(transfer.outer_plate_thickness_mm ?? 0), sign: 1 },
+    { key: 'inner', thicknessMm: Number(transfer.inner_plate_thickness_mm ?? 0), sign: -1 },
+  ].filter(spec => spec.thicknessMm > 1e-9);
+  if (!plateSpecs.length) return;
+
+  const detailUserData = {
+    id: con.id,
+    kind: `${con.type ?? 'connection'} / detail`,
+    _geoName: g.userData.geoName,
+    _isAlwaysVisibleConnectionDetail: true,
+    tooltipLines,
+  };
+  const markerUserData = {
+    id: con.id,
+    kind: `${con.type ?? 'connection'} / detail`,
+    _geoName: g.userData.geoName,
+    _isConnectionMarker: true,
+    tooltipLines,
+  };
+  const plateQuat = new THREE.Quaternion().setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(geom.axisDir, geom.heightAxis, geom.normalAxis)
+  );
+  for (const spec of plateSpecs) {
+    const plateGeo = new THREE.BoxGeometry(
+      Number(transfer.strip_width_mm ?? 0),
+      Number(transfer.plate_height_mm ?? 0),
+      spec.thicknessMm
+    );
+    const plateCenter = geom.anchor.clone().add(
+      geom.normalAxis.clone().multiplyScalar(spec.sign * (geom.faceOffsetMm + spec.thicknessMm / 2))
+    );
+
+    const plateMesh = new THREE.Mesh(
+      plateGeo,
+      new THREE.MeshBasicMaterial({
+        color: CONNECTION_DETAIL_PLATE_COLOR,
+        transparent: true,
+        opacity: 0.42,
+        depthWrite: false,
+      })
+    );
+    plateMesh.position.copy(plateCenter);
+    plateMesh.quaternion.copy(plateQuat);
+    plateMesh.visible = true;
+    plateMesh.userData = { ...detailUserData, id: `${con.id}.${spec.key}` };
+    g.add(plateMesh);
+    pk.push(plateMesh);
+
+    const plateEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(plateGeo),
+      new THREE.LineBasicMaterial({
+        color: CCOL.transfer_link ?? CONNECTION_DETAIL_PLATE_COLOR,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      })
+    );
+    plateEdges.position.copy(plateCenter);
+    plateEdges.quaternion.copy(plateQuat);
+    plateEdges.visible = true;
+    plateEdges.userData = { ...detailUserData, id: `${con.id}.${spec.key}.edges` };
+    g.add(plateEdges);
+    pk.push(plateEdges);
+  }
+
+  const fasteners = Array.isArray(transfer.fasteners) ? transfer.fasteners : [];
+  if (!fasteners.length) return;
+  const outerFaceMm = Number(transfer.outer_plate_thickness_mm ?? 0) > 1e-9
+    ? geom.faceOffsetMm + Number(transfer.outer_plate_thickness_mm ?? 0) / 2
+    : geom.faceOffsetMm;
+  const innerFaceMm = Number(transfer.inner_plate_thickness_mm ?? 0) > 1e-9
+    ? -(geom.faceOffsetMm + Number(transfer.inner_plate_thickness_mm ?? 0) / 2)
+    : -geom.faceOffsetMm;
+  const boltLengthMm = outerFaceMm - innerFaceMm;
+  const boltCenterShiftMm = 0.5 * (outerFaceMm + innerFaceMm);
+  const boltQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), geom.normalAxis);
+  for (const fastener of fasteners) {
+    const diameterMm = Number(fastener.diameter_mm ?? transfer.fastener_d_mm ?? 0);
+    if (diameterMm <= 1e-9) continue;
+    const boltCenter = geom.anchor.clone()
+      .add(geom.axisDir.clone().multiplyScalar(Number(fastener.offset_along_strip_mm ?? 0)))
+      .add(geom.heightAxis.clone().multiplyScalar(Number(fastener.offset_height_mm ?? 0)))
+      .add(geom.normalAxis.clone().multiplyScalar(boltCenterShiftMm));
+    const boltMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(diameterMm / 2, diameterMm / 2, boltLengthMm, 14),
+      new THREE.MeshBasicMaterial({
+        color: CONNECTION_DETAIL_BOLT_COLOR,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      })
+    );
+    boltMesh.position.copy(boltCenter);
+    boltMesh.quaternion.copy(boltQuat);
+    boltMesh.visible = true;
+    boltMesh.userData = { ...detailUserData, id: `${con.id}.fastener.${fastener.id}` };
+    g.add(boltMesh);
+    pk.push(boltMesh);
+  }
+}
+
+function closestMemberEnd(memberInfo, point3) {
+  const axisPoint = projectPointToLine(point3, memberInfo.start3, memberInfo.end3);
+  return axisPoint.distanceToSquared(memberInfo.start3) <= axisPoint.distanceToSquared(memberInfo.end3)
+    ? 'axis_start'
+    : 'axis_end';
+}
+
+function plateBracketSupportGeometry(con, memberIndex) {
+  if (!con.at) return null;
+  const detail = con.detail;
+  const hostIndex = detail?.host_member === 'support_member' ? 1 : 0;
+  const otherIndex = hostIndex === 0 ? 1 : 0;
+  const hostInfo = con.members?.[hostIndex] ? memberIndex.get(con.members[hostIndex]) : null;
+  const otherInfo = con.members?.[otherIndex] ? memberIndex.get(con.members[otherIndex]) : null;
+  if (!hostInfo || !otherInfo) return null;
+  const anchor = pt(con.at);
+  const hostFrame = memberFrame(hostInfo.start3, hostInfo.end3, hostInfo.sectionRotationDeg);
+  const otherFrame = memberFrame(otherInfo.start3, otherInfo.end3, otherInfo.sectionRotationDeg);
+  if (!hostFrame || !otherFrame) return null;
+
+  const hostEnd = closestMemberEnd(hostInfo, anchor);
+  const hostFace = hostEnd === 'axis_end'
+    ? hostInfo.end3.clone()
+    : hostInfo.start3.clone();
+  const plateAxisDir = hostEnd === 'axis_end'
+    ? hostFrame.dir.clone()
+    : hostFrame.dir.clone().negate();
+
+  let plateWidthAxis = otherFrame.dir.clone().projectOnPlane(plateAxisDir);
+  if (plateWidthAxis.lengthSq() < 1e-8) {
+    plateWidthAxis = otherFrame.yAx.clone().projectOnPlane(plateAxisDir);
+  }
+  if (plateWidthAxis.lengthSq() < 1e-8) {
+    plateWidthAxis = new THREE.Vector3(1, 0, 0).projectOnPlane(plateAxisDir);
+  }
+  if (plateWidthAxis.lengthSq() < 1e-8) return null;
+  plateWidthAxis.normalize();
+
+  let plateThicknessAxis = new THREE.Vector3().crossVectors(plateAxisDir, plateWidthAxis);
+  if (plateThicknessAxis.lengthSq() < 1e-8) {
+    plateThicknessAxis = otherFrame.zAx.clone().projectOnPlane(plateAxisDir);
+  }
+  if (plateThicknessAxis.lengthSq() < 1e-8) return null;
+  plateThicknessAxis.normalize();
+  if (plateThicknessAxis.dot(otherFrame.zAx) < 0) {
+    plateWidthAxis.negate();
+    plateThicknessAxis.negate();
+  }
+
+  return {
+    hostFace,
+    plateAxisDir,
+    plateWidthAxis,
+    plateThicknessAxis,
+  };
+}
+
+function plateBracketPlateCenter(detail, plate, supportGeom) {
+  const axisShiftMm = (detail.visible_length_mm - detail.embedded_length_mm) / 2;
+  return supportGeom.hostFace.clone()
+    .add(supportGeom.plateAxisDir.clone().multiplyScalar(axisShiftMm))
+    .add(supportGeom.plateThicknessAxis.clone().multiplyScalar(Number(plate.offset_across_center_mm ?? 0)));
+}
+
+function plateBracketPointPosition(detail, plate, point, supportGeom) {
+  const alongMm = detail.visible_length_mm - (point.distance_from_visible_end_mm ?? 0);
+  return supportGeom.hostFace.clone()
+    .add(supportGeom.plateAxisDir.clone().multiplyScalar(alongMm))
+    .add(supportGeom.plateThicknessAxis.clone().multiplyScalar(
+      Number(plate.offset_across_center_mm ?? 0) + (point.offset_across_plate_mm ?? 0)
+    ))
+    .add(supportGeom.plateWidthAxis.clone().multiplyScalar(point.offset_vertical_mm ?? 0));
+}
+
+function addPlateBracketVisuals(g, pk, con, memberIndex, tooltipLines) {
+  const detail = con.detail;
+  if (detail?.kind !== 'plate_bracket' || !con.at) return;
+  const supportGeom = plateBracketSupportGeometry(con, memberIndex);
+  if (!supportGeom) return;
+
+  const detailUserData = {
+    id: con.id,
+    kind: `${con.type ?? 'connection'} / detail`,
+    _geoName: g.userData.geoName,
+    _isAlwaysVisibleConnectionDetail: true,
+    tooltipLines,
+  };
+  const plateQuat = new THREE.Quaternion().setFromRotationMatrix(
+    new THREE.Matrix4().makeBasis(
+      supportGeom.plateAxisDir,
+      supportGeom.plateWidthAxis,
+      supportGeom.plateThicknessAxis
+    )
+  );
+  const plateLengthMm = detail.visible_length_mm + detail.embedded_length_mm;
+  for (const plate of detail.plates ?? []) {
+    const plateGeo = new THREE.BoxGeometry(
+      plateLengthMm,
+      detail.plate_width_mm,
+      detail.plate_thickness_mm
+    );
+    const plateMesh = new THREE.Mesh(
+      plateGeo,
+      new THREE.MeshBasicMaterial({
+        color: CONNECTION_DETAIL_PLATE_COLOR,
+        transparent: true,
+        opacity: 0.38,
+        depthWrite: false,
+      })
+    );
+    plateMesh.position.copy(plateBracketPlateCenter(detail, plate, supportGeom));
+    plateMesh.quaternion.copy(plateQuat);
+    plateMesh.visible = true;
+    plateMesh.userData = { ...detailUserData };
+    g.add(plateMesh);
+    pk.push(plateMesh);
+
+    const plateEdges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(plateGeo),
+      new THREE.LineBasicMaterial({
+        color: CONNECTION_DETAIL_PLATE_COLOR,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      })
+    );
+    plateEdges.position.copy(plateMesh.position);
+    plateEdges.quaternion.copy(plateQuat);
+    plateEdges.visible = true;
+    plateEdges.userData = { ...detailUserData };
+    g.add(plateEdges);
+    pk.push(plateEdges);
+  }
+
+  const plateById = new Map((detail.plates ?? []).map(plate => [plate.id, plate]));
+  for (const point of detail.points ?? []) {
+    const plate = plateById.get(point.plate_id);
+    if (!plate) continue;
+    const radiusMm = Math.max(10, (point.diameter_mm ?? 20) / 2);
+    const pointMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(radiusMm, 12, 10),
+      new THREE.MeshBasicMaterial({
+        color: CONNECTION_DETAIL_POINT_COLOR,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false,
+      })
+    );
+    pointMesh.position.copy(plateBracketPointPosition(detail, plate, point, supportGeom));
+    pointMesh.visible = true;
+    pointMesh.userData = { ...detailUserData };
+    g.add(pointMesh);
+    pk.push(pointMesh);
+  }
 }
 
 function connectionCuts(con) {
@@ -1370,21 +1702,26 @@ function addConnections(g, pk, connections, memberIndex) {
     if (!con.at) continue;
     const col = CCOL[con.type] ?? 0xffffff;
     const tooltipLines = connectionTooltipLines(con);
-    const mesh = new THREE.Mesh(
-      sphereGeo,
-      new THREE.MeshBasicMaterial({ color: col })
-    );
-    mesh.position.copy(pt(con.at));
-    mesh.visible = showConnectionMarkers;
-    mesh.userData = {
-      id: con.id,
-      kind: con.type ?? 'connection',
-      _geoName: g.userData.geoName,
-      _isConnectionMarker: true,
-      tooltipLines,
-    };
-    g.add(mesh);
-    pk.push(mesh);
+    const isTransferLinkDetail = con.type === 'transfer_link' && !!con.transfer;
+    if (!isTransferLinkDetail) {
+      const mesh = new THREE.Mesh(
+        sphereGeo,
+        new THREE.MeshBasicMaterial({ color: col })
+      );
+      mesh.position.copy(pt(con.at));
+      mesh.visible = showConnectionMarkers;
+      mesh.userData = {
+        id: con.id,
+        kind: con.type ?? 'connection',
+        _geoName: g.userData.geoName,
+        _isConnectionMarker: true,
+        tooltipLines,
+      };
+      g.add(mesh);
+      pk.push(mesh);
+    }
+    addTransferLinkVisuals(g, pk, con, memberIndex, tooltipLines);
+    addPlateBracketVisuals(g, pk, con, memberIndex, tooltipLines);
     addConnectionAnalysisVisuals(g, pk, con, memberIndex, tooltipLines);
     if (con.type === 'notched_over') {
       const cuts = connectionCuts(con);

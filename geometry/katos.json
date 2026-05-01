@@ -362,7 +362,35 @@
         "beam.lp225.x125",
         "col.x125"
       ],
-      "at": {"x": 125, "y": 1675, "z": 2350}
+      "at": {"x": 125, "y": 1675, "z": 2350},
+      "detail": {
+        "kind": "plate_bracket",
+        "host_member": "support_member",
+        "plate_width_mm": 100,
+        "plate_thickness_mm": 10,
+        "visible_length_mm": 150,
+        "embedded_length_mm": 600,
+        "plates": [
+          {"id": "plate.0", "offset_across_center_mm": -55},
+          {"id": "plate.1", "offset_across_center_mm": 55}
+        ],
+        "points": [
+          {
+            "id": "hole.0",
+            "kind": "hole_center",
+            "plate_id": "plate.0",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          },
+          {
+            "id": "hole.1",
+            "kind": "hole_center",
+            "plate_id": "plate.1",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          }
+        ]
+      }
     },
     {
       "id": "con.lp225.x7075.on.col",
@@ -371,7 +399,35 @@
         "beam.lp225.x7075",
         "col.x7075"
       ],
-      "at": {"x": 7075, "y": 1675, "z": 3900}
+      "at": {"x": 7075, "y": 1675, "z": 3900},
+      "detail": {
+        "kind": "plate_bracket",
+        "host_member": "support_member",
+        "plate_width_mm": 100,
+        "plate_thickness_mm": 10,
+        "visible_length_mm": 150,
+        "embedded_length_mm": 600,
+        "plates": [
+          {"id": "plate.0", "offset_across_center_mm": -55},
+          {"id": "plate.1", "offset_across_center_mm": 55}
+        ],
+        "points": [
+          {
+            "id": "hole.0",
+            "kind": "hole_center",
+            "plate_id": "plate.0",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          },
+          {
+            "id": "hole.1",
+            "kind": "hole_center",
+            "plate_id": "plate.1",
+            "diameter_mm": 20,
+            "distance_from_visible_end_mm": 50
+          }
+        ]
+      }
     },
     {
       "id": "con.kp450y900.on.lp.x125",

@@ -191,6 +191,7 @@
         "spacing_mm": { "type": "number" },
         "analysis":   { "$ref": "#/$defs/connection_analysis" },
         "transfer":   { "$ref": "#/$defs/transfer_link" },
+        "detail":     { "$ref": "#/$defs/connection_detail" },
         "notch":      { "$ref": "#/$defs/notch" },
         "cuts": {
           "type": "array",
@@ -298,6 +299,30 @@
       "enum": ["4.6", "5.8", "8.8", "10.9"]
     },
 
+    "transfer_link_fastener_member_ref": {
+      "type": "string",
+      "enum": ["member_a", "member_b"]
+    },
+
+    "transfer_link_fastener": {
+      "type": "object",
+      "required": [
+        "id",
+        "member_ref",
+        "offset_along_strip_mm",
+        "offset_height_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "member_ref": { "$ref": "#/$defs/transfer_link_fastener_member_ref" },
+        "offset_along_strip_mm": { "type": "number" },
+        "offset_height_mm": { "type": "number" },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "label": { "type": "string" }
+      }
+    },
+
     "transfer_link": {
       "type": "object",
       "required": [
@@ -320,8 +345,105 @@
         "inner_plate_thickness_mm": { "type": "number", "minimum": 0 },
         "fastener_d_mm":            { "type": "number", "exclusiveMinimum": 0 },
         "fastener_grade":           { "$ref": "#/$defs/bolt_grade" },
-        "fastener_count_per_member": { "type": "integer", "minimum": 1 }
+        "fastener_count_per_member": { "type": "integer", "minimum": 1 },
+        "fasteners": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transfer_link_fastener" }
+        }
       }
+    },
+
+    "connection_detail_host_member": {
+      "type": "string",
+      "enum": ["supported_member", "support_member"]
+    },
+
+    "detail_plate": {
+      "type": "object",
+      "required": [
+        "id",
+        "offset_across_center_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "offset_across_center_mm": { "type": "number" },
+        "label": { "type": "string" }
+      }
+    },
+
+    "detail_point_kind": {
+      "type": "string",
+      "enum": ["hole_center", "connection_point"]
+    },
+
+    "detail_point": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "plate_id",
+        "distance_from_visible_end_mm"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "$ref": "#/$defs/detail_point_kind" },
+        "plate_id": { "type": "string" },
+        "label": { "type": "string" },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "distance_from_visible_end_mm": { "type": "number", "minimum": 0 },
+        "offset_across_plate_mm": { "type": "number", "default": 0 },
+        "offset_vertical_mm": { "type": "number", "default": 0 }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "kind": { "const": "hole_center" } }
+          },
+          "then": {
+            "required": ["diameter_mm"]
+          }
+        }
+      ]
+    },
+
+    "plate_bracket_detail": {
+      "type": "object",
+      "required": [
+        "kind",
+        "host_member",
+        "plate_width_mm",
+        "plate_thickness_mm",
+        "visible_length_mm",
+        "embedded_length_mm",
+        "plates"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "const": "plate_bracket" },
+        "description": { "type": "string" },
+        "host_member": { "$ref": "#/$defs/connection_detail_host_member" },
+        "plate_width_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "plate_thickness_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "visible_length_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "embedded_length_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "plates": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/detail_plate" }
+        },
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detail_point" }
+        }
+      }
+    },
+
+    "connection_detail": {
+      "oneOf": [
+        { "$ref": "#/$defs/plate_bracket_detail" }
+      ]
     },
 
     "cut_reference": {
