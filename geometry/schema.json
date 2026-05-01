@@ -31,7 +31,8 @@
       }
     },
     "connections": { "type": "array", "items": { "$ref": "#/$defs/connection" } },
-    "surfaces":    { "type": "array", "items": { "$ref": "#/$defs/surface" } }
+    "surfaces":    { "type": "array", "items": { "$ref": "#/$defs/surface" } },
+    "foundations": { "type": "array", "items": { "$ref": "#/$defs/foundation" } }
   },
 
   "$defs": {
@@ -132,6 +133,67 @@
         "placement":   { "$ref": "#/$defs/placement" },
         "local_shape": { "$ref": "#/$defs/local_shape" },
         "polygon":     { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } }
+      }
+    },
+
+    "foundation_size": {
+      "type": "object",
+      "required": ["x", "y", "z"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "number", "exclusiveMinimum": 0 },
+        "y": { "type": "number", "exclusiveMinimum": 0 },
+        "z": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "foundation_soil_cover": {
+      "type": "object",
+      "required": ["gamma_kNm3"],
+      "additionalProperties": false,
+      "properties": {
+        "gamma_kNm3": { "type": "number", "exclusiveMinimum": 0 },
+        "include_in_uplift": { "type": "boolean", "default": true }
+      }
+    },
+
+    "foundation_soil_bearing": {
+      "type": "object",
+      "required": ["q_design_kPa"],
+      "additionalProperties": false,
+      "properties": {
+        "q_design_kPa": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+
+    "foundation_anchorage": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["reinforcing_dowels", "anchor_bolts", "unknown"] },
+        "description": { "type": "string" }
+      }
+    },
+
+    "foundation": {
+      "type": "object",
+      "required": ["id", "type", "supports", "size_mm", "ground_ref"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "pad_footing" },
+        "supports": { "type": "string" },
+        "center": { "$ref": "#/$defs/point" },
+        "size_mm": { "$ref": "#/$defs/foundation_size" },
+        "material": { "type": "string" },
+        "gamma_kNm3": { "type": "number", "exclusiveMinimum": 0 },
+        "top_z": { "type": "number" },
+        "ground_ref": { "type": "string" },
+        "frost_insulated": { "type": "boolean", "default": false },
+        "soil_cover": { "$ref": "#/$defs/foundation_soil_cover" },
+        "soil_bearing": { "$ref": "#/$defs/foundation_soil_bearing" },
+        "anchorage": { "$ref": "#/$defs/foundation_anchorage" }
       }
     },
 

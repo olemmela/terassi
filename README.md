@@ -228,10 +228,15 @@ on kuvattu yksiselitteisessä, LLM-ystävällisessä JSON-muodossa:
 (x = seinän suuntaisesti, y = seinästä ulospäin, z = pystysuoraan ylöspäin),
 yksikkö mm.
 
-**Sisältö:** `project`-metatiedot, `reference_surfaces` (talon seinä/katto),
+**Sisältö:** `project`-metatiedot, `reference_surfaces` (talon seinä/katto/maanpinta),
 `members` (`columns`, `beams`, `rafters`, `purlins`), `connections`
 (liitosten topologia + analyysimetatieto) ja `surfaces` (kate,
-aurinkopaneelit, sivu- ja kolmiolasit, laudoitukset, aukot).
+aurinkopaneelit, sivu- ja kolmiolasit, laudoitukset, aukot). Lisäksi
+`foundations` voi kuvata pilarikohtaiset anturat: tuettu pilari (`supports`),
+mitat (`size_mm`), maanpintaviite (`ground_ref`), routaeristys,
+maanpeitteen ominaispaino ja ankkurointitapa. Perustustarkistus laskee
+peitesyvyydet `ref.ground`-pinnasta, joten syvyyttä ei tarvitse ylläpitää
+erillisenä rinnakkaisena arvona.
 `connections` voi lisäksi sisältää loveus-/leikkausmetatietoa:
 vanha yksittäinen `notch` toimii yhä, mutta `notched_over`-liitokselle voi
 nyt antaa myös `cuts`-listan. Listan itemit voivat olla
@@ -284,6 +289,8 @@ suuntaan.
 `surfaces`-objektin `thickness_mm` näkyy
 viewerissä tilavuutena, joten esimerkiksi valu- ja levyrakenteet voidaan
 mallintaa oikealla paksuudella.
+`viewer.py` näyttää myös `foundations`-anturalaatikot läpikuultavina 3D-kappaleina
+pilarien alla.
 
 **JSON on totuuden lähde geometrialle:** Python-laskelmat lukevat
 primitiiviset geometria-arvot (leveydet, jännevälit, profiilimitat ym.)

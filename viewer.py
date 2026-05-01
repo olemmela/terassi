@@ -483,8 +483,9 @@ const SCOL = {
   roof_covering: 0x3c8c3c, solar_panel_array: 0x1155cc,
   side_glazing: 0x00aaaa, triangle_glazing: 0x00bbbb, gable_glazing: 0x00cccc,
   opening: 0xddcc00, boarding: 0x7a6040, purlin_layer: 0x888866,
-  building_wall: 0x998877, building_roof: 0x887766, floor: 0x777755,
+  building_wall: 0x998877, building_roof: 0x887766, floor: 0x777755, ground: 0x556b2f,
 };
+const FCOL = { pad_footing: 0x6f6f75 };
 const CCOL = {
   supported_on:  0xff4444,
   supported_by_pattern: 0x66ccff,
@@ -701,6 +702,23 @@ function surfaceTooltipLines(surfaceObj) {
   const rules = surfaceObj.load_transfer?.to_members;
   if (Array.isArray(rules) && rules.length) {
     for (const rule of rules) lines.push(`load_transfer: ${loadTransferRuleSummary(rule)}`);
+  }
+  return lines;
+}
+
+function foundationTooltipLines(foundation) {
+  const size = foundation.size_mm ?? {};
+  const lines = [`${foundation.id}  —  ${foundation.type ?? 'foundation'}`];
+  if (foundation.supports) lines.push(`pilari: ${foundation.supports}`);
+  if (size.x && size.y && size.z) lines.push(`koko: ${size.x} x ${size.y} x ${size.z} mm`);
+  if (foundation.material) lines.push(`materiaali: ${foundation.material}`);
+  if (foundation.ground_ref) lines.push(`maanpinta: ${foundation.ground_ref}`);
+  if (foundation.frost_insulated) lines.push('routaeristetty');
+  if (foundation.soil_cover?.gamma_kNm3 != null) {
+    lines.push(`maanpeite γ = ${foundation.soil_cover.gamma_kNm3} kN/m³`);
+  }
+  if (foundation.anchorage?.type) {
+    lines.push(`ankkurointi: ${foundation.anchorage.description ?? foundation.anchorage.type}`);
   }
   return lines;
 }
@@ -1664,6 +1682,58 @@ function addSurfaces(g, pk, list, opacity) {
   }
 }
 
+// ── Foundation meshes ─────────────────────────────────────────────────────────
+function foundationPlacement(foundation, memberIndex) {
+  const size = foundation.size_mm;
+  if (!size?.x || !size?.y || !size?.z) return null;
+  const supportInfo = foundation.supports ? memberIndex.get(foundation.supports) : null;
+  const center = foundation.center ?? null;
+  const base = supportInfo?.member?.base ?? null;
+  const x = center?.x ?? base?.x;
+  const y = center?.y ?? base?.y;
+  const topZ = foundation.top_z ?? base?.z;
+  if (x == null || y == null || topZ == null) return null;
+  return {
+    center: pt({ x, y, z: topZ - size.z / 2 }),
+    size,
+  };
+}
+
+function addFoundations(g, pk, foundations, memberIndex) {
+  const geoName = g.userData.geoName;
+  for (const foundation of foundations ?? []) {
+    const placement = foundationPlacement(foundation, memberIndex);
+    if (!placement) continue;
+    const { center, size } = placement;
+    const col = FCOL[foundation.type] ?? 0x777777;
+    const boxGeo = new THREE.BoxGeometry(size.x, size.z, size.y);
+    const mat = new THREE.MeshLambertMaterial({
+      color: col,
+      transparent: true,
+      opacity: 0.42,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(boxGeo, mat);
+    mesh.position.copy(center);
+    mesh.userData = {
+      id: foundation.id,
+      kind: foundation.type ?? 'foundation',
+      _geoName: geoName,
+      tooltipLines: foundationTooltipLines(foundation),
+    };
+    g.add(mesh);
+    pk.push(mesh);
+
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(boxGeo),
+      new THREE.LineBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.55 })
+    );
+    edges.position.copy(center);
+    edges.userData = { ...mesh.userData };
+    g.add(edges);
+  }
+}
+
 // ── Connection markers ────────────────────────────────────────────────────────
 function addConnectionAnalysisVisuals(g, pk, con, memberIndex, tooltipLines) {
   const analysis = con.analysis;
@@ -2023,6 +2093,7 @@ async function renderGeoFor(name, resolved, options = {}) {
   addMembers(g, pickable, resolved);
   addSurfaces(g, pickable, resolved.surfaces, 0.30);
   addSurfaces(g, pickable, resolved.reference_surfaces, 0.12);
+  addFoundations(g, pickable, resolved.foundations, memberIndex);
   const notchCutsMap = addConnections(g, pickable, resolved.connections, memberIndex);
   await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
   setConnectionMarkerVisibility(showConnectionMarkers);

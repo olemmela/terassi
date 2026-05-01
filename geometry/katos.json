@@ -104,7 +104,7 @@
     },
     {
       "id": "ref.ground",
-      "type": "floor",
+      "type": "ground",
       "placement": {
         "anchor": {"x": -1000, "y": 0, "z": -2990},
         "u": {
@@ -119,6 +119,83 @@
       },
       "local_shape": {
         "type": "rectangle"
+      }
+    }
+  ],
+  "foundations": [
+    {
+      "id": "fdn.col.x125",
+      "type": "pad_footing",
+      "supports": "col.x125",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
+    },
+    {
+      "id": "fdn.col.x7075",
+      "type": "pad_footing",
+      "supports": "col.x7075",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
+    },
+    {
+      "id": "fdn.col.x125.outer",
+      "type": "pad_footing",
+      "supports": "col.x125.outer.bottom",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
+    },
+    {
+      "id": "fdn.col.x3600.outer",
+      "type": "pad_footing",
+      "supports": "col.x3600.outer.bottom",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
+    },
+    {
+      "id": "fdn.col.x7075.outer",
+      "type": "pad_footing",
+      "supports": "col.x7075.outer.bottom",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
       }
     }
   ],

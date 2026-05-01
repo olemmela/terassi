@@ -145,6 +145,23 @@
   col.x3600.outer.bottom ulkopilari     68.60     95.89     42.04  Puristus 42.04 kN  OK ✓
   col.x7075.outer.bottom ulkopilari     34.90     48.65     22.26  Puristus 22.26 kN  OK ✓
 
+── PERUSTUKSET ─────────────────────────────────────────
+  Anturat                       5 kpl, 800x800x300 mm
+  Maanpinta                     ref.ground; peitesyvyydet laskettu anturan kulmista
+  Pysyvä paino nostossa         antura + maanpeite, jos soil_cover.include_in_uplift = true
+  Maapohjan q_Rd                ei annettu; vertaa alla oleviin q_uls-arvoihin
+
+  Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
+  ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
+  fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      46      68    0.00    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      50      73    0.00    8.32     0.00
+  fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      71      99    0.00    9.52     0.00
+  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     124     172    0.00    9.52     0.00
+  fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      71      98    0.00    9.52     0.00
+  Suurin pohjapaine ULS         172 kPa (fdn.col.x3600.outer)
+  Suurin jäljelle jäävä nosto   0.00 kN (fdn.col.x125)
+  Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
+
 ── ONTELOLAATAT 1200×150 SAUMATTU ─────────────────────
   Piirustuksen lisäpysyvä g      2.00 kN/m²
   Piirustuksen hyötykuorma q     2.50 kN/m²

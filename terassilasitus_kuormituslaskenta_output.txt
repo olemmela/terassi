@@ -178,13 +178,30 @@
 
   Pilari                 Ryhmä          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
-  col.x125               sisäpilari     34.20     53.62      2.89  Puristus 2.89 kN  OK ✓
-  col.x7075              sisäpilari     40.13     60.32      4.99  Puristus 4.99 kN  OK ✓
+  col.x125               sisäpilari     34.20     53.03     -2.74  NOSTO 2.74 kN
+  col.x7075              sisäpilari     40.13     59.72     -0.68  NOSTO 0.68 kN
   col.x125.outer.bottom  ulkopilari     47.25     68.21     22.40  Puristus 22.40 kN  OK ✓
   col.x3600.outer.bottom ulkopilari     87.25    125.85     39.89  Puristus 39.89 kN  OK ✓
   col.x7075.outer.bottom ulkopilari     47.84     68.02     22.28  Puristus 22.28 kN  OK ✓
   Suurin kokonaispuristus        125.85 kN
-  Suurin kokonaisnostotarve      0.00 kN
+  Suurin kokonaisnostotarve      2.74 kN
+
+── PERUSTUKSET ─────────────────────────────────────────
+  Anturat                       5 kpl, 800x800x300 mm
+  Maanpinta                     ref.ground; peitesyvyydet laskettu anturan kulmista
+  Pysyvä paino nostossa         antura + maanpeite, jos soil_cover.include_in_uplift = true
+  Maapohjan q_Rd                ei annettu; vertaa alla oleviin q_uls-arvoihin
+
+  Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
+  ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
+  fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      68     102    2.74    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      77     113    0.68    8.32     0.00
+  fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      90     129    0.00    9.52     0.00
+  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     153     219    0.00    9.52     0.00
+  fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      91     129    0.00    9.52     0.00
+  Suurin pohjapaine ULS         219 kPa (fdn.col.x3600.outer)
+  Suurin jäljelle jäävä nosto   0.00 kN (fdn.col.x125)
+  Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
 
 ── HUOMIOT ───────────────────────────────────────────────────────
   * Reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa; kuorma siirtyy

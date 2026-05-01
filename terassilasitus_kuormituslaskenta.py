@@ -29,6 +29,7 @@ from beam_analysis import (
     total_uniform_load_kN,
     uniform_loads_for_nodes,
 )
+from foundation_checks import foundation_checks_from_envelope, foundation_report_lines
 from geometry_loader import expanded_members, load, member, surface, reference, profile_b, profile_h
 from terrace_column_loads import (
     GAMMA_CONCRETE_KNM3,
@@ -112,6 +113,7 @@ def member_side_from_id(member_id):
 # ── geometria ───────────────────────────────────────────────────────────────
 
 GEO = load("terassi_puu.json")
+FOUNDATION_GEO = load("katos.json")
 CONNECTIONS = {conn["id"]: conn for conn in GEO["connections"]}
 MEMBERS_BY_ID = {}
 for group_name in GEO["members"]:
@@ -1959,6 +1961,7 @@ terrace_total_column_envelope = envelope_column_totals(
     ULS_CASE_KEYS,
     SLS_CASE_KEYS,
 )
+foundation_checks = foundation_checks_from_envelope(FOUNDATION_GEO, terrace_total_column_envelope)
 
 h_seina_left_m = local_wall_height_m_at_x(inner_supports_x_mm[0])
 h_seina_right_m = local_wall_height_m_at_x(inner_supports_x_mm[-1])
@@ -2308,6 +2311,10 @@ for column_id in terrace_total_column_loads["column_output_order"]:
     )
 print(f"  Suurin kokonaispuristus        {max(row['N_uls'] for row in terrace_total_column_envelope.values()):.2f} kN")
 print(f"  Suurin kokonaisnostotarve      {max(0.0, max(-row['N_min'] for row in terrace_total_column_envelope.values())):.2f} kN")
+
+print("\n── PERUSTUKSET ─────────────────────────────────────────")
+for line in foundation_report_lines(foundation_checks):
+    print(line)
 
 print("\n── HUOMIOT ───────────────────────────────────────────────────────")
 print("  * Reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa; kuorma siirtyy")

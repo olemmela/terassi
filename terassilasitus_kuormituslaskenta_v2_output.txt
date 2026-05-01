@@ -178,19 +178,19 @@
 
 ── OLEMASSA OLEVA LP225x90 @ x125 ───────────────────────
   Hallitseva tapaus             ULS A
-  Pistekuormat y = 900 mm: 9.07 kN / 1750 mm: 9.63 kN
-  Tukireaktiot seinä / pilari   3.76 / 14.93 kN
-  Md,max / Vd,max               3.39 kNm @ y = 900 mm / 14.93 kN
-  Tulos                         η_M = 28.6%,  η_V = 60.8%  OK ✓
+  Pistekuormat y = 900 mm: 8.78 kN / 1750 mm: 9.63 kN
+  Tukireaktiot seinä / pilari   3.63 / 14.78 kN
+  Md,max / Vd,max               3.27 kNm @ y = 900 mm / 14.78 kN
+  Tulos                         η_M = 27.6%,  η_V = 60.1%  OK ✓
 
 ── OLEMASSA OLEVA 2xKP360x51 (vanha katos + puu2) ───────────────
   MRd = 64.63 kNm,  VRd = 73.44 kN
   Hallitseva tapaus             ULS A
-  Md,max                        28.32 kNm @ x = 3000 mm
-  Vd,max                        30.15 kN
-  Pilarireaktiot yhteensa       26.75 / 16.25 kN
+  Md,max                        27.69 kNm @ x = 3000 mm
+  Vd,max                        29.81 kN
+  Pilarireaktiot yhteensa       26.31 / 15.81 kN
   Taipuma SLS / DRIFT           16.02 / 23.2 mm  OK ✓
-  Tulos                         η_M = 53.9%,  η_V = 50.5%,  η_LTB = 53.9%  OK ✓
+  Tulos                         η_M = 52.7%,  η_V = 50.0%,  η_LTB = 52.7%  OK ✓
 
 ── PILARIKUORMAT JA NOSTO ───────────────────────────────────────
   Ulkopalkin reaktiot ULS A / UPLIFT [kN]:
@@ -200,17 +200,17 @@
   Sisäpalkin reaktiot ULS A / UPLIFT [kN]:
     x = 6950 mm               10.98 /  -1.73
   KP360 yhteisreaktiot ULS A / UPLIFT [kN]:
-    x =  125 mm               26.75 /  -3.16
-    x = 7075 mm               16.25 /  -1.52
-  LP225 x125 pilarireaktio ULS DRIFT / UPLIFT [kN]: 13.73 / -2.48
-  LP225 x7075 perusreaktio ULS DRIFT / UPLIFT [kN]: 4.87 / -0.44
+    x =  125 mm               26.31 /  -7.33
+    x = 7075 mm               15.81 /  -5.74
+  LP225 x125 pilarireaktio ULS DRIFT / UPLIFT [kN]: 13.58 / -3.93
+  LP225 x7075 perusreaktio ULS DRIFT / UPLIFT [kN]: 4.72 / -1.89
   Sisatukien kokonaiskuormat ULS DRIFT / UPLIFT [kN]:
-    x =  125 mm               39.85 /  -5.64
-    x = 7075 mm               45.42 /  -5.68
+    x =  125 mm               39.26 / -11.27
+    x = 7075 mm               44.82 / -11.36
   Suurin ulkopilaripuristus         25.48 kN
   Suurin ulkopilarin nostotarve     5.05 kN
-  Suurin sisatukipuristus           45.42 kN
-  Suurin sisatuen nostotarve        5.68 kN
+  Suurin sisatukipuristus           44.82 kN
+  Suurin sisatuen nostotarve        11.36 kN
 
 ── KOKONAISPILARIKUORMAT TERASSIN JALKEEN ───────────────────────
   Olemassa oleva baseline        geometry/katos.json + puu2-variantin lisakuormat
@@ -223,13 +223,30 @@
 
   Pilari                 Ryhma          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
-  col.x125               sisäpilari     34.43     53.96      2.55  Puristus 2.55 kN  OK ✓
-  col.x7075              sisäpilari     40.50     60.90      4.64  Puristus 4.64 kN  OK ✓
+  col.x125               sisäpilari     34.43     53.37     -3.08  NOSTO 3.08 kN
+  col.x7075              sisäpilari     40.50     60.30     -1.04  NOSTO 1.04 kN
   col.x125.outer.bottom  ulkopilari     47.44     68.56     22.23  Puristus 22.23 kN  OK ✓
   col.x3600.outer.bottom ulkopilari     87.06    125.59     39.80  Puristus 39.80 kN  OK ✓
   col.x7075.outer.bottom ulkopilari     48.05     68.22     22.13  Puristus 22.13 kN  OK ✓
   Suurin kokonaispuristus        125.59 kN
-  Suurin kokonaisnostotarve      0.00 kN
+  Suurin kokonaisnostotarve      3.08 kN
+
+── PERUSTUKSET ─────────────────────────────────────────
+  Anturat                       5 kpl, 800x800x300 mm
+  Maanpinta                     ref.ground; peitesyvyydet laskettu anturan kulmista
+  Pysyvä paino nostossa         antura + maanpeite, jos soil_cover.include_in_uplift = true
+  Maapohjan q_Rd                ei annettu; vertaa alla oleviin q_uls-arvoihin
+
+  Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
+  ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
+  fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      68     103    3.08    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      78     114    1.04    8.32     0.00
+  fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      91     129    0.00    9.52     0.00
+  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     153     219    0.00    9.52     0.00
+  fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      92     129    0.00    9.52     0.00
+  Suurin pohjapaine ULS         219 kPa (fdn.col.x3600.outer)
+  Suurin jäljelle jäävä nosto   0.00 kN (fdn.col.x125)
+  Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
 
 ── HUOMIOT ───────────────────────────────────────────────────────
   * Reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa; kuorma siirtyy

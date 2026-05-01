@@ -41,8 +41,9 @@ from existing_beam_checks import (
     simple_span_point_reactions,
     uniform_line_member_support_reactions,
 )
+from foundation_checks import foundation_checks_from_envelope, foundation_report_lines
 from geometry_loader import expanded_connections, expanded_members, load, member, surface, profile_b, profile_h
-from terrace_column_loads import calculate_katos_total_column_loads
+from terrace_column_loads import calculate_katos_total_column_loads, envelope_column_totals
 from timber_member_checks import (
     combined_section_h,
     governing_moment,
@@ -727,6 +728,8 @@ outer_beam_self_kNm = KATOS_TOTAL_COLUMN_LOADS["outer_beam_self_kNm"]
 outer_beam_total_self_kN = KATOS_TOTAL_COLUMN_LOADS["outer_beam_total_self_kN"]
 outer_beam_count = KATOS_TOTAL_COLUMN_LOADS["outer_beam_count"]
 column_case_totals = KATOS_TOTAL_COLUMN_LOADS["case_totals"]
+column_envelope = envelope_column_totals(column_case_totals, ["ULS"], ["SLS"])
+foundation_checks = foundation_checks_from_envelope(_GEO, column_envelope)
 column_output_order = KATOS_TOTAL_COLUMN_LOADS["column_output_order"]
 column_display = KATOS_TOTAL_COLUMN_LOADS["column_display"]
 column_group_label = KATOS_TOTAL_COLUMN_LOADS["column_group_label"]
@@ -1097,14 +1100,19 @@ print()
 print(f"  {'Pilari':<22} {'Ryhmä':<10} {'N_sls':>9} {'N_uls':>9} {'N_min':>9}  {'Tila'}")
 print(f"  {'-'*22} {'-'*10} {'-'*9} {'-'*9} {'-'*9}  {'-'*18}")
 for column_id in column_output_order:
-    N_sls = column_case_totals["SLS"][column_id]
-    N_uls = column_case_totals["ULS"][column_id]
-    N_min = column_case_totals["UPLIFT"][column_id]
+    row = column_envelope[column_id]
+    N_sls = row["N_sls"]
+    N_uls = row["N_uls"]
+    N_min = row["N_min"]
     status = f"Puristus {N_min:.2f} kN  OK ✓" if N_min >= 0.0 else f"NOSTO {abs(N_min):.2f} kN"
     print(
         f"  {column_display[column_id]:<22} {column_group_label[column_id]:<10} "
         f"{N_sls:>9.2f} {N_uls:>9.2f} {N_min:>9.2f}  {status}"
     )
+
+print("\n── PERUSTUKSET ─────────────────────────────────────────")
+for line in foundation_report_lines(foundation_checks):
+    print(line)
 
 print("\n── ONTELOLAATAT 1200×150 SAUMATTU ─────────────────────")
 print(f"  Piirustuksen lisäpysyvä g      {gk_hollow_slab_allow:.2f} kN/m²")
