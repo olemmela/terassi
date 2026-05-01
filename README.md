@@ -21,7 +21,8 @@ Laskee kuormat ja mitoitustarkistukset nykyiselle yksikalteiselle katokselle (ka
 **Laskenta sisältää:**
 - Pysyvät kuormat (kate + palkkien omapainot)
 - Lumikuorma (EN 1991-1-3, FI NA, vyöhyke II, `sk = 2,0 kN/m²`)
-- Tuulikuorma (EN 1991-1-4, nettopainekertoimet yksikalteiselle katokselle)
+- Tuulikuorma (EN 1991-1-4, rakennuksen kattolappeen jatke / räystäsuloke:
+  yläpinnan kattopaine + alapinnan viereisen seinän paine)
 - Kuormayhdistelmät EN 1990 kaavan 6.10 mukaan
 - `geometry/katos.json`:n pää- ja vino-orsien geometriasta luetut 50×100-orsien
   tukipisteet KP450- ja KP360-palkeille sekä `rayst`-orsien jatkuvat KP450-sivuliitokset

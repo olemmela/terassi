@@ -236,6 +236,34 @@ def _kp450_side_katos_purlins(geo):
     )
 
 
+def roof_continuation_wind_model(qp_z_kNm2):
+    """Wind envelope for a roof plane that continues from the main building roof."""
+    # Sign convention: positive cp,net acts downward on the roof members.
+    # The uplift envelope combines roof-edge suction on the top surface with
+    # windward wall pressure acting on the underside of the eaves/overhang.
+    # The downward envelope combines weak top pressure with wall-side suction
+    # below the overhang; final project-specific cpe zones still need review.
+    cpe_top_down = 0.2
+    cpe_under_suction = -0.5
+    cpe_top_uplift = -1.2
+    cpe_under_windward = 0.8
+    cp_net_down = cpe_top_down - cpe_under_suction
+    cp_net_up = cpe_top_uplift - cpe_under_windward
+    return {
+        "model": "building_roof_overhang_continuation",
+        "description": "Rakennuksen kattolappeen jatke / räystäsuloke, ei vapaasti seisova katos",
+        "basis": "EN 1991-1-4 rakennuksen kattopinta + räystään alapinnan viereisen seinän paine",
+        "cpe_top_down": cpe_top_down,
+        "cpe_under_down": cpe_under_suction,
+        "cp_net_down": cp_net_down,
+        "cpe_top_uplift": cpe_top_uplift,
+        "cpe_under_uplift": cpe_under_windward,
+        "cp_net_up": cp_net_up,
+        "w_wind_down_kNm2": cp_net_down * qp_z_kNm2,
+        "w_wind_up_kNm2": cp_net_up * qp_z_kNm2,
+    }
+
+
 def _connection_by_members(connections, member_a_id, member_b_id):
     wanted = {member_a_id, member_b_id}
     for connection_obj in connections:
@@ -402,14 +430,11 @@ def katos_existing_context():
     iv_z = 1.0 / math.log(max(z_ref_m, z_min) / z0)
     vm_z = cr_z * vb0
     qp_z = (1.0 + 7.0 * iv_z) * 0.5 * rho_air * vm_z**2 / 1000.0
-    alpha_ref_lo, alpha_ref_hi = 10.0, 20.0
-    cp_dn_lo, cp_dn_hi = 0.8, 1.3
-    cp_up_lo, cp_up_hi = -0.6, -1.3
-    t = (slope_deg - alpha_ref_lo) / (alpha_ref_hi - alpha_ref_lo)
-    cp_net_down = cp_dn_lo + t * (cp_dn_hi - cp_dn_lo)
-    cp_net_up = cp_up_lo + t * (cp_up_hi - cp_up_lo)
-    w_wind_down = cp_net_down * qp_z
-    w_wind_up = cp_net_up * qp_z
+    wind_model = roof_continuation_wind_model(qp_z)
+    cp_net_down = wind_model["cp_net_down"]
+    cp_net_up = wind_model["cp_net_up"]
+    w_wind_down = wind_model["w_wind_down_kNm2"]
+    w_wind_up = wind_model["w_wind_up_kNm2"]
     qk_wind_down1_direct_kNm = w_wind_down * trib_w1_m
     qk_wind_down2_direct_kNm = 0.0
     qk_wind_up1_direct_kNm = w_wind_up * trib_w1_m
@@ -552,6 +577,9 @@ def katos_existing_context():
             "edge_y_mm": float(roof_edge_y_mm),
             "gk_roofing_kNm2": gk_roofing,
             "snow_kNm2": s_roof,
+            "wind_model": wind_model,
+            "cp_net_down": cp_net_down,
+            "cp_net_up": cp_net_up,
             "wind_down_kNm2": w_wind_down,
             "wind_up_kNm2": w_wind_up,
             "q_roof_uls_kNm2": q_roof_d_kNm2,

@@ -333,21 +333,16 @@ vm_z = cr_z * vb0
 # Huippupainekorkeus qp(z)  [kN/m²]
 qp_z = (1.0 + 7.0 * Iv_z) * 0.5 * rho_air * vm_z**2 / 1000.0
 
-# Yksikalteisen katoksen nettopainekertoimet  (EN 1991-1-4 taulukko 7.7)
-# HUOM: Taulukko 7.7 on vapaasti seisovalle katokselle (free-standing canopy).
-# Seinään kiinnitetylle katokselle tarkempi tarkistus olisi taulukko 7.2–7.4
-# (ulkopaine − sisäpaine). Taulukko 7.7 on käytäntöön vakiintunut yksinkertaistus
-# ja yleensä konservatiivinen tässä yhteydessä.
-# Interpolointi α = 12°:
-alpha_ref_lo, alpha_ref_hi = 10.0, 20.0
-cp_dn_lo, cp_dn_hi = 0.8, 1.3
-cp_up_lo, cp_up_hi = -0.6, -1.3
-t = (slope_deg - alpha_ref_lo) / (alpha_ref_hi - alpha_ref_lo)
-cp_net_down = cp_dn_lo + t * (cp_dn_hi - cp_dn_lo)   # alaspäin
-cp_net_up   = cp_up_lo + t * (cp_up_hi - cp_up_lo)   # ylöspäin
+# Katos on geometrian mukaan rakennuksen kattolappeen jatke:
+# surf.roof jatkuu rakennuksen puolelta (y < 0) katoksen räystäälle asti.
+# Siksi ei käytetä vapaasti seisovan katoksen nettokertoimia, vaan
+# rakennuksen kattopinnan ja räystäsulokkeen alapinnan envelopea.
+wind_model = _ROOF_CTX["wind_model"]
+cp_net_down = wind_model["cp_net_down"]   # alaspäin
+cp_net_up = wind_model["cp_net_up"]       # ylöspäin / imu
 
-w_wind_down = cp_net_down * qp_z   # kN/m² (alaspäin, pahin yhdistelmä lumen kanssa)
-w_wind_up   = cp_net_up   * qp_z   # kN/m² (ylöspäin, imukuorma)
+w_wind_down = wind_model["w_wind_down_kNm2"]   # kN/m²
+w_wind_up = wind_model["w_wind_up_kNm2"]       # kN/m²
 
 qk_wind_down1 = _BEAM1_CTX["q_wind_down_direct_kNm"]
 qk_wind_down2 = _KP360_CTX["q_wind_down_direct_kNm"]
@@ -977,8 +972,16 @@ print(f"  cr({z_ref:.0f})                        {cr_z:.3f}")
 print(f"  Iv({z_ref:.0f})                        {Iv_z:.3f}")
 print(f"  Keskinopeus vm                 {vm_z:.1f} m/s")
 print(f"  Huippupainekerroin qp({z_ref:.0f})      {qp_z:.3f} kN/m²")
-print(f"  Nettopainekerroin alaspäin     cp,net = {cp_net_down:.2f}  (interpoloitu {slope_deg:.0f}°)")
-print(f"  Nettopainekerroin ylöspäin     cp,net = {cp_net_up:.2f}")
+print(f"  Tuulimalli                     {wind_model['description']}")
+print(f"  Peruste                        {wind_model['basis']}")
+print(
+    f"  Nettopainekerroin alaspäin     cp,net = {cp_net_down:.2f}  "
+    f"(cpe_top {wind_model['cpe_top_down']:+.2f} - cpe_under {wind_model['cpe_under_down']:+.2f})"
+)
+print(
+    f"  Nettopainekerroin ylöspäin     cp,net = {cp_net_up:.2f}  "
+    f"(cpe_top {wind_model['cpe_top_uplift']:+.2f} - cpe_under {wind_model['cpe_under_uplift']:+.2f})"
+)
 print(f"  Tuulikuorma katolla (alas)     {w_wind_down:.3f} kN/m²")
 print(f"  Tuulikuorma katolla (ylös)     {w_wind_up:.3f} kN/m²")
 print(f"  KP450×51   q_tuuli, suora      {qk_wind_down1:.3f} kN/m")
@@ -1157,8 +1160,8 @@ print("  * Räystäskuormat (x-suunta) huomioitu tukireaktioissa (LP225, pilarit
 print("  * Kokonaispilarikuormat sisältävät nyt myös terassin pintavalun, 1200×150 ontelolaattojen omapainon,")
 print("    betonisen alapalkin sekä maahan asti jatkuvien pilarien omapainon geometriasta johdettuna.")
 print("  * Leikkaus ja taipuma on laskettu combined-kuormituksesta (suora viivakuorma + orsipistekuormat).")
-print("  * Tuulikuorman nettopainekerroin interpoloitu EC1-1-4 taulukosta 7.7")
-print("    (vapaasti seisova katos – konservatiivinen yksinkertaistus seinään kiinnitetylle).")
+print("  * Tuulimalli vaihdettu rakennuksen kattolappeen jatkeeksi: yläpinta käsitellään")
+print("    rakennuksen kattopintana ja räystään alapinta viereisen seinäpinnan paineella.")
 print("  * LTB-tarkistus (§6.3.3) edellyttää ruoteiden riittävää kiinnitystä palkkeihin.")
 print("  * Kate-/ruodepaino 0.20 kN/m² on arvio – tarkista suunnitelmista.")
 print(dw)

@@ -40,13 +40,49 @@
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
-          [0, 0],
-          [7200, 0],
+          [0, -2990],
+          [7200, -2990],
           [7200, 4200],
           [0, 2700]
         ]
       }
     },
+    { 
+      "id": "ref.house_wall_middle",
+      "type": "building_wall",
+      "placement": {
+        "anchor": {"x": 7200, "y": 0, "z": -2990},
+        "u": {
+          "dir": "-y",
+          "length_mm": 10000
+        },
+        "v": { 
+          "dir": "+z",
+          "length_mm": 7400
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    { 
+      "id": "ref.house_wall_side",
+      "type": "building_wall",
+      "placement": {
+        "anchor": {"x": 0, "y": 0, "z": -2990},
+        "u": {
+          "dir": "-y",
+          "length_mm": 10000
+        },
+        "v": { 
+          "dir": "+z",
+          "length_mm": 5800
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },  
     {
       "id": "ref.terrace_floor",
       "type": "floor",
@@ -60,6 +96,25 @@
           "dir": "+y",
           "horizontal_mm": 5400,
           "rise_mm": -68
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "ref.ground",
+      "type": "floor",
+      "placement": {
+        "anchor": {"x": -1000, "y": 0, "z": -2990},
+        "u": {
+          "dir": "+x",
+          "length_mm": 10000
+        },
+        "v": {
+          "dir": "+y",
+          "horizontal_mm": 10000,
+          "rise_mm": -200
         }
       },
       "local_shape": {
@@ -79,7 +134,7 @@
       "id": "350x300",
       "name": "350x300",
       "material": "Betoni",
-      "b_mm": 350,
+      "b_mm": 300,
       "h_mm": 350
     },
     {
@@ -199,16 +254,16 @@
       {
         "id": "beam.bottom.conreate.0",
         "profile": "350x300",
-        "axis_start": {"x": 0, "y": 5225, "z": -370},
-        "axis_end": {"x": 3590, "y": 5225, "z": -370},
+        "axis_start": {"x": 0, "y": 5250, "z": -370},
+        "axis_end": {"x": 3590, "y": 5250, "z": -370},
         "mass_kg": 785,
         "existing": true
       },
       {
         "id": "beam.bottom.conreate.1",
         "profile": "350x300",
-        "axis_start": {"x": 3610, "y": 5225, "z": -370},
-        "axis_end": {"x": 7200, "y": 5225, "z": -370},
+        "axis_start": {"x": 3610, "y": 5250, "z": -370},
+        "axis_end": {"x": 7200, "y": 5250, "z": -370},
         "mass_kg": 785,
         "existing": true
       },
