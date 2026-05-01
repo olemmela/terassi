@@ -30,6 +30,13 @@ from beam_analysis import (
     uniform_loads_for_nodes,
 )
 from geometry_loader import expanded_members, load, member, surface, reference, profile_b, profile_h
+from terrace_column_loads import (
+    GAMMA_CONCRETE_KNM3,
+    COLUMN_CASE_FACTORS,
+    calculate_katos_total_column_loads,
+    column_self_weight_kN,
+    envelope_column_totals,
+)
 from timber_member_checks import (
     combined_section_h,
     governing_moment,
@@ -1901,6 +1908,58 @@ inner_reaction_case = max(ULS_CASE_KEYS, key=lambda case_key: max(RESULTS[case_k
 outer_uplift = RESULTS["UPLIFT"]["outer_beam"]["reactions_kN"]
 inner_uplift = RESULTS["UPLIFT"]["inner_beam"]["reactions_kN"]
 
+column_case_groups = {
+    case_key: ("UPLIFT" if case_key == "UPLIFT" else "SLS" if case_key in SLS_CASE_KEYS else "ULS")
+    for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
+}
+inner_column_id_by_support_x = {
+    inner_supports_x_mm[0]: "col.x125",
+    inner_supports_x_mm[-1]: "col.x7075",
+}
+outer_ground_column_id_by_support_x = {
+    outer_supports_x_mm[0]: "col.x125.outer.bottom",
+    outer_supports_x_mm[1]: "col.x3600.outer.bottom",
+    outer_supports_x_mm[2]: "col.x7075.outer.bottom",
+}
+outer_column_member_id_by_support_x = {
+    float(member(GEO, "columns", "col.outer.x0")["base"]["x"]): "col.outer.x0",
+    float(member(GEO, "columns", "col.outer.x3600")["base"]["x"]): "col.outer.x3600",
+    float(member(GEO, "columns", "col.outer.x7200")["base"]["x"]): "col.outer.x7200",
+}
+outer_column_objs_by_support_x = {
+    support_x_mm: member(GEO, "columns", column_id)
+    for support_x_mm, column_id in outer_column_member_id_by_support_x.items()
+}
+
+additional_upper_column_loads_by_case = {
+    case_key: {
+        column_id: RESULTS[case_key]["inner_beam"]["reactions_kN"].get(support_x_mm, 0.0)
+        for support_x_mm, column_id in inner_column_id_by_support_x.items()
+    }
+    for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
+}
+additional_ground_column_loads_by_case = {}
+for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT"):
+    permanent_factor = COLUMN_CASE_FACTORS[column_case_groups[case_key]]
+    additional_ground_column_loads_by_case[case_key] = {}
+    for support_x_mm, ground_column_id in outer_ground_column_id_by_support_x.items():
+        column_obj = outer_column_objs_by_support_x[support_x_mm]
+        additional_ground_column_loads_by_case[case_key][ground_column_id] = (
+            RESULTS[case_key]["outer_beam"]["reactions_kN"].get(support_x_mm, 0.0)
+            + column_self_weight_kN(column_obj, GAMMA_CONCRETE_KNM3, factor=permanent_factor)
+        )
+
+terrace_total_column_loads = calculate_katos_total_column_loads(
+    case_groups=column_case_groups,
+    extra_upper_column_loads_by_case=additional_upper_column_loads_by_case,
+    extra_ground_column_loads_by_case=additional_ground_column_loads_by_case,
+)
+terrace_total_column_envelope = envelope_column_totals(
+    terrace_total_column_loads["case_totals"],
+    ULS_CASE_KEYS,
+    SLS_CASE_KEYS,
+)
+
 h_seina_left_m = local_wall_height_m_at_x(inner_supports_x_mm[0])
 h_seina_right_m = local_wall_height_m_at_x(inner_supports_x_mm[-1])
 
@@ -2217,6 +2276,38 @@ for x_mm in inner_supports_x_mm:
 print(f"  Suurin ulkopilaripuristus         {max(RESULTS[outer_reaction_case]['outer_beam']['reactions_kN'].values()):.2f} kN")
 print(f"  Suurin ulkopilarin nostotarve     {abs(min(outer_uplift.values())):.2f} kN")
 print(f"  Suurin sisätuen nostotarve        {abs(min(inner_uplift.values())):.2f} kN")
+
+print("\n── KOKONAISPILARIKUORMAT TERASSIN JÄLKEEN ───────────────────────")
+print(f"  Olemassa oleva baseline        geometry/katos.json + uuden terassin lisäkuormat")
+print(
+    f"  Ontelolaatta saumattuna h=150  {terrace_total_column_loads['gk_hollow_slab_kNm2']:.2f} kN/m²"
+    f"  = {terrace_total_column_loads['hollow_beam_self_kNm']:.3f} kN/m / laatta"
+)
+print(f"  Pintavalu 60 mm                {terrace_total_column_loads['gk_floor_cast_kNm2']:.2f} kN/m²")
+print(f"  Terassin hyötykuorma           {terrace_total_column_loads['qk_terrace_live_kNm2']:.2f} kN/m²")
+if terrace_total_column_loads["outer_beam_count"] == 1:
+    print(f"  Alapalkki 350×300              {terrace_total_column_loads['outer_beam_self_kNm']:.3f} kN/m")
+else:
+    print(
+        f"  Alapalkit {terrace_total_column_loads['outer_beam_count']}×350×300            "
+        f"{terrace_total_column_loads['outer_beam_total_self_kN'] / terrace_total_column_loads['outer_beam_count']:.2f}"
+        f" kN / palkki  = {terrace_total_column_loads['outer_beam_self_kNm']:.3f} kN/m"
+    )
+print("  Kuormareitti                   sisäpilarit suoraan perustuksille, ontelolaatat seinästä alapalkille, alapalkki ulompiin pilareihin")
+print(f"  N_sls / N_uls / N_min          max(SLS,SLS DRIFT) / max(ULS A, ULS B, ULS DRIFT) / UPLIFT")
+print()
+print(f"  {'Pilari':<22} {'Ryhmä':<10} {'N_sls':>9} {'N_uls':>9} {'N_min':>9}  {'Tila'}")
+print(f"  {'-'*22} {'-'*10} {'-'*9} {'-'*9} {'-'*9}  {'-'*18}")
+for column_id in terrace_total_column_loads["column_output_order"]:
+    row = terrace_total_column_envelope[column_id]
+    status = f"Puristus {row['N_min']:.2f} kN  OK ✓" if row["N_min"] >= 0.0 else f"NOSTO {abs(row['N_min']):.2f} kN"
+    print(
+        f"  {terrace_total_column_loads['column_display'][column_id]:<22} "
+        f"{terrace_total_column_loads['column_group_label'][column_id]:<10} "
+        f"{row['N_sls']:>9.2f} {row['N_uls']:>9.2f} {row['N_min']:>9.2f}  {status}"
+    )
+print(f"  Suurin kokonaispuristus        {max(row['N_uls'] for row in terrace_total_column_envelope.values()):.2f} kN")
+print(f"  Suurin kokonaisnostotarve      {max(0.0, max(-row['N_min'] for row in terrace_total_column_envelope.values())):.2f} kN")
 
 print("\n── HUOMIOT ───────────────────────────────────────────────────────")
 print("  * Reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa; kuorma siirtyy")

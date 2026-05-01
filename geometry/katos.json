@@ -127,49 +127,35 @@
       {
         "id": "col.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": 0},
+        "base": {"x": 125, "y": 1675, "z": -3470},
         "top": {"x": 125, "y": 1675, "z": 2350},
-        "existing": true
-      },
-      {
-        "id": "col.x125.bottom",
-        "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": -2990},
-        "top": {"x": 125, "y": 1675, "z": -250},
         "existing": true
       },
       {
         "id": "col.x7075",
         "profile": "250x250",
-        "base": {"x": 7075, "y": 1675, "z": 0},
-        "top": {"x": 7075, "y": 1675, "z": 3900},
-        "existing": true
-      },
-      {
-        "id": "col.x7075.bottom",
-        "profile": "250x250",
-        "base": {"x": 7075, "y": 1675, "z": -2990},
-        "top": {"x": 7075, "y": 1675, "z": -250},
+        "base": {"x": 7075, "y": 1675, "z": -3470},
+        "top": {"x": 7075, "y": 1675, "z": 3870},
         "existing": true
       },
       {
         "id": "col.x125.outer.bottom",
         "profile": "250x250",
-        "base": {"x": 125, "y": 5275, "z": -3090},
+        "base": {"x": 125, "y": 5275, "z": -3670},
         "top": {"x": 125, "y": 5275, "z": -550},
         "existing": true
       },
       {
         "id": "col.x3600.outer.bottom",
         "profile": "250x250",
-        "base": {"x": 3600, "y": 5275, "z": -3090},
+        "base": {"x": 3600, "y": 5275, "z": -3670},
         "top": {"x": 3600, "y": 5275, "z": -550},
         "existing": true
       },
       {
         "id": "col.x7075.outer.bottom",
         "profile": "250x250",
-        "base": {"x": 7075, "y": 5275, "z": -3090},
+        "base": {"x": 7075, "y": 5275, "z": -3670},
         "top": {"x": 7075, "y": 5275, "z": -550},
         "existing": true
       }
@@ -179,21 +165,21 @@
         "id": "beam.kp450.wall",
         "profile": "KP450x51",
         "axis_start": {"x": 0, "y": 0, "z": 2800},
-        "axis_end": {"x": 7200, "y": 0, "z": 4400},
+        "axis_end": {"x": 7200, "y": 0, "z": 4370},
         "existing": true
       },
       {
         "id": "beam.kp450.y900",
         "profile": "KP450x51",
         "axis_start": {"x": 0, "y": 900, "z": 2800},
-        "axis_end": {"x": 7200, "y": 900, "z": 4400},
+        "axis_end": {"x": 7200, "y": 900, "z": 4370},
         "existing": true
       },
       {
         "id": "beam.kp360x2",
         "profile": "2xKP360x51",
         "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4350},
+        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
         "existing": true
       },
       {
@@ -206,15 +192,24 @@
       {
         "id": "beam.lp225.x7075",
         "profile": "LP225x90",
-        "axis_start": {"x": 7075, "y": 0, "z": 4020},
-        "axis_end": {"x": 7075, "y": 1750, "z": 4020},
+        "axis_start": {"x": 7075, "y": 0, "z": 3990},
+        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
         "existing": true
       },
       {
-        "id": "beam.bottom.conreate",
+        "id": "beam.bottom.conreate.0",
         "profile": "350x300",
         "axis_start": {"x": 0, "y": 5225, "z": -370},
+        "axis_end": {"x": 3590, "y": 5225, "z": -370},
+        "mass_kg": 785,
+        "existing": true
+      },
+      {
+        "id": "beam.bottom.conreate.1",
+        "profile": "350x300",
+        "axis_start": {"x": 3610, "y": 5225, "z": -370},
         "axis_end": {"x": 7200, "y": 5225, "z": -370},
+        "mass_kg": 785,
         "existing": true
       },
       {
@@ -264,8 +259,8 @@
       {
         "id": "purlin.50x100",
         "profile": "50x100",
-        "axis_start": {"x": 1200, "y": 1000, "z": 3250},
-        "axis_end": {"x": 1200, "y": 2200, "z": 3250},
+        "axis_start": {"x": 1200, "y": 1000, "z": 3230},
+        "axis_end": {"x": 1200, "y": 2200, "z": 3230},
         "existing": true,
         "section_rotation_deg": 12,
         "pattern": {
@@ -277,7 +272,7 @@
       {
         "id": "purlin.rayst.left",
         "profile": "50x100",
-        "axis_start": {"x": -400, "y": 75, "z": 2900},
+        "axis_start": {"x": -400, "y": 75, "z": 2890},
         "axis_end": {"x": 1600, "y": 75, "z": 3330},
         "existing": true,
         "pattern": {
@@ -289,8 +284,8 @@
       {
         "id": "purlin.rayst.right",
         "profile": "50x100",
-        "axis_start": {"x": 5600, "y": 50, "z": 4230},
-        "axis_end": {"x": 7600, "y": 50, "z": 4670},
+        "axis_start": {"x": 5600, "y": 50, "z": 4200},
+        "axis_end": {"x": 7600, "y": 50, "z": 4640},
         "existing": true,
         "pattern": {
           "count": 2,
@@ -317,16 +312,16 @@
       {
         "id": "diag.45.right",
         "profile": "50x100",
-        "axis_start": {"x": 6500, "y": 1000, "z": 4430},
-        "axis_end": {"x": 7600, "y": 2190, "z": 4670},
+        "axis_start": {"x": 6500, "y": 1000, "z": 4400},
+        "axis_end": {"x": 7600, "y": 2190, "z": 4640},
         "section_rotation_deg": 12,
         "existing": true
       },
       {
         "id": "diag.67.right",
         "profile": "50x100",
-        "axis_start": {"x": 6350, "y": 1000, "z": 4400},
-        "axis_end": {"x": 6800, "y": 2200, "z": 4500},
+        "axis_start": {"x": 6350, "y": 1000, "z": 4370},
+        "axis_end": {"x": 6800, "y": 2200, "z": 4470},
         "section_rotation_deg": 12,
         "existing": true
       }
@@ -680,7 +675,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.0",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.0"
       ],
       "at": {"x": 600, "y": 5150, "z": -200}
     },
@@ -689,7 +684,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.1",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.0"
       ],
       "at": {"x": 1800, "y": 5150, "z": -200}
     },
@@ -698,7 +693,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.2",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.0"
       ],
       "at": {"x": 3000, "y": 5150, "z": -200}
     },
@@ -707,7 +702,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.3",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.1"
       ],
       "at": {"x": 4200, "y": 5150, "z": -200}
     },
@@ -716,7 +711,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.4",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.1"
       ],
       "at": {"x": 5400, "y": 5150, "z": -200}
     },
@@ -725,7 +720,7 @@
       "type": "supported_on",
       "members": [
         "beam.hollow.5",
-        "beam.bottom.conreate"
+        "beam.bottom.conreate.1"
       ],
       "at": {"x": 6600, "y": 5150, "z": -200}
     },
@@ -733,64 +728,37 @@
       "id": "con.bottom.conreate.on.col.x125.outer",
       "type": "supported_on",
       "members": [
-        "beam.bottom.conreate",
+        "beam.bottom.conreate.0",
         "col.x125.outer.bottom"
       ],
       "at": {"x": 125, "y": 5275, "z": -550}
     },
     {
-      "id": "con.bottom.conreate.on.col.x3600.outer",
+      "id": "con.bottom.conreate.0.on.col.x3600.outer",
       "type": "supported_on",
       "members": [
-        "beam.bottom.conreate",
+        "beam.bottom.conreate.0",
         "col.x3600.outer.bottom"
       ],
-      "at": {"x": 3600, "y": 5275, "z": -550}
+      "at": {"x": 3545, "y": 5275, "z": -550}
+    },
+    {
+      "id": "con.bottom.conreate.1.on.col.x3600.outer",
+      "type": "supported_on",
+      "members": [
+        "beam.bottom.conreate.1",
+        "col.x3600.outer.bottom"
+      ],
+      "at": {"x": 3675, "y": 5275, "z": -550}
     },
     {
       "id": "con.bottom.conreate.on.col.x7075.outer",
       "type": "supported_on",
       "members": [
-        "beam.bottom.conreate",
+        "beam.bottom.conreate.1",
         "col.x7075.outer.bottom"
       ],
       "at": {"x": 7075, "y": 5275, "z": -550}
-    },
-    {
-      "id": "con.hollow.0.on.col.x125.bottom",
-      "type": "supported_on",
-      "members": [
-        "beam.hollow.0",
-        "col.x125.bottom"
-      ],
-      "at": {"x": 125, "y": 1675, "z": -250}
-    },
-    {
-      "id": "con.hollow.5.on.col.x7075.bottom",
-      "type": "supported_on",
-      "members": [
-        "beam.hollow.5",
-        "col.x7075.bottom"
-      ],
-      "at": {"x": 7075, "y": 1675, "z": -250}
-    },
-    {
-      "id": "con.col.x125.on.hollow.0",
-      "type": "supported_on",
-      "members": [
-        "col.x125",
-        "beam.hollow.0"
-      ],
-      "at": {"x": 125, "y": 1675, "z": 0}
-    },
-    {
-      "id": "con.col.x7075.on.hollow.5",
-      "type": "supported_on",
-      "members": [
-        "col.x7075",
-        "beam.hollow.5"
-      ],
-      "at": {"x": 7075, "y": 1675, "z": 0}
     },
     {
       "id": "con.purlins.lateral.kp450",
@@ -800,46 +768,6 @@
         "beam.kp450.y900"
       ],
       "spacing_mm": 900
-    },
-    {
-      "id": "con.col.x125.bottom.base",
-      "type": "column_base",
-      "members": [
-        "col.x125.bottom"
-      ],
-      "at": {"x": 125, "y": 1675, "z": -2990}
-    },
-    {
-      "id": "con.col.x7075.bottom.base",
-      "type": "column_base",
-      "members": [
-        "col.x7075.bottom"
-      ],
-      "at": {"x": 7075, "y": 1675, "z": -2990}
-    },
-    {
-      "id": "con.col.x125.outer.bottom.base",
-      "type": "column_base",
-      "members": [
-        "col.x125.outer.bottom"
-      ],
-      "at": {"x": 125, "y": 5275, "z": -3090}
-    },
-    {
-      "id": "con.col.x3600.outer.bottom.base",
-      "type": "column_base",
-      "members": [
-        "col.x3600.outer.bottom"
-      ],
-      "at": {"x": 3600, "y": 5275, "z": -3090}
-    },
-    {
-      "id": "con.col.x7075.outer.bottom.base",
-      "type": "column_base",
-      "members": [
-        "col.x7075.outer.bottom"
-      ],
-      "at": {"x": 7075, "y": 5275, "z": -3090}
     }
   ],
   "surfaces": [
@@ -860,15 +788,15 @@
         "diag.67.right"
       ],
       "placement": {
-        "anchor": {"x": -400, "y": 0, "z": 2950},
+        "anchor": {"x": -400, "y": -11000, "z": 2950},
         "u": {
           "dir": "+x",
           "horizontal_mm": 8000,
-          "rise_mm": 1780
+          "rise_mm": 1750
         },
         "v": {
           "dir": "+y",
-          "length_mm": 2200
+          "length_mm": 13200
         }
       },
       "local_shape": {

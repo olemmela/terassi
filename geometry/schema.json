@@ -160,6 +160,7 @@
         "ref":                  { "type": "string" },
         "axis_start":           { "$ref": "#/$defs/point" },
         "axis_end":             { "$ref": "#/$defs/point" },
+        "mass_kg":              { "type": "number" },
         "section_rotation_deg": { "type": "number", "default": 0 },
         "existing":             { "type": "boolean", "default": false },
         "pattern": {

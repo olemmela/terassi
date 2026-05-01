@@ -57,7 +57,7 @@
         "u": {
           "dir": "+x",
           "horizontal_mm": 8000,
-          "rise_mm": 1780
+          "rise_mm": 1750
         },
         "v": {
           "dir": "+y",
@@ -124,15 +124,15 @@
       {
         "id": "col.existing.inner.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": 0},
+        "base": {"x": 125, "y": 1675, "z": -3470},
         "top": {"x": 125, "y": 1675, "z": 2350},
         "existing": true
       },
       {
         "id": "col.existing.inner.x7075",
         "profile": "250x250",
-        "base": {"x": 7075, "y": 1675, "z": 0},
-        "top": {"x": 7075, "y": 1675, "z": 3900},
+        "base": {"x": 7075, "y": 1675, "z": -3470},
+        "top": {"x": 7075, "y": 1675, "z": 3870},
         "existing": true
       },
       {
@@ -162,7 +162,7 @@
         "id": "beam.existing.kp360x2",
         "profile": "2xKP360x51",
         "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4350},
+        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
         "existing": true
       },
       {

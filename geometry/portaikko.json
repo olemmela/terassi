@@ -87,15 +87,15 @@
       "id": "ref.house.roof",
       "type": "building_roof",
       "placement": {
-        "anchor": {"x": -400, "y": -10000, "z": 2950},
+        "anchor": {"x": -400, "y": -11000, "z": 2950},
         "u": {
           "dir": "+x",
           "horizontal_mm": 8000,
-          "rise_mm": 1780
+          "rise_mm": 1750
         },
         "v": {
           "dir": "+y",
-          "length_mm": 12200
+          "length_mm": 13200
         }
       },
       "local_shape": {
@@ -141,8 +141,8 @@
       {
         "id": "col.x7075",
         "profile": "250x250",
-        "base": {"x": 7075, "y": 1675, "z": 0},
-        "top": {"x": 7075, "y": 1675, "z": 3900},
+        "base": {"x": 7075, "y": 1675, "z": -3470},
+        "top": {"x": 7075, "y": 1675, "z": 3870},
         "existing": true
       },
       {

@@ -28,7 +28,7 @@
   qp(4.0 m)                     0.496 kN/m²
   cp,net alas / ylös              0.20 / -1.20
   Tuuli alas / ylös               0.099 / -0.596 kN/m²
-  Kinostuma max                   ref.house.roof (x=7200, y=1800) @ x=7200, y=1800 → h = 2.41 m, ls = 2.93 m, μ2 = 2.00
+  Kinostuma max                   ref.house.roof (x=7200, y=1800) @ x=7200, y=1800 → h = 2.38 m, ls = 2.93 m, μ2 = 2.00
   s_kin,max / s_kin@palkki        4.00 / 1.60 kN/m² @ rafter.wall
 
 ── HALLITSEVAT KUORMATAPAUKSET ──────────────────────────────
@@ -104,7 +104,7 @@
   * Tuuli mallinnetaan rakennukseen kiinnittyvänä avoimena pulpettikatoksena;
     vapaasti seisovan katoksen taulukkoa 7.7 ei käytetä tässä tiedostossa.
   * Kinostuma lasketaan rafterikohtaisesti. Suurin este on ref.house.roof (x=7200, y=1800) pisteessä
-    x = 7200 mm, y = 1800 mm; tämä antaa rafter.wall:lle h = 2.41 m ja s_kin,max = 4.00 kN/m².
+    x = 7200 mm, y = 1800 mm; tämä antaa rafter.wall:lle h = 2.38 m ja s_kin,max = 4.00 kN/m².
   * Kattotuolit laajennetaan geometriasta sekä erillisistä että pattern-jäsenistä,
     joten suurin tributäärileveys on 950 mm kattotuolilla rafter.5.
   * Kattotuolien seinäpää mallinnetaan piirustusten perusteella kiertymäjäykkänä,

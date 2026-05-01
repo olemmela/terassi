@@ -21,7 +21,15 @@ import io
 import math
 from pathlib import Path
 
-from beam_analysis import beam_solver, refine_nodes_mm, sample_internal_forces, sample_max_deflection_mm, uniform_loads_for_nodes
+from beam_analysis import (
+    beam_solver,
+    combine_uniform_loads,
+    intervals_to_uniform_loads,
+    refine_nodes_mm,
+    sample_internal_forces,
+    sample_max_deflection_mm,
+    uniform_loads_for_nodes,
+)
 from existing_beam_checks import (
     aggregate_point_loads,
     check_existing_lp225_x125_combined,
@@ -34,6 +42,7 @@ from existing_beam_checks import (
     uniform_line_member_support_reactions,
 )
 from geometry_loader import expanded_connections, expanded_members, load, member, surface, profile_b, profile_h
+from terrace_column_loads import calculate_katos_total_column_loads
 from timber_member_checks import (
     combined_section_h,
     governing_moment,
@@ -47,8 +56,9 @@ from timber_member_checks import (
 # GEOMETRIA  (luetaan geometry/katos.json:ista)
 # ============================================================
 _GEO = load("katos.json")
+_CONNECTION_LIST = expanded_connections(_GEO)
 _PURLIN_MEMBERS = {member_obj["id"]: member_obj for member_obj in expanded_members(_GEO, "purlins")}
-_CONNECTIONS = {connection_obj["id"]: connection_obj for connection_obj in expanded_connections(_GEO)}
+_CONNECTIONS = {connection_obj["id"]: connection_obj for connection_obj in _CONNECTION_LIST}
 _EXISTING_CTX = katos_existing_context()
 _ROOF_CTX = _EXISTING_CTX["roof"]
 _PURLIN_CTX = _EXISTING_CTX["purlins_main"]
@@ -123,6 +133,14 @@ def load_script_module_quietly(script_name, module_name):
     with contextlib.redirect_stdout(io.StringIO()):
         spec.loader.exec_module(module)
     return module
+
+
+def connection_by_members(member_a_id, member_b_id):
+    wanted = {member_a_id, member_b_id}
+    for connection_obj in _CONNECTION_LIST:
+        if set(connection_obj.get("members", [])) == wanted:
+            return connection_obj
+    raise KeyError(f"Connection not found for members: {member_a_id}, {member_b_id}")
 
 
 def connection_cut(connection_id, kind):
@@ -211,6 +229,7 @@ def make_connection_bevel_notch_depth_fn(info, support_coord_mm, member_length_m
     if info["reference"] in {"support_centerline", "support_inner_edge", "support_outer_edge"}:
         return make_support_referenced_bevel_notch_depth_fn(info, support_coord_mm, 0.0, member_length_mm)
     raise ValueError(f"Unsupported bevel notch reference for purlin check: {info['reference']}")
+
 
 # ============================================================
 # PALKKIEN POIKKILEIKKAUKSET  (Kerto-S LVL)
@@ -699,6 +718,35 @@ R_uplift2_right = _KP360_CTX["reactions_uplift_kN"][float(max(_col_xs))]
 R_uplift1 = min(R_uplift1_left, R_uplift1_right)
 R_uplift2 = min(R_uplift2_left, R_uplift2_right)
 
+# ============================================================
+# KOKONAISPILARIKUORMAT  (katos + koko terassi)
+# ============================================================
+KATOS_TOTAL_COLUMN_LOADS = calculate_katos_total_column_loads()
+gk_hollow_slab = KATOS_TOTAL_COLUMN_LOADS["gk_hollow_slab_kNm2"]
+gk_hollow_slab_allow = KATOS_TOTAL_COLUMN_LOADS["gk_hollow_slab_allow_kNm2"]
+gk_floor_cast = KATOS_TOTAL_COLUMN_LOADS["gk_floor_cast_kNm2"]
+qk_terrace_live = KATOS_TOTAL_COLUMN_LOADS["qk_terrace_live_kNm2"]
+qk_hollow_slab_allow = KATOS_TOTAL_COLUMN_LOADS["qk_hollow_slab_allow_kNm2"]
+hollow_beam_self_kNm = KATOS_TOTAL_COLUMN_LOADS["hollow_beam_self_kNm"]
+outer_beam_self_kNm = KATOS_TOTAL_COLUMN_LOADS["outer_beam_self_kNm"]
+outer_beam_total_self_kN = KATOS_TOTAL_COLUMN_LOADS["outer_beam_total_self_kN"]
+outer_beam_count = KATOS_TOTAL_COLUMN_LOADS["outer_beam_count"]
+column_case_totals = KATOS_TOTAL_COLUMN_LOADS["case_totals"]
+column_output_order = KATOS_TOTAL_COLUMN_LOADS["column_output_order"]
+column_display = KATOS_TOTAL_COLUMN_LOADS["column_display"]
+column_group_label = KATOS_TOTAL_COLUMN_LOADS["column_group_label"]
+hollow_slabs_sls = KATOS_TOTAL_COLUMN_LOADS["hollow_case_results"]["SLS"]
+hollow_cast_util_pct = gk_floor_cast / gk_hollow_slab_allow * 100.0 if gk_hollow_slab_allow > 1e-9 else float("inf")
+hollow_live_util_pct = qk_terrace_live / qk_hollow_slab_allow * 100.0 if qk_hollow_slab_allow > 1e-9 else float("inf")
+critical_hollow_slab = max(
+    hollow_slabs_sls,
+    key=lambda row: max(
+        abs(row["M_pos"]["value_kNm"]),
+        abs(row["M_neg"]["value_kNm"]),
+        abs(row["V_abs"]["value_kN"]),
+    ),
+)
+
 # ── 3) Lumikuorman epätasainen jakautuma (EN 1991-1-3 §6.2) ──
 # Yksilappinen katto: epätasaiset tapaukset eivät pääsääntöisesti koske
 # yksinkertaista yksilappeista katosta (ei murtumisvaaraa toiselle lappee).
@@ -1029,6 +1077,55 @@ print(f"  fm,d = {fm_d_lp:.1f} N/mm²  (GL30c, kmod={kmod_lp}, γM={gammaM_lp})"
 print(f"  W  = {W_lp/1e3:.0f} cm³   MRd = {MRd_lp:.2f} kNm   η_M = {eta_lp:.1f}%  {'OK ✓' if eta_lp <= 100 else '*** YLITTYY ***'}")
 print(f"  Vd = {Vd_lp:.2f} kN   VRd = {VRd_lp:.2f} kN          η_V = {eta_V_lp:.1f}%  {'OK ✓' if eta_V_lp <= 100 else '*** YLITTYY ***'}")
 
+print("\n── KOKONAISPILARIKUORMAT  (KATOS + TERASSI) ───────────")
+print(f"  Ontelolaatta saumattuna h=150  {gk_hollow_slab:.2f} kN/m²  = {hollow_beam_self_kNm:.3f} kN/m / laatta")
+print(f"  Pintavalu 60 mm                {gk_floor_cast:.2f} kN/m²")
+print(f"  Terassin hyötykuorma           {qk_terrace_live:.2f} kN/m²")
+if outer_beam_count == 1:
+    print(f"  Alapalkki 350×300              {outer_beam_self_kNm:.3f} kN/m")
+else:
+    print(
+        f"  Alapalkit {outer_beam_count}×350×300            "
+        f"{outer_beam_total_self_kN / outer_beam_count:.2f} kN / palkki  = {outer_beam_self_kNm:.3f} kN/m"
+    )
+print(f"  Betonipilari 250×250           {0.25 * 0.25 * KATOS_TOTAL_COLUMN_LOADS['gamma_concrete_kNm3']:.3f} kN/m")
+print("  Kuormareitti                   sisäpilarit suoraan perustuksille, ontelolaatat seinästä alapalkille, alapalkki ulompiin pilareihin")
+print()
+print(f"  {'Pilari':<22} {'Ryhmä':<10} {'N_sls':>9} {'N_uls':>9} {'N_min':>9}  {'Tila'}")
+print(f"  {'-'*22} {'-'*10} {'-'*9} {'-'*9} {'-'*9}  {'-'*18}")
+for column_id in column_output_order:
+    N_sls = column_case_totals["SLS"][column_id]
+    N_uls = column_case_totals["ULS"][column_id]
+    N_min = column_case_totals["UPLIFT"][column_id]
+    status = f"Puristus {N_min:.2f} kN  OK ✓" if N_min >= 0.0 else f"NOSTO {abs(N_min):.2f} kN"
+    print(
+        f"  {column_display[column_id]:<22} {column_group_label[column_id]:<10} "
+        f"{N_sls:>9.2f} {N_uls:>9.2f} {N_min:>9.2f}  {status}"
+    )
+
+print("\n── ONTELOLAATAT 1200×150 SAUMATTU ─────────────────────")
+print(f"  Piirustuksen lisäpysyvä g      {gk_hollow_slab_allow:.2f} kN/m²")
+print(f"  Piirustuksen hyötykuorma q     {qk_hollow_slab_allow:.2f} kN/m²")
+print(f"  Nykyinen pintavalu             {gk_floor_cast:.2f}/{gk_hollow_slab_allow:.2f} kN/m²  ({hollow_cast_util_pct:.0f}%)")
+print(f"  Nykyinen hyötykuorma           {qk_terrace_live:.2f}/{qk_hollow_slab_allow:.2f} kN/m²  ({hollow_live_util_pct:.0f}%)")
+print(f"  Oma paino vertailuna           {gk_hollow_slab:.2f} kN/m²  = {hollow_beam_self_kNm:.3f} kN/m")
+print("  Huom.                          g/q-arvot koskevat tasaista pinta-kuormaa; alla olevat voimasuureet on laskettu yksiaukkoisena seinä → alapalkki -laattana.")
+print()
+print(f"  {'ID':<14} {'b_trib':>6} {'q_uni':>7} {'R_wall':>8} {'R_out':>8} {'Md':>7} {'Vd':>7}")
+print(f"  {'-'*14} {'-'*6} {'-'*7} {'-'*8} {'-'*8} {'-'*7} {'-'*7}")
+for row in hollow_slabs_sls:
+    print(
+        f"  {row['id']:<14} {row['cast_tributary_width_m']:>6.3f} {row['uniform_total_area_load_kNm2']:>7.2f} "
+        f"{row['wall_reaction_kN']:>8.2f} {row['outer_reaction_kN']:>8.2f} "
+        f"{max(abs(row['M_pos']['value_kNm']), abs(row['M_neg']['value_kNm'])):>7.2f} "
+        f"{abs(row['V_abs']['value_kN']):>7.2f}"
+    )
+print(
+    f"  Kriittisin laatta              {critical_hollow_slab['id']}  "
+    f"Md = {max(abs(critical_hollow_slab['M_pos']['value_kNm']), abs(critical_hollow_slab['M_neg']['value_kNm'])):.2f} kNm, "
+    f"Vd = {abs(critical_hollow_slab['V_abs']['value_kN']):.2f} kN"
+)
+
 print()
 print(dw)
 print("  YHTEENVETO – KÄYTTÖASTEET")
@@ -1057,6 +1154,8 @@ print("  * KP450×51 kantaa suoran kattokaistan + pää- ja vino-orsien sisärea
 print("  * Rayst-orret on mallinnettu KP450-palkkien sivujatkeina, ei erillisinä KP360-siirtopisteinä.")
 print("  * Pää- ja vino-orret on tarkistettu 50x400 mm bevel bottom notch -lovella geometrian notched_over-liitoksista.")
 print("  * Räystäskuormat (x-suunta) huomioitu tukireaktioissa (LP225, pilarit).")
+print("  * Kokonaispilarikuormat sisältävät nyt myös terassin pintavalun, 1200×150 ontelolaattojen omapainon,")
+print("    betonisen alapalkin sekä maahan asti jatkuvien pilarien omapainon geometriasta johdettuna.")
 print("  * Leikkaus ja taipuma on laskettu combined-kuormituksesta (suora viivakuorma + orsipistekuormat).")
 print("  * Tuulikuorman nettopainekerroin interpoloitu EC1-1-4 taulukosta 7.7")
 print("    (vapaasti seisova katos – konservatiivinen yksinkertaistus seinään kiinnitetylle).")

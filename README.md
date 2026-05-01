@@ -36,6 +36,15 @@ Laskee kuormat ja mitoitustarkistukset nykyiselle yksikalteiselle katokselle (ka
 - Huoltokuorma (EN 1991-1-1, kategoria H)
 - Tuulen nostokuorma ja kiinnitystarkistus
 - LP225×90-päätykannakkeen mitoitus
+- Koko terassin kokonaispilarikuormat kaikille `katos.json`:n pilareille:
+  tehdasvalmisteiset yhtenäiset sisäpilarit sekä betonisen alapalkin varassa
+  olevat ulommat maapilarit
+- Terassin pintavalun, saumattujen `1200×150` ontelolaattojen,
+  terassin hyötykuorman (`q = 2.5 kN/m²`), betonisen alapalkin ja
+  betonipilarien kuormareitin geometriasta johdetulla mallilla
+- Ontelolaattojen SLS-kuormitustaulukon, jossa näkyvät laattakohtaiset
+  seinä- ja ulkopalkkireaktiot sekä vertailu piirustuksen tasaisiin
+  kapasiteetteihin `g = 2.0 kN/m²` ja `q = 2.5 kN/m²`
 
 ---
 
@@ -73,6 +82,10 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_notch`, `rect_notch`)
 - Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
 - Pilarireaktiot ja nostotarpeet
+- `geometry/katos.json`:n olemassa olevan terassin kokonaispilarikuormat täydennettynä
+  uuden puuratkaisun lisäkuormilla samoille pilarilinjoille, jolloin raportti näyttää
+  kuormat terassin jälkeen myös maahan asti, mukaan lukien ontelolaatan
+  omapaino, pintavalu ja terassin hyötykuorma
 
 ---
 
@@ -107,6 +120,10 @@ kaistalevyliitoksilla.
   transfer_link-pohjaisen kuormansiirron existing-rungolle
 - Sisäpalkin `beam.inner.new` -> `beam.existing.kp360x2` sovitusloven
   nettoh-tarkistuksen sekä transfer_linkien `h_net`-marginaalin lovialueella
+- `geometry/katos.json`:n olemassa olevan terassin kokonaispilarikuormat täydennettynä
+  puu2-variantin lisäkuormilla samoille pilarilinjoille, jolloin raportti näyttää
+  kuormat terassin jälkeen myös maahan asti, mukaan lukien ontelolaatan
+  omapaino, pintavalu ja terassin hyötykuorma
 
 ---
 
@@ -179,6 +196,18 @@ Yhteinen apumoduuli puujäsenten poikkileikkausominaisuuksille, nettoh-/
 lovitarkistuksille ja momentin hallitsevan pisteen poiminnalle. Tätä käyttävät
 nyt `kuormituslaskenta.py`, `terassilasitus_kuormituslaskenta.py`,
 `terassilasitus_kuormituslaskenta_v2.py` ja `portaikko_kuormituslaskenta.py`.
+
+---
+
+### `terrace_column_loads.py` – Jaettu koko terassin pilarikuormien kuormareitti
+
+Yhteinen apumoduuli `geometry/katos.json`:n koko terassin pilarikuormille. Laskee
+tehdasvalmisteisten jatkuvien sisäpilarien sekä betonisen alapalkin varassa
+olevien ulompien maapilarien kuormat. Sama moduuli laskee ontelolaatat
+yksiaukkoisina seinältä alapalkille, tukee yhtä tai useampaa erillistä
+betonista alapalkkia ja käyttää beam-jäsenen `mass_kg`-arvoa omapainoon, jos
+se on annettu geometriassa. Terassivaihtoehtojen lisäkuormat voidaan syöttää
+samoille pilarilinjoille tapauskohtaisesti.
 
 ---
 
