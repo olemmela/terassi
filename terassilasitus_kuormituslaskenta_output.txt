@@ -44,7 +44,6 @@
   Mitoittava piste              sisäreuna, y = 1800 mm, ULS = 5.40/5.40 kN/m², η = 100.0%  -> OK
   Rajan alitus edellyttää       s_kin <= 3.60 kN/m², h <= 1.80 m @ sisäreuna
   Nykyinen ylitys / varmuus     ΔULS = -0.00 kN/m², Δs_kin = -0.00 kN/m², Δh = -1 mm
-  Kentän reuna vertailuna       x = 7569 mm → ULS = 5.77 kN/m², η = 106.8%
 
   Tarkistuspisteet              kriittinen sarake 7/7
   Sijainti                  y [mm]   s_kin     ULS       η     Tila

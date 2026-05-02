@@ -971,8 +971,6 @@ for dy_mm, label in panel_depth_checkpoints(roof_depth_mm, panel_count_y):
     })
 critical_panel_check = max(critical_panel_check_rows, key=lambda item: (item["uls_kNm2"], -item["y_mm"]))
 critical_panel_ok = all(item["ok"] for item in critical_panel_check_rows)
-panel_edge_reference_uls_kNm2 = gammaQ * drift_snow_kNm2(critical_drift["x_mm"], roof_y0_mm)
-panel_edge_reference_eta_pct = 100.0 * panel_edge_reference_uls_kNm2 / panel_front_snow_cap_kNm2
 panel_char_limit_kNm2 = panel_front_snow_cap_kNm2 / gammaQ
 critical_panel_y_offset_mm = critical_panel_check["y_mm"] - roof_y0_mm
 panel_height_limit_m = wall_height_limit_for_panel_capacity(panel_front_snow_cap_kNm2, critical_panel_y_offset_mm)
@@ -2060,10 +2058,6 @@ else:
         f"  Nykyinen ylitys / varmuus     ΔULS = {panel_uls_margin_kNm2:+.2f} kN/m², "
         f"Δs_kin = {panel_char_margin_kNm2:+.2f} kN/m², Δh = {panel_height_margin_mm:+.0f} mm"
     )
-print(
-    f"  Kentän reuna vertailuna       x = {critical_drift['x_mm']:.0f} mm → "
-    f"ULS = {panel_edge_reference_uls_kNm2:.2f} kN/m², η = {panel_edge_reference_eta_pct:.1f}%"
-)
 print()
 print(f"  Tarkistuspisteet              kriittinen sarake {critical_panel_column['index']}/{panel_count_x}")
 print(f"  {'Sijainti':<24} {'y [mm]':>7} {'s_kin':>7} {'ULS':>7} {'η':>7} {'Tila':>8}")
