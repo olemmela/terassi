@@ -46,7 +46,6 @@
   Mitoittava piste              sisäreuna, y = 1800 mm, ULS = 5.40/5.40 kN/m², η = 100.0%  -> OK
   Rajan alitus edellyttää       s_kin <= 3.60 kN/m², h <= 1.80 m @ sisäreuna
   Nykyinen ylitys / varmuus     ΔULS = -0.00 kN/m², Δs_kin = -0.00 kN/m², Δh = -1 mm
-  Kentän reuna vertailuna       x = 7569 mm → ULS = 5.77 kN/m², η = 106.8%
 
   Tarkistuspisteet              kriittinen sarake 7/7
   Sijainti                  y [mm]   s_kin     ULS       η     Tila
@@ -167,14 +166,14 @@
   Siirtyvä voima yhteensa       20.76 kN
   Ekvivalentti vasen tukipiste  x = 825 mm  ->  L_eff = 6125 mm
   Kriittinen kaistalevy         Kaistalevy 4 / 4, Fd = 14.06 kN, η_fast = 24.9%, η_levy = 5.7%
-  Lovialueen pienin h_net/linkki Kaistalevy 1 / 4, h_net = 162 mm, levy = 280 mm, Δh = -118 mm  YLITTYY ✗
+  Lovialueen pienin h_net/linkki Kaistalevy 1 / 4, h_net = 162 mm, levy/jäsen = 140 mm (levy yht. 280 mm), Δh = +22 mm  OK ✓
 
-  ID                             x        k       Fd    η_fast    η_levy   h_net      Δh   M12/tarve
-  ------------------------- ------ -------- -------- --------- --------- ------- ------- -----------
-  Kaistalevy 1 / 4             290     5.65     6.22     11.0%      2.5%     162    -118    1/    1
-  Kaistalevy 2 / 4             490     5.65     0.00      0.0%      0.0%     207     -73    1/    1
-  Kaistalevy 3 / 4             690     5.65     6.70     11.9%      2.7%     252     -28    1/    1
-  Kaistalevy 4 / 4             890     5.65    14.06     24.9%      5.7%     297     +17    1/    1
+  ID                             x        k       Fd    η_fast    η_levy   h_net  levy/j      Δh   M12/tarve
+  ------------------------- ------ -------- -------- --------- --------- ------- ------- ------- -----------
+  Kaistalevy 1 / 4             290     5.65     6.22     11.0%      2.5%     162     140     +22    1/    1
+  Kaistalevy 2 / 4             490     5.65     0.00      0.0%      0.0%     207     140     +67    1/    1
+  Kaistalevy 3 / 4             690     5.65     6.70     11.9%      2.7%     252     140    +112    1/    1
+  Kaistalevy 4 / 4             890     5.65    14.06     24.9%      5.7%     297     140    +157    1/    1
 
 ── OLEMASSA OLEVA LP225x90 @ x125 ───────────────────────
   Hallitseva tapaus             ULS A

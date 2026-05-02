@@ -1266,8 +1266,6 @@ for dy_mm, label in panel_depth_checkpoints(roof_depth_mm, panel_count_y):
     })
 critical_panel_check = max(critical_panel_check_rows, key=lambda item: (item["uls_kNm2"], -item["y_mm"]))
 critical_panel_ok = all(item["ok"] for item in critical_panel_check_rows)
-panel_edge_reference_uls_kNm2 = gammaQ * drift_snow_kNm2(critical_drift["x_mm"], roof_y0_mm)
-panel_edge_reference_eta_pct = 100.0 * panel_edge_reference_uls_kNm2 / panel_front_snow_cap_kNm2
 panel_char_limit_kNm2 = panel_front_snow_cap_kNm2 / gammaQ
 critical_panel_y_offset_mm = critical_panel_check["y_mm"] - roof_y0_mm
 panel_height_limit_m = wall_height_limit_for_panel_capacity(panel_front_snow_cap_kNm2, critical_panel_y_offset_mm)
@@ -2365,12 +2363,14 @@ def analyse_transfer_zone_case(point_loads_kN, gamma_self, compression_only_inne
         abs_transfer_force_kN = abs(transfer_force_kN)
         h_net_inner_mm = inner_beam_section_h_fn(float(conn["at"]["x"]))
         plate_height_mm = float(transfer_info["plate_height_mm"])
+        plate_height_per_member_mm = plate_height_mm / 2.0
         transfer_rows.append({
             "id": conn["id"],
             "x_mm": float(conn["at"]["x"]),
             "description": transfer_info.get("description", conn["id"]),
             "strip_width_mm": float(transfer_info["strip_width_mm"]),
             "plate_height_mm": plate_height_mm,
+            "plate_height_per_member_mm": plate_height_per_member_mm,
             "outer_plate_thickness_mm": float(transfer_info["outer_plate_thickness_mm"]),
             "inner_plate_thickness_mm": float(transfer_info["inner_plate_thickness_mm"]),
             "fastener_d_mm": float(transfer_info["fastener_d_mm"]),
@@ -2389,8 +2389,8 @@ def analyse_transfer_zone_case(point_loads_kN, gamma_self, compression_only_inne
             "eta_plate_pct": abs_transfer_force_kN / transfer_link_plate_shear_capacity_kN(conn) * 100.0 if transfer_link_plate_shear_capacity_kN(conn) > 1e-9 else float("inf"),
             "required_fastener_count_per_member": max(1, int(math.ceil(abs_transfer_force_kN / max(1e-9, cap_per_fastener_kN)))),
             "h_net_inner_mm": h_net_inner_mm,
-            "plate_height_margin_mm": h_net_inner_mm - plate_height_mm,
-            "fits_inner_net_height": h_net_inner_mm + 1e-9 >= plate_height_mm,
+            "plate_height_margin_mm": h_net_inner_mm - plate_height_per_member_mm,
+            "fits_inner_net_height": h_net_inner_mm + 1e-9 >= plate_height_per_member_mm,
             "within_inner_beam_notch": any(zone_mm[0] - 1e-9 <= float(conn["at"]["x"]) <= zone_mm[1] + 1e-9 for zone_mm in inner_beam_fit_notch_zones_mm),
         })
 
@@ -2970,10 +2970,6 @@ else:
         f"  Nykyinen ylitys / varmuus     ΔULS = {panel_uls_margin_kNm2:+.2f} kN/m², "
         f"Δs_kin = {panel_char_margin_kNm2:+.2f} kN/m², Δh = {panel_height_margin_mm:+.0f} mm"
     )
-print(
-    f"  Kentän reuna vertailuna       x = {critical_drift['x_mm']:.0f} mm → "
-    f"ULS = {panel_edge_reference_uls_kNm2:.2f} kN/m², η = {panel_edge_reference_eta_pct:.1f}%"
-)
 print()
 print(f"  Tarkistuspisteet              kriittinen sarake {critical_panel_column['index']}/{panel_count_x}")
 print(f"  {'Sijainti':<24} {'y [mm]':>7} {'s_kin':>7} {'ULS':>7} {'η':>7} {'Tila':>8}")
@@ -3231,18 +3227,19 @@ else:
     print(
         f"  Lovialueen pienin h_net/linkki {transfer_link_fit_governing['description']}, "
         f"h_net = {transfer_link_fit_governing['h_net_inner_mm']:.0f} mm, "
-        f"levy = {transfer_link_fit_governing['plate_height_mm']:.0f} mm, "
+        f"levy/jäsen = {transfer_link_fit_governing['plate_height_per_member_mm']:.0f} mm "
+        f"(levy yht. {transfer_link_fit_governing['plate_height_mm']:.0f} mm), "
         f"Δh = {transfer_link_fit_governing['plate_height_margin_mm']:+.0f} mm  "
         f"{format_ok(transfer_link_fit_governing['fits_inner_net_height'])}"
     )
     print()
-    print(f"  {'ID':<25} {'x':>6} {'k':>8} {'Fd':>8} {'η_fast':>9} {'η_levy':>9} {'h_net':>7} {'Δh':>7} {'M12/tarve':>11}")
-    print(f"  {'-'*25} {'-'*6} {'-'*8} {'-'*8} {'-'*9} {'-'*9} {'-'*7} {'-'*7} {'-'*11}")
+    print(f"  {'ID':<25} {'x':>6} {'k':>8} {'Fd':>8} {'η_fast':>9} {'η_levy':>9} {'h_net':>7} {'levy/j':>7} {'Δh':>7} {'M12/tarve':>11}")
+    print(f"  {'-'*25} {'-'*6} {'-'*8} {'-'*8} {'-'*9} {'-'*9} {'-'*7} {'-'*7} {'-'*7} {'-'*11}")
     for row in transfer_zone_governing['transfer_rows']:
         print(
             f"  {row['description']:<25} {row['x_mm']:>6.0f} {row['k_N_per_mm']/1000.0:>8.2f} {row['force_abs_kN']:>8.2f}"
             f" {row['eta_fasteners_pct']:>8.1f}% {row['eta_plate_pct']:>8.1f}%"
-            f" {row['h_net_inner_mm']:>7.0f} {row['plate_height_margin_mm']:>+7.0f}"
+            f" {row['h_net_inner_mm']:>7.0f} {row['plate_height_per_member_mm']:>7.0f} {row['plate_height_margin_mm']:>+7.0f}"
             f" {row['fastener_count_per_member']:>4d}/{row['required_fastener_count_per_member']:>5d}"
         )
 
