@@ -91,11 +91,44 @@
   col.lp2 @ x=11900                 9.25      -1.87
   col.lp3 @ x=13200                 0.71      -0.21
 
+── PORTAIKON BETONIRAKENTEET JA PERUSTUSKUORMAT ─────────────
+  Ontelolaatat                   gk = 2.37 kN/m², qk = 2.50 kN/m²
+  Kuormareitti                   ontelolaatat / porraspalkki → vaakapalkki → betonipilarit
+  P15-22 sivutuki                mallinnettu ref.house_wall_corner-liitoksena; ei hyvitetä 1D-perustuskuormissa
+
+  Jäsen                           b/q   R_seinä   R_vaaka       Md       Vd
+  ------------------------ ---------- --------- --------- -------- --------
+  beam.hollow.entrance.0     1200 mm     11.26     10.84     7.04    10.85
+  beam.hollow.entrance.1      530 mm      4.97      4.79     3.11     4.79
+  beam.stairs               1.266 kN/m      1.71      1.64     1.07     1.65
+
+  Vaakapalkin tuki               SLS       ULS    UPLIFT
+  ------------------------ --------- --------- ---------
+  col.x7075                     8.58     12.08      4.74
+  col.x9100                     7.90     11.02      5.03
+
+── PERUSTUKSET ───────────────────────────────────────────────
+  col.x7075                      sisältää katos.json-baselinen + portaikon lisäkuormat
+  col.x9100                      sisältää vaakapalkin, LP225 col.lp1 -tuen ja pilarin omapainon
+  Anturat                       2 kpl, 800x800x300 mm
+  Maanpinta                     ref.ground; peitesyvyydet laskettu anturan kulmista
+  Pysyvä paino nostossa         antura + maanpeite, jos soil_cover.include_in_uplift = true
+  Maapohjan q_Rd                ei annettu; vertaa alla oleviin q_uls-arvoihin
+
+  Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
+  ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
+  fdn.portaikko.col.x7075 col.x7075              438...454 mm 738...754 mm    9.25      66      96    0.00    8.32     0.00
+  fdn.portaikko.col.x9100 col.x9100              438...454 mm 738...754 mm    9.25      44      63    0.00    8.32     0.00
+  Suurin pohjapaine ULS         96 kPa (fdn.portaikko.col.x7075)
+  Suurin jäljelle jäävä nosto   0.00 kN (fdn.portaikko.col.x7075)
+  Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
+
 ── YHTEENVETO ────────────────────────────────────────────────
   Hallitseva rakenneosa           rafter.5 → ULS MAINT / taivutus = 96.4%
   LP225×90 suurin käyttöaste      ULS MAINT / 19.6% (momentti), 28.6% (leikkaus)
   Suurin pilaripuristus           10.26 kN @ x=9100 mm
   Suurin pilarinostotarve         1.98 kN @ x=9100 mm
+  Suurin perustuspaine            96 kPa
   Tulos                           Kattotuoli on lähes täynnä mutta OK ✓
 
   HUOMIOT:

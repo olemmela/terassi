@@ -22,16 +22,15 @@ Rajaukset:
 import math
 
 from beam_analysis import (
-    beam_solver,
     element_section_state,
     refine_nodes_mm,
-    sample_internal_forces,
-    sample_max_deflection_mm,
     section_state_at_x_mm,
-    solve_linear_system,
+    solve_member_response,
     uniform_loads_for_nodes,
 )
+from foundation_checks import foundation_report_lines
 from geometry_loader import expanded_members, load, member, surface, reference, profile_b, profile_h
+from portaikko_loads import calculate_portaikko_foundation_loads
 from timber_member_checks import governing_moment, sample_net_section_utilization_rect as sample_net_section_utilization
 
 
@@ -131,35 +130,6 @@ def segment_uniform_loads(nodes_mm, q_kN_per_m_at_mm):
         (a_mm, b_mm, q_kN_per_m_at_mm(0.5 * (a_mm + b_mm)) / 1000.0)
         for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:])
     ]
-
-
-def solve_member_response(
-    nodes_mm,
-    supports_mm,
-    point_loads_kN,
-    uniform_loads_kN_per_mm,
-    EI_Nmm2=None,
-    EI_by_segment_Nmm2=None,
-    fixed_rotations_mm=None,
-):
-    """Ratkaisee jäsenen ja palauttaa FE-vasteen, sisäiset voimat ja taipuman."""
-    response = beam_solver(
-        nodes_mm,
-        supports_mm,
-        point_loads_kN=point_loads_kN,
-        uniform_loads_kN_per_mm=uniform_loads_kN_per_mm,
-        EI_Nmm2=1.0 if EI_Nmm2 is None else EI_Nmm2,
-        EI_by_segment_Nmm2=EI_by_segment_Nmm2,
-        fixed_rotations_mm=fixed_rotations_mm,
-    )
-    internal = sample_internal_forces(response["elements"])
-    delta = sample_max_deflection_mm(
-        response["nodes_mm"],
-        response["disp_mm"],
-        response["rot_rad"],
-        step_mm=2.0,
-    )
-    return response, internal, delta
 
 
 def bbox_contains_xy(x_mm, y_mm, polygon, tol=1e-9):
@@ -729,6 +699,16 @@ def analyse():
     max_column_down = max(results[down_case_beam]["beam"]["reactions_kN"].items(), key=lambda item: item[1])
     max_column_uplift = min(results["UPLIFT"]["beam"]["reactions_kN"].items(), key=lambda item: item[1])
 
+    foundation = calculate_portaikko_foundation_loads(
+        geo,
+        results,
+        beam_support_xs_mm,
+        down_case_keys,
+        gammaG,
+        gammaQ,
+        gamma_GL30c,
+    )
+
     return {
         "geo": {
             "roof_width_mm": roof_width_mm,
@@ -827,6 +807,7 @@ def analyse():
         "sls_rafter_results": sls_rafter_results,
         "uplift_rafter_results": uplift_rafter_results,
         "beam_governing": beam_governing,
+        "foundation": foundation,
     }
 
 
@@ -837,6 +818,7 @@ def main():
     drift = data["drift"]
     sec = data["sections"]
     cases = data["cases"]
+    foundation = data["foundation"]
 
     W = 64
     dw = "=" * W
@@ -961,11 +943,49 @@ def main():
         display = f"{col_id} @ x={x_mm:.0f}"
         print(f"  {display:<28} {down_val:>9.2f} {uplift_val:>10.2f}{tag}")
 
+    print("\n── PORTAIKON BETONIRAKENTEET JA PERUSTUSKUORMAT ─────────────")
+    print(f"  Ontelolaatat                   gk = {foundation['gk_hollow_slab']:.2f} kN/m², qk = {foundation['qk_floor_live']:.2f} kN/m²")
+    print("  Kuormareitti                   ontelolaatat / porraspalkki → vaakapalkki → betonipilarit")
+    print("  P15-22 sivutuki                mallinnettu ref.house_wall_corner-liitoksena; ei hyvitetä 1D-perustuskuormissa")
+    floor_uls = foundation["floor_results"]["ULS"]
+    print()
+    print(f"  {'Jäsen':<24} {'b/q':>10} {'R_seinä':>9} {'R_vaaka':>9} {'Md':>8} {'Vd':>8}")
+    print(f"  {'-'*24} {'-'*10} {'-'*9} {'-'*9} {'-'*8} {'-'*8}")
+    for slab in floor_uls["slabs"]:
+        moment = max(abs(slab["M_pos"]["value_kNm"]), abs(slab["M_neg"]["value_kNm"]))
+        print(
+            f"  {slab['id']:<24} {slab['width_m']*1000:>6.0f} mm {slab['wall_reaction_kN']:>9.2f}"
+            f" {slab['beam_reaction_kN']:>9.2f} {moment:>8.2f} {abs(slab['V_abs']['value_kN']):>8.2f}"
+        )
+    stair = floor_uls["stair_beam"]
+    stair_moment = max(abs(stair["M_pos"]["value_kNm"]), abs(stair["M_neg"]["value_kNm"]))
+    print(
+        f"  {'beam.stairs':<24} {stair['q_line_kNm']:>6.3f} kN/m {stair['wall_reaction_kN']:>9.2f}"
+        f" {stair['beam_reaction_kN']:>9.2f} {stair_moment:>8.2f} {abs(stair['V_abs']['value_kN']):>8.2f}"
+    )
+    print()
+    print(f"  {'Vaakapalkin tuki':<24} {'SLS':>9} {'ULS':>9} {'UPLIFT':>9}")
+    print(f"  {'-'*24} {'-'*9} {'-'*9} {'-'*9}")
+    for col_id, _x_mm in foundation["concrete_beam_supports"]:
+        print(
+            f"  {col_id:<24}"
+            f" {foundation['floor_results']['SLS']['concrete_beam']['reactions_by_column_id_kN'][col_id]:>9.2f}"
+            f" {foundation['floor_results']['ULS']['concrete_beam']['reactions_by_column_id_kN'][col_id]:>9.2f}"
+            f" {foundation['floor_results']['UPLIFT']['concrete_beam']['reactions_by_column_id_kN'][col_id]:>9.2f}"
+        )
+
+    print("\n── PERUSTUKSET ───────────────────────────────────────────────")
+    print("  col.x7075                      sisältää katos.json-baselinen + portaikon lisäkuormat")
+    print("  col.x9100                      sisältää vaakapalkin, LP225 col.lp1 -tuen ja pilarin omapainon")
+    for line in foundation_report_lines(foundation["checks"]):
+        print(line)
+
     print("\n── YHTEENVETO ────────────────────────────────────────────────")
     print(f"  Hallitseva rakenneosa           {crit['id']} → {data['down_case_rafter']} / {governing_label(crit['gov_mode'])} = {crit['eta_gov']:.1f}%")
     print(f"  LP225×90 suurin käyttöaste      {data['down_case_beam']} / {beam['eta_M']:.1f}% (momentti), {beam['eta_V']:.1f}% (leikkaus)")
     print(f"  Suurin pilaripuristus           {data['max_column_down'][1]:.2f} kN @ x={data['max_column_down'][0]:.0f} mm")
     print(f"  Suurin pilarinostotarve         {abs(data['max_column_uplift'][1]):.2f} kN @ x={data['max_column_uplift'][0]:.0f} mm")
+    print(f"  Suurin perustuspaine            {max(row['q_uls_kPa'] for row in foundation['checks']):.0f} kPa")
     print(f"  Tulos                           {'Kattotuoli on lähes täynnä mutta OK ✓' if crit['eta_gov'] <= 100.0 else 'Kattotuoli ylittää kapasiteetin ✗'}")
 
     print("\n  HUOMIOT:")

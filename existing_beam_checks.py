@@ -2,6 +2,7 @@ import math
 from functools import lru_cache
 
 from geometry_loader import expanded_connections, expanded_members, load, member, surface, profile_b, profile_h
+from structural_geometry import member_axis_length_mm, project_point_to_member_s_mm
 
 
 def aggregate_point_loads(point_loads):
@@ -270,31 +271,6 @@ def _connection_by_members(connections, member_a_id, member_b_id):
         if set(connection_obj.get("members", [])) == wanted:
             return connection_obj
     raise KeyError(f"Connection not found for members: {member_a_id}, {member_b_id}")
-
-
-def member_axis_length_mm(member_obj):
-    start = member_obj["axis_start"]
-    end = member_obj["axis_end"]
-    dx_mm = float(end["x"]) - float(start["x"])
-    dy_mm = float(end["y"]) - float(start["y"])
-    dz_mm = float(end["z"]) - float(start["z"])
-    return math.sqrt(dx_mm**2 + dy_mm**2 + dz_mm**2)
-
-
-def project_point_to_member_s_mm(member_obj, point):
-    start = member_obj["axis_start"]
-    end = member_obj["axis_end"]
-    dx_mm = float(end["x"]) - float(start["x"])
-    dy_mm = float(end["y"]) - float(start["y"])
-    dz_mm = float(end["z"]) - float(start["z"])
-    length_mm = math.sqrt(dx_mm**2 + dy_mm**2 + dz_mm**2)
-    if length_mm <= 1e-9:
-        return 0.0
-    vx_mm = float(point["x"]) - float(start["x"])
-    vy_mm = float(point["y"]) - float(start["y"])
-    vz_mm = float(point["z"]) - float(start["z"])
-    s_mm = (vx_mm * dx_mm + vy_mm * dy_mm + vz_mm * dz_mm) / length_mm
-    return max(0.0, min(length_mm, s_mm))
 
 
 @lru_cache(maxsize=1)

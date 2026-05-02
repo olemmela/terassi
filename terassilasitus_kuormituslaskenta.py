@@ -19,18 +19,18 @@ Geometria luetaan tiedostosta geometry/terassi_puu.json:
 import math
 
 from beam_analysis import (
-    beam_solver,
     combine_uniform_loads,
     intervals_to_uniform_loads,
     load_stats,
     refine_nodes_mm,
-    sample_internal_forces,
-    sample_max_deflection_mm,
+    solve_member_response,
     total_uniform_load_kN,
     uniform_loads_for_nodes,
 )
 from foundation_checks import foundation_checks_from_envelope, foundation_report_lines
 from geometry_loader import expanded_members, load, member, surface, reference, profile_b, profile_h
+from portaikko_loads import existing_column_extra_loads_by_case as portaikko_existing_column_extra_loads_by_case
+from structural_geometry import member_axis_length_mm, project_point_to_member_s_mm
 from terrace_column_loads import (
     GAMMA_CONCRETE_KNM3,
     COLUMN_CASE_FACTORS,
@@ -344,24 +344,6 @@ def member_axis_vector_3d(member_obj):
         float(member_obj["axis_end"]["y"]) - float(member_obj["axis_start"]["y"]),
         float(member_obj["axis_end"]["z"]) - float(member_obj["axis_start"]["z"]),
     )
-
-
-def member_axis_length_mm(member_obj):
-    dx_mm, dy_mm, dz_mm = member_axis_vector_3d(member_obj)
-    return math.sqrt(dx_mm**2 + dy_mm**2 + dz_mm**2)
-
-
-def project_point_to_member_s_mm(member_obj, point_xyz):
-    start = member_obj["axis_start"]
-    dx_mm, dy_mm, dz_mm = member_axis_vector_3d(member_obj)
-    length_sq = dx_mm**2 + dy_mm**2 + dz_mm**2
-    if length_sq <= 1e-9:
-        return 0.0
-    px_mm = float(point_xyz["x"]) - float(start["x"])
-    py_mm = float(point_xyz["y"]) - float(start["y"])
-    pz_mm = float(point_xyz.get("z", start["z"])) - float(start["z"])
-    t = clamp((px_mm * dx_mm + py_mm * dy_mm + pz_mm * dz_mm) / length_sq, 0.0, 1.0)
-    return t * math.sqrt(length_sq)
 
 
 def connection_other_member_id(connection_obj, member_id):
@@ -1123,29 +1105,6 @@ right_purlin_edge_support_line_x_mm = float(connection_support_point(right_purli
 
 analysis_step_member_mm = 100.0
 analysis_step_beam_mm = 150.0
-
-
-def solve_member_response(
-    nodes_mm,
-    supports_mm,
-    point_loads_kN,
-    uniform_loads_kN_per_mm,
-    EI_Nmm2=None,
-    EI_by_segment_Nmm2=None,
-    rotational_springs_Nmm_per_rad=None,
-):
-    response = beam_solver(
-        nodes_mm,
-        supports_mm,
-        point_loads_kN=point_loads_kN,
-        uniform_loads_kN_per_mm=uniform_loads_kN_per_mm,
-        EI_Nmm2=1.0 if EI_Nmm2 is None else EI_Nmm2,
-        EI_by_segment_Nmm2=EI_by_segment_Nmm2,
-        rotational_springs_Nmm_per_rad=rotational_springs_Nmm_per_rad,
-    )
-    internal = sample_internal_forces(response["elements"])
-    delta = sample_max_deflection_mm(response["nodes_mm"], response["disp_mm"], response["rot_rad"], step_mm=2.0)
-    return response, internal, delta
 
 
 def roof_area_uniform_loads(nodes_mm, fixed_coord_mm, roof_area_kNm2_at, trib_width_m, axis):
@@ -1938,6 +1897,23 @@ additional_upper_column_loads_by_case = {
     }
     for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
 }
+portaikko_extra_upper_column_loads_by_case = portaikko_existing_column_extra_loads_by_case(
+    (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
+)
+for case_key, column_loads in portaikko_extra_upper_column_loads_by_case.items():
+    for column_id, load_kN in column_loads.items():
+        additional_upper_column_loads_by_case[case_key][column_id] = (
+            additional_upper_column_loads_by_case[case_key].get(column_id, 0.0) + load_kN
+        )
+portaikko_col_x7075_extra_sls = max(
+    portaikko_extra_upper_column_loads_by_case[case_key]["col.x7075"]
+    for case_key in SLS_CASE_KEYS
+)
+portaikko_col_x7075_extra_uls = max(
+    portaikko_extra_upper_column_loads_by_case[case_key]["col.x7075"]
+    for case_key in ULS_CASE_KEYS
+)
+portaikko_col_x7075_extra_uplift = portaikko_extra_upper_column_loads_by_case["UPLIFT"]["col.x7075"]
 additional_ground_column_loads_by_case = {}
 for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT"):
     permanent_factor = COLUMN_CASE_FACTORS[column_case_groups[case_key]]
@@ -2276,10 +2252,7 @@ print(f"  Suurin sisätuen nostotarve        {abs(min(inner_uplift.values())):.2
 
 print("\n── KOKONAISPILARIKUORMAT TERASSIN JÄLKEEN ───────────────────────")
 print(f"  Olemassa oleva baseline        geometry/katos.json + uuden terassin lisäkuormat")
-print(
-    f"  Ontelolaatta saumattuna h=150  {terrace_total_column_loads['gk_hollow_slab_kNm2']:.2f} kN/m²"
-    f"  = {terrace_total_column_loads['hollow_beam_self_kNm']:.3f} kN/m / laatta"
-)
+print(f"  Ontelolaatta saumattuna h=150  {terrace_total_column_loads['gk_hollow_slab_kNm2']:.2f} kN/m²")
 print(f"  Pintavalu 60 mm                {terrace_total_column_loads['gk_floor_cast_kNm2']:.2f} kN/m²")
 print(f"  Terassin hyötykuorma           {terrace_total_column_loads['qk_terrace_live_kNm2']:.2f} kN/m²")
 if terrace_total_column_loads["outer_beam_count"] == 1:
@@ -2291,6 +2264,11 @@ else:
         f" kN / palkki  = {terrace_total_column_loads['outer_beam_self_kNm']:.3f} kN/m"
     )
 print("  Kuormareitti                   sisäpilarit suoraan perustuksille, ontelolaatat seinästä alapalkille, alapalkki ulompiin pilareihin")
+print("  Ontelolaatan päätyreaktio      jaetaan alapalkille laatan leveyden matkalle")
+print(
+    f"  Portaikon lisä col.x7075       SLS {portaikko_col_x7075_extra_sls:.2f} kN /"
+    f" ULS {portaikko_col_x7075_extra_uls:.2f} kN / UPLIFT {portaikko_col_x7075_extra_uplift:.2f} kN"
+)
 print(f"  N_sls / N_uls / N_min          max(SLS,SLS DRIFT) / max(ULS A, ULS B, ULS DRIFT) / UPLIFT")
 print()
 print(f"  {'Pilari':<22} {'Ryhmä':<10} {'N_sls':>9} {'N_uls':>9} {'N_min':>9}  {'Tila'}")

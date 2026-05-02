@@ -301,6 +301,42 @@
       "enum": ["pinned", "semi_rigid", "rigid"]
     },
 
+    "reaction_distribution": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["point", "uniform_over_supported_member_width", "uniform_over_width"]
+        },
+        "width_ref": {
+          "type": "string",
+          "enum": ["supported_member_profile_b"]
+        },
+        "width_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "label": { "type": "string" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "uniform_over_supported_member_width" } }
+          },
+          "then": {
+            "required": ["width_ref"]
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "uniform_over_width" } }
+          },
+          "then": {
+            "required": ["width_mm"]
+          }
+        }
+      ]
+    },
+
     "rotation_spring": {
       "type": "object",
       "required": ["model"],
@@ -340,6 +376,7 @@
       "properties": {
         "support_model":   { "$ref": "#/$defs/support_model" },
         "support_line_ref": { "$ref": "#/$defs/support_line_reference" },
+        "reaction_distribution": { "$ref": "#/$defs/reaction_distribution" },
         "rotation_spring": { "$ref": "#/$defs/rotation_spring" },
         "label":           { "type": "string" },
         "fastener_label":  { "type": "string" }

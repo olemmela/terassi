@@ -43,6 +43,7 @@ from existing_beam_checks import (
 )
 from foundation_checks import foundation_checks_from_envelope, foundation_report_lines
 from geometry_loader import expanded_connections, expanded_members, load, member, surface, profile_b, profile_h
+from portaikko_loads import existing_column_extra_loads_by_case as portaikko_existing_column_extra_loads_by_case
 from terrace_column_loads import calculate_katos_total_column_loads, envelope_column_totals
 from timber_member_checks import (
     combined_section_h,
@@ -715,15 +716,20 @@ R_uplift1 = min(R_uplift1_left, R_uplift1_right)
 R_uplift2 = min(R_uplift2_left, R_uplift2_right)
 
 # ============================================================
-# KOKONAISPILARIKUORMAT  (katos + koko terassi)
+# KOKONAISPILARIKUORMAT  (katos + koko terassi + portaikon jaettu pilari)
 # ============================================================
-KATOS_TOTAL_COLUMN_LOADS = calculate_katos_total_column_loads()
+portaikko_extra_upper_column_loads_by_case = portaikko_existing_column_extra_loads_by_case(("ULS", "SLS", "UPLIFT"))
+KATOS_TOTAL_COLUMN_LOADS = calculate_katos_total_column_loads(
+    extra_upper_column_loads_by_case=portaikko_extra_upper_column_loads_by_case,
+)
+portaikko_col_x7075_extra_sls = portaikko_extra_upper_column_loads_by_case["SLS"]["col.x7075"]
+portaikko_col_x7075_extra_uls = portaikko_extra_upper_column_loads_by_case["ULS"]["col.x7075"]
+portaikko_col_x7075_extra_uplift = portaikko_extra_upper_column_loads_by_case["UPLIFT"]["col.x7075"]
 gk_hollow_slab = KATOS_TOTAL_COLUMN_LOADS["gk_hollow_slab_kNm2"]
 gk_hollow_slab_allow = KATOS_TOTAL_COLUMN_LOADS["gk_hollow_slab_allow_kNm2"]
 gk_floor_cast = KATOS_TOTAL_COLUMN_LOADS["gk_floor_cast_kNm2"]
 qk_terrace_live = KATOS_TOTAL_COLUMN_LOADS["qk_terrace_live_kNm2"]
 qk_hollow_slab_allow = KATOS_TOTAL_COLUMN_LOADS["qk_hollow_slab_allow_kNm2"]
-hollow_beam_self_kNm = KATOS_TOTAL_COLUMN_LOADS["hollow_beam_self_kNm"]
 outer_beam_self_kNm = KATOS_TOTAL_COLUMN_LOADS["outer_beam_self_kNm"]
 outer_beam_total_self_kN = KATOS_TOTAL_COLUMN_LOADS["outer_beam_total_self_kN"]
 outer_beam_count = KATOS_TOTAL_COLUMN_LOADS["outer_beam_count"]
@@ -1083,8 +1089,8 @@ print(f"  fm,d = {fm_d_lp:.1f} N/mm²  (GL30c, kmod={kmod_lp}, γM={gammaM_lp})"
 print(f"  W  = {W_lp/1e3:.0f} cm³   MRd = {MRd_lp:.2f} kNm   η_M = {eta_lp:.1f}%  {'OK ✓' if eta_lp <= 100 else '*** YLITTYY ***'}")
 print(f"  Vd = {Vd_lp:.2f} kN   VRd = {VRd_lp:.2f} kN          η_V = {eta_V_lp:.1f}%  {'OK ✓' if eta_V_lp <= 100 else '*** YLITTYY ***'}")
 
-print("\n── KOKONAISPILARIKUORMAT  (KATOS + TERASSI) ───────────")
-print(f"  Ontelolaatta saumattuna h=150  {gk_hollow_slab:.2f} kN/m²  = {hollow_beam_self_kNm:.3f} kN/m / laatta")
+print("\n── KOKONAISPILARIKUORMAT  (KATOS + TERASSI + PORTAIKKO) ─")
+print(f"  Ontelolaatta saumattuna h=150  {gk_hollow_slab:.2f} kN/m²")
 print(f"  Pintavalu 60 mm                {gk_floor_cast:.2f} kN/m²")
 print(f"  Terassin hyötykuorma           {qk_terrace_live:.2f} kN/m²")
 if outer_beam_count == 1:
@@ -1096,6 +1102,11 @@ else:
     )
 print(f"  Betonipilari 250×250           {0.25 * 0.25 * KATOS_TOTAL_COLUMN_LOADS['gamma_concrete_kNm3']:.3f} kN/m")
 print("  Kuormareitti                   sisäpilarit suoraan perustuksille, ontelolaatat seinästä alapalkille, alapalkki ulompiin pilareihin")
+print("  Ontelolaatan päätyreaktio      jaetaan alapalkille laatan leveyden matkalle")
+print(
+    f"  Portaikon lisä col.x7075       SLS {portaikko_col_x7075_extra_sls:.2f} kN /"
+    f" ULS {portaikko_col_x7075_extra_uls:.2f} kN / UPLIFT {portaikko_col_x7075_extra_uplift:.2f} kN"
+)
 print()
 print(f"  {'Pilari':<22} {'Ryhmä':<10} {'N_sls':>9} {'N_uls':>9} {'N_min':>9}  {'Tila'}")
 print(f"  {'-'*22} {'-'*10} {'-'*9} {'-'*9} {'-'*9}  {'-'*18}")
@@ -1119,7 +1130,7 @@ print(f"  Piirustuksen lisäpysyvä g      {gk_hollow_slab_allow:.2f} kN/m²")
 print(f"  Piirustuksen hyötykuorma q     {qk_hollow_slab_allow:.2f} kN/m²")
 print(f"  Nykyinen pintavalu             {gk_floor_cast:.2f}/{gk_hollow_slab_allow:.2f} kN/m²  ({hollow_cast_util_pct:.0f}%)")
 print(f"  Nykyinen hyötykuorma           {qk_terrace_live:.2f}/{qk_hollow_slab_allow:.2f} kN/m²  ({hollow_live_util_pct:.0f}%)")
-print(f"  Oma paino vertailuna           {gk_hollow_slab:.2f} kN/m²  = {hollow_beam_self_kNm:.3f} kN/m")
+print(f"  Oma paino vertailuna           {gk_hollow_slab:.2f} kN/m²  (viivakuorma riippuu laatan leveydestä)")
 print("  Huom.                          g/q-arvot koskevat tasaista pinta-kuormaa; alla olevat voimasuureet on laskettu yksiaukkoisena seinä → alapalkki -laattana.")
 print()
 print(f"  {'ID':<14} {'b_trib':>6} {'q_uni':>7} {'R_wall':>8} {'R_out':>8} {'Md':>7} {'Vd':>7}")

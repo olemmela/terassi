@@ -221,6 +221,39 @@ def total_uniform_load_kN(loads):
     return sum((b_mm - a_mm) * q_kN_per_mm for a_mm, b_mm, q_kN_per_mm in loads)
 
 
+def solve_member_response(
+    nodes_mm,
+    supports_mm,
+    point_loads_kN=None,
+    uniform_loads_kN_per_mm=None,
+    EI_Nmm2=None,
+    EI_by_segment_Nmm2=None,
+    fixed_rotations_mm=None,
+    rotational_springs_Nmm_per_rad=None,
+    deflection_step_mm=2.0,
+):
+    """Solve a beam member and return FE response, internal forces, and max deflection."""
+
+    response = beam_solver(
+        nodes_mm,
+        supports_mm,
+        point_loads_kN=[] if point_loads_kN is None else point_loads_kN,
+        uniform_loads_kN_per_mm=[] if uniform_loads_kN_per_mm is None else uniform_loads_kN_per_mm,
+        EI_Nmm2=1.0 if EI_Nmm2 is None else EI_Nmm2,
+        EI_by_segment_Nmm2=EI_by_segment_Nmm2,
+        fixed_rotations_mm=fixed_rotations_mm,
+        rotational_springs_Nmm_per_rad=rotational_springs_Nmm_per_rad,
+    )
+    internal = sample_internal_forces(response["elements"])
+    delta = sample_max_deflection_mm(
+        response["nodes_mm"],
+        response["disp_mm"],
+        response["rot_rad"],
+        step_mm=deflection_step_mm,
+    )
+    return response, internal, delta
+
+
 def intervals_to_uniform_loads(nodes_mm, intervals):
     loads = []
     for a_mm, b_mm in zip(nodes_mm, nodes_mm[1:]):

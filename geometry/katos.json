@@ -215,9 +215,23 @@
       "h_mm": 350
     },
     {
-      "id": "1200x150",
+      "id": "P15-19",
+      "name": "950x150",
+      "material": "Ontelolaatta",
+      "b_mm": 950,
+      "h_mm": 150
+    },
+    {
+      "id": "P15-20",
       "name": "1200x150",
-      "material": "Betoni",
+      "material": "Ontelolaatta",
+      "b_mm": 1200,
+      "h_mm": 150
+    },
+    {
+      "id": "P15-21",
+      "name": "1200x150",
+      "material": "Ontelolaatta",
       "b_mm": 1200,
       "h_mm": 150
     },
@@ -346,44 +360,44 @@
       },
       {
         "id": "beam.hollow.0",
-        "profile": "1200x150",
+        "profile": "P15-19",
         "axis_start": {"x": 600, "y": -50, "z": -140},
         "axis_end": {"x": 600, "y": 5150, "z": -200},
         "existing": true
       },
       {
         "id": "beam.hollow.1",
-        "profile": "1200x150",
-        "axis_start": {"x": 1800, "y": -50, "z": -140},
-        "axis_end": {"x": 1800, "y": 5150, "z": -200},
+        "profile": "P15-20",
+        "axis_start": {"x": 1675, "y": -50, "z": -140},
+        "axis_end": {"x": 1675, "y": 5150, "z": -200},
         "existing": true
       },
       {
         "id": "beam.hollow.2",
-        "profile": "1200x150",
-        "axis_start": {"x": 3000, "y": -50, "z": -140},
-        "axis_end": {"x": 3000, "y": 5150, "z": -200},
+        "profile": "P15-20",
+        "axis_start": {"x": 2875, "y": -50, "z": -140},
+        "axis_end": {"x": 2875, "y": 5150, "z": -200},
         "existing": true
       },
       {
         "id": "beam.hollow.3",
-        "profile": "1200x150",
-        "axis_start": {"x": 4200, "y": -50, "z": -140},
-        "axis_end": {"x": 4200, "y": 5150, "z": -200},
+        "profile": "P15-20",
+        "axis_start": {"x": 4075, "y": -50, "z": -140},
+        "axis_end": {"x": 4075, "y": 5150, "z": -200},
         "existing": true
       },
       {
         "id": "beam.hollow.4",
-        "profile": "1200x150",
-        "axis_start": {"x": 5400, "y": -50, "z": -140},
-        "axis_end": {"x": 5400, "y": 5150, "z": -200},
+        "profile": "P15-20",
+        "axis_start": {"x": 5275, "y": -50, "z": -140},
+        "axis_end": {"x": 5275, "y": 5150, "z": -200},
         "existing": true
       },
       {
         "id": "beam.hollow.5",
-        "profile": "1200x150",
-        "axis_start": {"x": 6600, "y": -50, "z": -140},
-        "axis_end": {"x": 6600, "y": 5150, "z": -200},
+        "profile": "P15-21",
+        "axis_start": {"x": 6475, "y": -50, "z": -140},
+        "axis_end": {"x": 6475, "y": 5150, "z": -200},
         "existing": true
       }
     ],
@@ -820,7 +834,7 @@
         "beam.hollow.1",
         "ref.house_wall"
       ],
-      "at": {"x": 1800, "y": 0, "z": -141}
+      "at": {"x": 1675, "y": 0, "z": -141}
     },
     {
       "id": "con.hollow.2.on.house_wall",
@@ -829,7 +843,7 @@
         "beam.hollow.2",
         "ref.house_wall"
       ],
-      "at": {"x": 3000, "y": 0, "z": -141}
+      "at": {"x": 2875, "y": 0, "z": -141}
     },
     {
       "id": "con.hollow.3.on.house_wall",
@@ -838,7 +852,7 @@
         "beam.hollow.3",
         "ref.house_wall"
       ],
-      "at": {"x": 4200, "y": 0, "z": -141}
+      "at": {"x": 4075, "y": 0, "z": -141}
     },
     {
       "id": "con.hollow.4.on.house_wall",
@@ -847,7 +861,7 @@
         "beam.hollow.4",
         "ref.house_wall"
       ],
-      "at": {"x": 5400, "y": 0, "z": -141}
+      "at": {"x": 5275, "y": 0, "z": -141}
     },
     {
       "id": "con.hollow.5.on.house_wall",
@@ -856,7 +870,7 @@
         "beam.hollow.5",
         "ref.house_wall"
       ],
-      "at": {"x": 6600, "y": 0, "z": -141}
+      "at": {"x": 6475, "y": 0, "z": -141}
     },
     {
       "id": "con.hollow.0.on.outer_beam",
@@ -865,7 +879,16 @@
         "beam.hollow.0",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 600, "y": 5150, "z": -200}
+      "at": {"x": 600, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.hollow.1.on.outer_beam",
@@ -874,7 +897,16 @@
         "beam.hollow.1",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 1800, "y": 5150, "z": -200}
+      "at": {"x": 1675, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.hollow.2.on.outer_beam",
@@ -883,7 +915,16 @@
         "beam.hollow.2",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 3000, "y": 5150, "z": -200}
+      "at": {"x": 2875, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.hollow.3.on.outer_beam",
@@ -892,7 +933,16 @@
         "beam.hollow.3",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 4200, "y": 5150, "z": -200}
+      "at": {"x": 4075, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.hollow.4.on.outer_beam",
@@ -901,7 +951,16 @@
         "beam.hollow.4",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 5400, "y": 5150, "z": -200}
+      "at": {"x": 5275, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.hollow.5.on.outer_beam",
@@ -910,7 +969,16 @@
         "beam.hollow.5",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 6600, "y": 5150, "z": -200}
+      "at": {"x": 6475, "y": 5150, "z": -200},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
     },
     {
       "id": "con.bottom.conreate.on.col.x125.outer",

@@ -101,6 +101,57 @@
       "local_shape": {
         "type": "rectangle"
       }
+    },
+    {
+      "id": "ref.ground",
+      "type": "ground",
+      "placement": {
+        "anchor": {"x": -1000, "y": 0, "z": -2990},
+        "u": {
+          "dir": "+x",
+          "length_mm": 16000
+        },
+        "v": {
+          "dir": "+y",
+          "horizontal_mm": 10000,
+          "rise_mm": -200
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    }
+  ],
+  "foundations": [
+    {
+      "id": "fdn.portaikko.col.x7075",
+      "type": "pad_footing",
+      "supports": "col.x7075",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
+    },
+    {
+      "id": "fdn.portaikko.col.x9100",
+      "type": "pad_footing",
+      "supports": "col.x9100",
+      "size_mm": {"x": 800, "y": 800, "z": 300},
+      "material": "Teräsbetoni",
+      "gamma_kNm3": 24,
+      "ground_ref": "ref.ground",
+      "frost_insulated": true,
+      "soil_cover": {"gamma_kNm3": 18, "include_in_uplift": true},
+      "anchorage": {
+        "type": "reinforcing_dowels",
+        "description": "Pilari ankkuroitu anturaan raudoituksella"
+      }
     }
   ],
   "profiles": [
@@ -110,6 +161,34 @@
       "material": "Betoni",
       "b_mm": 250,
       "h_mm": 250
+    },
+    {
+      "id": "350x300",
+      "name": "350x300",
+      "material": "Betoni",
+      "b_mm": 300,
+      "h_mm": 350
+    },
+    {
+      "id": "150x250",
+      "name": "150x250",
+      "material": "Betoni",
+      "b_mm": 250,
+      "h_mm": 150
+    },
+    {
+      "id": "P15-22",
+      "name": "1200x150",
+      "material": "Ontelolaatta",
+      "b_mm": 1200,
+      "h_mm": 150
+    },
+    {
+      "id": "P15-23",
+      "name": "530x150",
+      "material": "Ontelolaatta",
+      "b_mm": 530,
+      "h_mm": 150
     },
     {
       "id": "LP225x90",
@@ -146,6 +225,13 @@
         "existing": true
       },
       {
+        "id": "col.x9100",
+        "profile": "250x250",
+        "base": {"x": 9100, "y": 1675, "z": -3470},
+        "top": {"x": 9100, "y": 1675, "z": -520},
+        "existing": true
+      },
+      {
         "id": "col.lp1",
         "profile": "LP90x90",
         "base": {"x": 9100, "y": 1675, "z": 0},
@@ -173,6 +259,35 @@
         "profile": "LP225x90",
         "axis_start": {"x": 7200, "y": 1675, "z": 1970},
         "axis_end": {"x": 13300, "y": 1675, "z": 1970},
+        "existing": true
+      },
+      {
+        "id": "beam.entrance",
+        "profile": "350x300",
+        "axis_start": {"x": 7210, "y": 1650, "z": -340},
+        "axis_end": {"x": 9220, "y": 1650, "z": -340},
+        "mass_kg": 440,
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.entrance.0",
+        "profile": "P15-22",
+        "axis_start": {"x": 7675, "y": -1050, "z": -120},
+        "axis_end": {"x": 7675, "y": 1600, "z": -160},
+        "existing": true
+      },
+      {
+        "id": "beam.hollow.entrance.1",
+        "profile": "P15-23",
+        "axis_start": {"x": 8540, "y": -1050, "z": -120},
+        "axis_end": {"x": 8540, "y": 1600, "z": -160},
+        "existing": true
+      },
+      {
+        "id": "beam.stairs",
+        "profile": "150x250",
+        "axis_start": {"x": 8930, "y": -1050, "z": -120},
+        "axis_end": {"x": 8930, "y": 1600, "z": -160},
         "existing": true
       }
     ],
@@ -285,6 +400,140 @@
         "col.lp3"
       ],
       "at": {"x": 13200, "y": 1675, "z": 1858}
+    },
+    {
+      "id": "con.beam.entrance.on.col.x7075",
+      "type": "supported_on",
+      "members": [
+        "beam.entrance",
+        "col.x7075"
+      ],
+      "at": {"x": 7210, "y": 1650, "z": -520},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "label": "raudoitettu betonikonsoli"
+      }
+    },
+    {
+      "id": "con.beam.entrance.on.col.x9100",
+      "type": "supported_on",
+      "members": [
+        "beam.entrance",
+        "col.x9100"
+      ],
+      "at": {"x": 9100, "y": 1650, "z": -520},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "label": "raudoitettu betonikonsoli"
+      }
+    },
+    {
+      "id": "con.hollow.entrance.0.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.entrance.0",
+        "ref.house_wall_entrance"
+      ],
+      "at": {"x": 7675, "y": -1000, "z": -121},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.hollow.entrance.0.edge.on.house_wall_corner",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.entrance.0",
+        "ref.house_wall_corner"
+      ],
+      "at": {"x": 7200, "y": -500, "z": -130},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_width",
+          "width_mm": 1000,
+          "label": "mahdollinen sivureunan laakerointi seinäkulmaan, jos P15-22 on täysileveä"
+        }
+      }
+    },
+    {
+      "id": "con.hollow.entrance.0.on.beam.entrance",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.entrance.0",
+        "beam.entrance"
+      ],
+      "at": {"x": 7675, "y": 1600, "z": -160},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
+    },
+    {
+      "id": "con.hollow.entrance.1.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.entrance.1",
+        "ref.house_wall_entrance"
+      ],
+      "at": {"x": 8540, "y": -1000, "z": -121},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.hollow.entrance.1.on.beam.entrance",
+      "type": "supported_on",
+      "members": [
+        "beam.hollow.entrance.1",
+        "beam.entrance"
+      ],
+      "at": {"x": 8540, "y": 1600, "z": -160},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline",
+        "reaction_distribution": {
+          "type": "uniform_over_supported_member_width",
+          "width_ref": "supported_member_profile_b",
+          "label": "ontelolaatan päätyreaktio laatan leveyden matkalle"
+        }
+      }
+    },
+    {
+      "id": "con.beam.stairs.on.house_wall",
+      "type": "supported_on",
+      "members": [
+        "beam.stairs",
+        "ref.house_wall_entrance"
+      ],
+      "at": {"x": 8930, "y": -1000, "z": -121},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.beam.stairs.on.beam.entrance",
+      "type": "supported_on",
+      "members": [
+        "beam.stairs",
+        "beam.entrance"
+      ],
+      "at": {"x": 8930, "y": 1600, "z": -160},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_centerline"
+      }
     }
   ],
   "surfaces": [

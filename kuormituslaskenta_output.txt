@@ -129,21 +129,23 @@
   W  = 759 cm³   MRd = 11.85 kNm   η_M = 30.9%  OK ✓
   Vd = 4.72 kN   VRd = 24.57 kN          η_V = 19.2%  OK ✓
 
-── KOKONAISPILARIKUORMAT  (KATOS + TERASSI) ───────────
-  Ontelolaatta saumattuna h=150  2.37 kN/m²  = 2.844 kN/m / laatta
+── KOKONAISPILARIKUORMAT  (KATOS + TERASSI + PORTAIKKO) ─
+  Ontelolaatta saumattuna h=150  2.37 kN/m²
   Pintavalu 60 mm                1.50 kN/m²
   Terassin hyötykuorma           2.50 kN/m²
   Alapalkit 2×350×300            7.70 kN / palkki  = 2.145 kN/m
   Betonipilari 250×250           1.562 kN/m
   Kuormareitti                   sisäpilarit suoraan perustuksille, ontelolaatat seinästä alapalkille, alapalkki ulompiin pilareihin
+  Ontelolaatan päätyreaktio      jaetaan alapalkille laatan leveyden matkalle
+  Portaikon lisä col.x7075       SLS 10.19 kN / ULS 14.70 kN / UPLIFT 4.25 kN
 
   Pilari                 Ryhmä          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
   col.x125               sisäpilari     20.32     30.71      0.97  Puristus 0.97 kN  OK ✓
-  col.x7075              sisäpilari     22.79     34.07      3.03  Puristus 3.03 kN  OK ✓
-  col.x125.outer.bottom  ulkopilari     35.09     48.91     22.37  Puristus 22.37 kN  OK ✓
-  col.x3600.outer.bottom ulkopilari     68.60     95.89     42.04  Puristus 42.04 kN  OK ✓
-  col.x7075.outer.bottom ulkopilari     34.90     48.65     22.26  Puristus 22.26 kN  OK ✓
+  col.x7075              sisäpilari     32.98     48.77      7.28  Puristus 7.28 kN  OK ✓
+  col.x125.outer.bottom  ulkopilari     35.09     48.90     22.37  Puristus 22.37 kN  OK ✓
+  col.x3600.outer.bottom ulkopilari     68.54     95.82     42.01  Puristus 42.01 kN  OK ✓
+  col.x7075.outer.bottom ulkopilari     34.96     48.73     22.29  Puristus 22.29 kN  OK ✓
 
 ── PERUSTUKSET ─────────────────────────────────────────
   Anturat                       5 kpl, 800x800x300 mm
@@ -154,7 +156,7 @@
   Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
   ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
   fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      46      68    0.00    8.32     0.00
-  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      50      73    0.00    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      66      96    0.00    8.32     0.00
   fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      71      99    0.00    9.52     0.00
   fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     124     172    0.00    9.52     0.00
   fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      71      98    0.00    9.52     0.00
@@ -167,18 +169,18 @@
   Piirustuksen hyötykuorma q     2.50 kN/m²
   Nykyinen pintavalu             1.50/2.00 kN/m²  (75%)
   Nykyinen hyötykuorma           2.50/2.50 kN/m²  (100%)
-  Oma paino vertailuna           2.37 kN/m²  = 2.844 kN/m
+  Oma paino vertailuna           2.37 kN/m²  (viivakuorma riippuu laatan leveydestä)
   Huom.                          g/q-arvot koskevat tasaista pinta-kuormaa; alla olevat voimasuureet on laskettu yksiaukkoisena seinä → alapalkki -laattana.
 
   ID             b_trib   q_uni   R_wall    R_out      Md      Vd
   -------------- ------ ------- -------- -------- ------- -------
-  beam.hollow.0   0.950    6.37    15.73    15.39   20.06   15.58
-  beam.hollow.1   1.200    6.37    19.87    19.45   25.34   19.68
+  beam.hollow.0   0.887    6.37    14.70    14.38   18.74   14.56
+  beam.hollow.1   1.137    6.37    18.84    18.43   24.02   18.66
   beam.hollow.2   1.200    6.37    19.87    19.45   25.34   19.68
   beam.hollow.3   1.200    6.37    19.87    19.45   25.34   19.68
   beam.hollow.4   1.200    6.37    19.87    19.45   25.34   19.68
-  beam.hollow.5   0.950    6.37    15.73    15.39   20.06   15.58
-  Kriittisin laatta              beam.hollow.1  Md = 25.34 kNm, Vd = 19.68 kN
+  beam.hollow.5   1.075    6.37    17.81    17.42   22.70   17.63
+  Kriittisin laatta              beam.hollow.2  Md = 25.34 kNm, Vd = 19.68 kN
 
 ============================================================
   YHTEENVETO – KÄYTTÖASTEET

@@ -513,6 +513,11 @@ const REFERENCE_LABELS = {
   support_inner_edge: 'tuen sisäreuna',
   support_outer_edge: 'tuen ulkoreuna',
 };
+const REACTION_DISTRIBUTION_LABELS = {
+  point: 'pistekuorma',
+  uniform_over_supported_member_width: 'tasainen tuetun jäsenen leveydelle',
+  uniform_over_width: 'tasainen annetulle leveydelle',
+};
 const HIGHLIGHT_MEMBER_COLOR = 0xffee66;
 const SUPPORT_LINE_SHIFT_COLOR = 0x99ff33;
 const CONNECTION_DETAIL_PLATE_COLOR = 0xb0b7c3;
@@ -631,6 +636,12 @@ function connectionTooltipLines(con) {
     lines.push(`tuki: ${SUPPORT_MODEL_LABELS[supportModel] ?? supportModel}`);
     if (analysis.support_line_ref) {
       lines.push(`tukilinja: ${REFERENCE_LABELS[analysis.support_line_ref] ?? analysis.support_line_ref}`);
+    }
+    if (analysis.reaction_distribution) {
+      const dist = analysis.reaction_distribution;
+      lines.push(`reaktio: ${REACTION_DISTRIBUTION_LABELS[dist.type] ?? dist.type}`);
+      if (dist.width_ref) lines.push(`reaktion leveys: ${dist.width_ref}`);
+      if (dist.width_mm) lines.push(`reaktion leveys: ${dist.width_mm} mm`);
     }
     if (analysis.label) {
       lines.push(

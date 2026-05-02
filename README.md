@@ -250,12 +250,16 @@ jolloin loveus voidaan mallintaa joko jäsenen ylä- tai alapintaan. `viewer.py`
 overlay-muotoina; `birdsmouth_notch` johdetaan viewerissä tukijäsenen
 geometriasta, joten seat/plumb-kulmat seuraavat oikeaa tukikulmaa.
 Lisäksi `connections.analysis` voi kuvata analyysikäyttäytymisen
-(`support_model`, `support_line_ref`, `rotation_spring`) ja
+(`support_model`, `support_line_ref`, `reaction_distribution`, `rotation_spring`) ja
 `surfaces[*].load_transfer` voi kuvata, siirtyykö pinta-kuorma jäsenille
 pistekuormana, viivakuormana vai osaviivakuormana; säännöt osoittavat
 kohdejäseniin eksplisiittisesti `member_refs`-listalla. Tämä on toistaiseksi
 otettu käyttöön lopullisen puurakenteen laskurissa
 `terassilasitus_kuormituslaskenta.py` tiedostolle `geometry/terassi_puu.json`.
+`reaction_distribution` kuvaa jäsenliitoksen tukireaktion paikallisen
+jakautumisen: esimerkiksi ontelolaatan päätyreaktio voidaan siirtää alapalkille
+tasaisena kuormana laatan profiilileveyden matkalle
+(`uniform_over_supported_member_width`).
 Lisäksi `connections[*].detail` voi kuvata fyysisen liitosdetaljin, jota ei
 vielä käytetä suoraan laskennassa. Tällä hetkellä käytössä on
 `plate_bracket`, jolla voidaan tallentaa esimerkiksi LP225×90-tuennan

@@ -213,21 +213,23 @@
 
 ── KOKONAISPILARIKUORMAT TERASSIN JALKEEN ───────────────────────
   Olemassa oleva baseline        geometry/katos.json + puu2-variantin lisakuormat
-  Ontelolaatta saumattuna h=150  2.37 kN/m²  = 2.844 kN/m / laatta
+  Ontelolaatta saumattuna h=150  2.37 kN/m²
   Pintavalu 60 mm                1.50 kN/m²
   Terassin hyötykuorma           2.50 kN/m²
   Alapalkit 2x350x300            7.70 kN / palkki  = 2.145 kN/m
   Kuormareitti                   sisapilarit suoraan perustuksille, ontelolaatat seinasta alapalkille, alapalkki ulompiin pilareihin
+  Ontelolaatan paatyreaktio      jaetaan alapalkille laatan leveyden matkalle
+  Portaikon lisa col.x7075       SLS 10.30 kN / ULS 14.70 kN / UPLIFT 4.25 kN
   N_sls / N_uls / N_min          max(SLS,SLS DRIFT) / max(ULS A, ULS B, ULS DRIFT) / UPLIFT
 
   Pilari                 Ryhma          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
   col.x125               sisäpilari     34.43     53.37     -3.08  NOSTO 3.08 kN
-  col.x7075              sisäpilari     40.50     60.30     -1.04  NOSTO 1.04 kN
-  col.x125.outer.bottom  ulkopilari     47.44     68.56     22.23  Puristus 22.23 kN  OK ✓
-  col.x3600.outer.bottom ulkopilari     87.06    125.59     39.80  Puristus 39.80 kN  OK ✓
-  col.x7075.outer.bottom ulkopilari     48.05     68.22     22.13  Puristus 22.13 kN  OK ✓
-  Suurin kokonaispuristus        125.59 kN
+  col.x7075              sisäpilari     50.81     75.00      3.21  Puristus 3.21 kN  OK ✓
+  col.x125.outer.bottom  ulkopilari     47.43     68.55     22.23  Puristus 22.23 kN  OK ✓
+  col.x3600.outer.bottom ulkopilari     87.01    125.51     39.77  Puristus 39.77 kN  OK ✓
+  col.x7075.outer.bottom ulkopilari     48.11     68.31     22.16  Puristus 22.16 kN  OK ✓
+  Suurin kokonaispuristus        125.51 kN
   Suurin kokonaisnostotarve      3.08 kN
 
 ── PERUSTUKSET ─────────────────────────────────────────
@@ -239,11 +241,11 @@
   Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
   ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
   fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      68     103    3.08    8.32     0.00
-  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      78     114    1.04    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      94     137    0.00    8.32     0.00
   fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      91     129    0.00    9.52     0.00
-  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     153     219    0.00    9.52     0.00
+  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     152     218    0.00    9.52     0.00
   fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      92     129    0.00    9.52     0.00
-  Suurin pohjapaine ULS         219 kPa (fdn.col.x3600.outer)
+  Suurin pohjapaine ULS         218 kPa (fdn.col.x3600.outer)
   Suurin jäljelle jäävä nosto   0.00 kN (fdn.col.x125)
   Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
 

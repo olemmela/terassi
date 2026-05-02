@@ -1,5 +1,3 @@
-import math
-
 from beam_analysis import (
     beam_solver,
     combine_uniform_loads,
@@ -11,12 +9,21 @@ from existing_beam_checks import (
     aggregate_point_loads,
     check_existing_lp225_x125_combined,
     katos_existing_context,
-    member_axis_length_mm,
     point_beam_with_right_overhang_response,
-    project_point_to_member_s_mm,
     tributary_ranges_mm,
 )
-from geometry_loader import expanded_connections, load, member, surface, profile_b, profile_h
+from geometry_loader import expanded_connections, load, member, surface, profile_b
+from structural_geometry import (
+    column_self_weight_kN,
+    connection_by_members,
+    distributed_reaction_interval_on_member_mm,
+    member_axis_length_mm,
+    member_point_at_s_mm,
+    member_s_at_axis_value_mm,
+    member_total_self_weight_kN,
+    member_uniform_self_weight_kNm,
+    project_point_to_member_s_mm,
+)
 
 
 GEO = load("katos.json")
@@ -62,55 +69,21 @@ COLUMN_GROUP_LABEL = {
 }
 
 
-def connection_by_members(member_a_id, member_b_id):
-    wanted = {member_a_id, member_b_id}
-    for connection_obj in CONNECTION_LIST:
-        if set(connection_obj.get("members", [])) == wanted:
-            return connection_obj
-    raise KeyError(f"Connection not found for members: {member_a_id}, {member_b_id}")
+def reaction_distribution(connection_obj):
+    return connection_obj.get("analysis", {}).get("reaction_distribution", {"type": "point"})
 
 
-def column_length_mm(column_obj):
-    base = column_obj["base"]
-    top = column_obj["top"]
-    dx_mm = float(top["x"]) - float(base["x"])
-    dy_mm = float(top["y"]) - float(base["y"])
-    dz_mm = float(top["z"]) - float(base["z"])
-    return math.sqrt(dx_mm**2 + dy_mm**2 + dz_mm**2)
-
-
-def member_total_self_weight_kN(member_obj, gamma_kNm3):
-    if "mass_kg" in member_obj:
-        return float(member_obj["mass_kg"]) * 9.81 / 1000.0
-    return (
-        profile_b(member_obj) / 1000.0
-        * profile_h(member_obj) / 1000.0
-        * (member_axis_length_mm(member_obj) / 1000.0)
-        * gamma_kNm3
-    )
-
-
-def member_uniform_self_weight_kNm(member_obj, gamma_kNm3):
-    member_length_m = member_axis_length_mm(member_obj) / 1000.0
-    if member_length_m <= 1e-9:
-        return 0.0
-    return member_total_self_weight_kN(member_obj, gamma_kNm3) / member_length_m
-
-
-def column_self_weight_kN(column_obj, gamma_kNm3, factor=1.0):
-    area_m2 = profile_b(column_obj) / 1000.0 * profile_h(column_obj) / 1000.0
-    return factor * area_m2 * (column_length_mm(column_obj) / 1000.0) * gamma_kNm3
-
-
-def member_s_at_y_mm(member_obj, y_mm):
-    start_y_mm = float(member_obj["axis_start"]["y"])
-    end_y_mm = float(member_obj["axis_end"]["y"])
-    dy_mm = end_y_mm - start_y_mm
-    if abs(dy_mm) <= 1e-9:
-        raise ValueError(f"Member {member_obj['id']} is not monotonic in y.")
-    t = (float(y_mm) - start_y_mm) / dy_mm
-    t = max(0.0, min(1.0, t))
-    return t * member_axis_length_mm(member_obj)
+def reaction_distribution_width_mm(distribution, supported_member_obj):
+    distribution_type = distribution.get("type", "point")
+    if distribution_type == "point":
+        return None
+    if distribution_type == "uniform_over_supported_member_width":
+        if distribution.get("width_ref") != "supported_member_profile_b":
+            raise ValueError(f"Unsupported reaction distribution width_ref: {distribution.get('width_ref')}")
+        return profile_b(supported_member_obj)
+    if distribution_type == "uniform_over_width":
+        return float(distribution["width_mm"])
+    raise ValueError(f"Unsupported reaction distribution type: {distribution_type}")
 
 
 def empty_column_loads():
@@ -226,7 +199,7 @@ def calculate_katos_total_column_loads(
         support_rows = []
         for column_id in outer_column_objs:
             try:
-                support_conn = connection_by_members(outer_beam["id"], column_id)
+                support_conn = connection_by_members(CONNECTION_LIST, outer_beam["id"], column_id)
             except KeyError:
                 continue
             support_rows.append(
@@ -282,7 +255,10 @@ def calculate_katos_total_column_loads(
         }
 
         hollow_rows = []
-        outer_point_loads_by_beam = {row["id"]: [] for row in outer_beam_rows}
+        outer_loads_by_beam = {
+            row["id"]: {"point_loads": [], "distributed_loads": []}
+            for row in outer_beam_rows
+        }
 
         for beam_obj, (trib_start_x_mm, trib_end_x_mm) in zip(hollow_beams, hollow_trib_ranges_mm):
             beam_id = beam_obj["id"]
@@ -292,12 +268,12 @@ def calculate_katos_total_column_loads(
             cast_line_load_kNm = permanent_factor * GK_FLOOR_CAST_KNM2 * cast_trib_width_m
             live_line_load_kNm = FLOOR_LIVE_CASE_FACTORS[case_group] * QK_TERRACE_LIVE_KNM2 * cast_trib_width_m
 
-            wall_support_s_mm = project_point_to_member_s_mm(beam_obj, connection_by_members(beam_id, "ref.house_wall")["at"])
+            wall_support_s_mm = project_point_to_member_s_mm(beam_obj, connection_by_members(CONNECTION_LIST, beam_id, "ref.house_wall")["at"])
             outer_beam_row = None
             outer_support_conn = None
             for candidate in outer_beam_rows:
                 try:
-                    outer_support_conn = connection_by_members(beam_id, candidate["id"])
+                    outer_support_conn = connection_by_members(CONNECTION_LIST, beam_id, candidate["id"])
                     outer_beam_row = candidate
                     break
                 except KeyError:
@@ -305,8 +281,8 @@ def calculate_katos_total_column_loads(
             if outer_beam_row is None or outer_support_conn is None:
                 raise KeyError(f"Outer beam support not found for hollow slab {beam_id}")
             outer_support_s_mm = project_point_to_member_s_mm(beam_obj, outer_support_conn["at"])
-            load_start_s_mm = member_s_at_y_mm(beam_obj, FLOOR_Y0_MM)
-            load_end_s_mm = member_s_at_y_mm(beam_obj, FLOOR_Y1_MM)
+            load_start_s_mm = member_s_at_axis_value_mm(beam_obj, "y", FLOOR_Y0_MM)
+            load_end_s_mm = member_s_at_axis_value_mm(beam_obj, "y", FLOOR_Y1_MM)
 
             point_loads_kN = []
             support_s_mm = [wall_support_s_mm, outer_support_s_mm]
@@ -329,7 +305,48 @@ def calculate_katos_total_column_loads(
             reactions_kN = response["reactions_kN"]
             internal = sample_internal_forces(response["elements"])
             outer_reaction_kN = reactions_kN[outer_support_s_mm]
-            outer_point_loads_by_beam[outer_beam_row["id"]].append((float(outer_support_conn["at"]["x"]), outer_reaction_kN))
+            outer_distribution = reaction_distribution(outer_support_conn)
+            distribution_width_mm = reaction_distribution_width_mm(outer_distribution, beam_obj)
+            outer_reaction_transfer = {
+                "type": outer_distribution.get("type", "point"),
+                "center_x_mm": float(outer_support_conn["at"]["x"]),
+                "reaction_kN": outer_reaction_kN,
+            }
+            if distribution_width_mm is None:
+                outer_loads_by_beam[outer_beam_row["id"]]["point_loads"].append(
+                    (float(outer_support_conn["at"]["x"]), outer_reaction_kN)
+                )
+            else:
+                interval_start_s_mm, interval_end_s_mm = distributed_reaction_interval_on_member_mm(
+                    outer_beam_row["obj"],
+                    outer_support_conn["at"],
+                    distribution_width_mm,
+                )
+                interval_length_mm = interval_end_s_mm - interval_start_s_mm
+                q_reaction_kN_per_mm = outer_reaction_kN / interval_length_mm
+                start_point = member_point_at_s_mm(outer_beam_row["obj"], interval_start_s_mm)
+                end_point = member_point_at_s_mm(outer_beam_row["obj"], interval_end_s_mm)
+                distributed_load = {
+                    "source_id": beam_id,
+                    "start_s_mm": interval_start_s_mm,
+                    "end_s_mm": interval_end_s_mm,
+                    "start_x_mm": start_point["x"],
+                    "end_x_mm": end_point["x"],
+                    "width_mm": interval_length_mm,
+                    "profile_width_mm": distribution_width_mm,
+                    "q_kN_per_mm": q_reaction_kN_per_mm,
+                    "total_kN": outer_reaction_kN,
+                }
+                outer_loads_by_beam[outer_beam_row["id"]]["distributed_loads"].append(distributed_load)
+                outer_reaction_transfer.update(
+                    {
+                        "width_mm": interval_length_mm,
+                        "profile_width_mm": distribution_width_mm,
+                        "start_x_mm": start_point["x"],
+                        "end_x_mm": end_point["x"],
+                        "q_kNm": q_reaction_kN_per_mm * 1000.0,
+                    }
+                )
 
             hollow_rows.append(
                 {
@@ -347,6 +364,7 @@ def calculate_katos_total_column_loads(
                     "wall_reaction_kN": reactions_kN[wall_support_s_mm],
                     "inner_reaction_kN": None,
                     "outer_reaction_kN": outer_reaction_kN,
+                    "outer_reaction_transfer": outer_reaction_transfer,
                     "column_point_load_kN": 0.0,
                     "upper_column_id": None,
                     "M_pos": internal["M_pos"],
@@ -361,11 +379,14 @@ def calculate_katos_total_column_loads(
             for base_x_mm in sorted(set(outer_column_base_x_mm.values()))
         }
         all_outer_point_loads_kN = []
+        all_outer_distributed_loads = []
         outer_beam_case_beam_results = {}
         for outer_beam_row in outer_beam_rows:
             outer_beam_obj = outer_beam_row["obj"]
-            point_loads_global = aggregate_point_loads(outer_point_loads_by_beam[outer_beam_row["id"]])
+            outer_loads = outer_loads_by_beam[outer_beam_row["id"]]
+            point_loads_global = aggregate_point_loads(outer_loads["point_loads"])
             all_outer_point_loads_kN.extend(point_loads_global)
+            all_outer_distributed_loads.extend(outer_loads["distributed_loads"])
             point_loads_local = [
                 (
                     project_point_to_member_s_mm(
@@ -380,6 +401,10 @@ def calculate_katos_total_column_loads(
                 )
                 for x_mm, load_kN in point_loads_global
             ]
+            distributed_intervals_local = [
+                (load["start_s_mm"], load["end_s_mm"], load["q_kN_per_mm"])
+                for load in outer_loads["distributed_loads"]
+            ]
             support_s_mm = [support_row["local_s_mm"] for support_row in outer_beam_row["support_rows"]]
             outer_beam_nodes_mm = sorted(
                 {
@@ -387,16 +412,21 @@ def calculate_katos_total_column_loads(
                     outer_beam_row["length_mm"],
                     *support_s_mm,
                     *[x_mm for x_mm, _ in point_loads_local],
+                    *[x_mm for interval in distributed_intervals_local for x_mm in interval[:2]],
                 }
+            )
+            outer_beam_uniform = combine_uniform_loads(
+                uniform_loads_for_nodes(
+                    outer_beam_nodes_mm,
+                    permanent_factor * outer_beam_row["self_kNm"] / 1000.0,
+                ),
+                intervals_to_uniform_loads(outer_beam_nodes_mm, distributed_intervals_local),
             )
             outer_beam_response = beam_solver(
                 outer_beam_nodes_mm,
                 support_s_mm,
                 point_loads_kN=point_loads_local,
-                uniform_loads_kN_per_mm=uniform_loads_for_nodes(
-                    outer_beam_nodes_mm,
-                    permanent_factor * outer_beam_row["self_kNm"] / 1000.0,
-                ),
+                uniform_loads_kN_per_mm=outer_beam_uniform,
             )
             beam_reactions_by_global_x_kN = {}
             beam_reactions_by_column_id_kN = {}
@@ -411,6 +441,7 @@ def calculate_katos_total_column_loads(
 
             outer_beam_case_beam_results[outer_beam_row["id"]] = {
                 "point_loads_kN": point_loads_global,
+                "distributed_loads": list(outer_loads["distributed_loads"]),
                 "reactions_kN": beam_reactions_by_global_x_kN,
                 "reactions_by_column_id_kN": beam_reactions_by_column_id_kN,
                 "self_total_kN": permanent_factor * outer_beam_row["self_total_kN"],
@@ -419,6 +450,7 @@ def calculate_katos_total_column_loads(
 
         outer_beam_case_results[case_key] = {
             "point_loads_kN": aggregate_point_loads(all_outer_point_loads_kN),
+            "distributed_loads": all_outer_distributed_loads,
             "reactions_kN": outer_reactions_by_global_x_kN,
             "reactions_by_column_id_kN": outer_reactions_by_column_id_kN,
             "beam_results": outer_beam_case_beam_results,
