@@ -75,14 +75,45 @@
   Tukiorren tarkistus            orsi.tuki C24 48x48, ULS DRIFT: Md = 0.13 kNm, η_M/η_V = 54.2%/18.3%, δ = 0.92/3.8 mm
   Tukiorren kuormareitti         8 kattotuolitukea, max |R| = 1.36 kN
 
-── PÄÄTYKOLMIOLASI – KUORMANSIIRTO ──────────────────────────────
-  Omapaino                      0.58 kN -> beam.inner.new viivakuormana 0.113 kN/m
-  Tuulijako                     50% alapalkille + 50% yläreunan 2×KP360×51-palkille (pystyreunaa ei hyvitetä)
-  Vaakatuet                     beam.inner.new x = 125 / 7075 mm; 2×KP360×51 x = 125 / 7075 mm
-  Tuulikuorma yhteensä          1.51 kN, q_line,char = 0.148 kN/m per palkki
-  Hallitseva vaakakuorma        ULS B
-  beam.inner.new vaakataivutus  Md = 1.18 kNm, Vd = 0.70 kN, η_M/η_V = 5.2%/0.9%, δ = 3.61/23.2 mm
-  beam.existing.kp360x2         Md = 1.18 kNm, Vd = 0.70 kN, η_M/η_V = 6.5%/0.9%, δ = 8.80/23.2 mm
+── PYSTYLASITUKSET – OMAPAINO JA TUULI ──────────────────────────
+  Yhteensä                      A = 40.87 m², Gk = 8.02 kN, Wk = 21.04 kN
+  Tuulipaine                    qp(z) = 0.51 kN/m², cp,net = 1.0, ULS tuuli = 0.77 kN/m²
+  Omapaino                      oletetaan alareunan kiskolle/lattialle; päätykolmiolasi erillistarkistuksena
+  Ryhmä                        kpl       A      Gk      Wk   W_ULS
+  ---------------------------- --- ------- ------- ------- -------
+  Päätykolmiolasi                1   2.94   0.58   1.51   2.27
+  Seinän puolen aukkolasit       3  10.03   1.97   5.16   7.75
+  Sivujen liukulasit             2  13.40   2.63   6.90  10.35
+  Sivujen yläkolmiot             2   1.60   0.31   0.82   1.24
+  Ulkoreunan liukulasit          2  12.90   2.53   6.64   9.96
+  Lasipaneelien mitoitus        yksisuuntainen ylä-/alakiskojen välinen kaista, f_d = 50 N/mm²
+  Lasi                                   L    t      σd      ησ    δ_sls     δ/L  σ-tila
+  ---------------------------------- ----- ---- ------- ------- -------- ------- -------
+  triangle_glazing.gable              1150    8   12.0   23.9%     3.9 L/ 293      OK
+  side_glazing.outer.vasen            2000    8   36.2   72.4%    35.9 L/  56      OK
+  side_glazing.outer.oikea            2000    8   36.2   72.4%    35.9 L/  56      OK
+  side_glazing.vasen                  2000    8   36.2   72.4%    35.9 L/  56      OK
+  side_glazing.oikea                  2000    8   36.2   72.4%    35.9 L/  56      OK
+  side_glazing.wall.vasen             2480    8   55.7  111.3%    84.9 L/  29  YLITYS
+  side_glazing.wall.oikea.ala         2300    8   47.9   95.8%    62.8 L/  37      OK
+  side_glazing.wall.oikea.yla         1690    8   25.8   51.7%    18.3 L/  92      OK
+  gable_glazing.vasen.yla              440    8    1.8    3.5%     0.1 L/5230      OK
+  gable_glazing.oikea.yla              440    8    1.8    3.5%     0.1 L/5230      OK
+  Huomio                        σ-tila koskee lasin alustavaa jännitystarkistusta; δ/L on valmistajalle annettava taipumatieto
+  Päätykolmiolasin omapaino     0.58 kN -> beam.inner.new viivakuormana 0.113 kN/m
+  Päätykolmiolasin vaakatuet    ULS B, tuulijako 50/50 ala-/yläpalkille, qk = 0.148 kN/m per palkki
+    beam.inner.new           Md,z = 1.18 kNm, η_M/η_V = 5.2%/0.9%, δ = 3.61/23.2 mm, max H_tuki = 0.70 kN
+    beam.existing.kp360x2    Md,z = 1.18 kNm, η_M/η_V = 6.5%/0.9%, δ = 8.80/23.2 mm, max H_tuki = 0.70 kN
+  Ulkoreunan yläreunapalkki     hallitseva vaakakuorma ULS B
+    beam.outer               qk = 0.515 kN/m, Md,z = 1.16 kNm, η_M/η_V = 8.2%/3.4%, δ = 0.61/11.6 mm, max H_tuki = 3.16 kN
+  Seinänpuolen yläreunapalkit   hallitseva vaakakuorma ULS B
+    beam.lp225.x125          qk = 0.638 kN/m, Md = 0.36 kNm, η_M/η_V = 6.1%/2.7%, δ = 0.43/5.8 mm
+    beam.lp225.x7075         qk = 0.435 kN/m, Md = 0.24 kNm, η_M/η_V = 4.2%/1.9%, δ = 0.29/5.8 mm
+  Sivulasien yläkiskot          hallitseva vaakakuorma ULS DRIFT
+    kattotuoli.vasen         qk = 0.576 kN/m, Md,z = 0.74 kNm, η_y+z/η_V = 19.3%/1.9%, δ = 1.45/11.2 mm, max H_tuki = 0.87 kN
+    kattotuoli.oikea         qk = 0.576 kN/m, Md,z = 0.74 kNm, η_y+z/η_V = 23.6%/1.9%, δ = 1.45/11.2 mm, max H_tuki = 0.87 kN
+  Oletus                        sivulasien tuuli jakautuu ala- ja yläkiskolle; yläkisko tukeutuu reunakattotuoliin
+  Huomio                        beam.outer pysty+vaakavuorovaikutus esitetään myös ulkopalkkiosiossa
 
 ── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────
   Sivukaista vasen / oikea      0.567 / 0.567 m
@@ -238,6 +269,13 @@
   * Orsien oma paino mallinnetaan viivakuormana.
   * Seinän täytekaistan ulkoreuna tukeutuu erilliselle tukiorrelle; sen
     reaktiot siirretään kattotuoleille, ei aurinkopaneelikentälle.
+  * Pystylasitusten omapaino ja tuuli summataan geometriasta; seinänpuolen
+    LP225×90-yläreunapalkit tarkistetaan vaakatuulen yläreunareaktiolle.
+  * Pystylasitukset tarkistetaan alustavasti 8 mm lasilevynä yksisuuntaisella
+    ylä-/alakiskojen välisellä tuulitaivutusmallilla; valmistajan mitoitus tarvitaan lopulliseksi.
+  * Sivulasien tuulen yläkiskoreaktio lisätään reunakattotuolien heikon suunnan
+    tarkistukseen; lasitusjärjestelmän lopullinen kiinnitys on varmistettava toimittajalta.
+    Jos lasit ovat yläkannatteisia, myös niiden omapaino pitää lisätä yläkiskon rakenteille.
   * Päätykolmiolasin omapaino lisätään beam.inner.new-pystymalliin; tuulikuorma
     jaetaan konservatiivisesti 50/50 alapalkille ja yläreunan 2×KP360×51-palkille.
   * Ulkokulmien nurkkaorret mallinnetaan tuettuina toiseksi uloimpaan kattotuoliin ja

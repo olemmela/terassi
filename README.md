@@ -73,6 +73,14 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Seinän viereisen 8 mm lasisen täytekaistan omapaino-, lumi-/kinostuma-,
   noste-, taivutus- ja taipumatarkistuksen sekä ulkoreunan tukiorren kuormareitin
   kattotuoleille
+- Pystylasitusten omapaino- ja tuulikuormayhteenvedon geometriasta sekä
+  alustavan lasipaneelien oman tuulitaivutus-/jännitystarkistuksen
+  yksisuuntaisella ylä-/alakiskojen välisellä kaistamallilla
+- Pystylasitusten kuormia vastaanottavien rakenteiden tarkistukset:
+  ulkoreunan `beam.outer`-palkin, seinänpuolen aukkolasien LP225×90-
+  yläreunapalkkien ja sivulasien reunakattotuolien vaakatuulitarkistukset;
+  sivulasien lopullinen kiinnitys- ja omapainon kuormareitti pitää varmistaa
+  lasitusjärjestelmän toimittajalta
 - Päätykolmiolasin omapainon alapalkille sekä tuulikuorman 50/50-jaon
   alapalkille ja yläreunan `2×KP360×51`-palkille, vaakataivutuksena tarkistettuna
 - X-suuntaisten orsien ulomman tuen geometrian `support_line_ref`-metadatasta
@@ -118,7 +126,9 @@ kaistalevyliitoksilla.
 - Kaistalevyjen M12-pulttien ja puun reunapuristuksen kapasiteettitarkistukset
 - Kaistalevyjen teräslevyn in-plane shear -tarkistuksen
 - Seinän viereisen 8 mm lasisen täytekaistan, sen ulkoreunan tukiorren sekä
-  päätykolmiolasin omapaino- ja tuulikuormien tarkistukset kuten pääpuuratkaisussa
+  pystylasitusten, seinänpuolen aukkolasien LP225×90-yläreunapalkkien,
+  sivulasien reunakattotuolien ja päätykolmiolasin omapaino- ja tuulikuormien
+  tarkistukset kuten pääpuuratkaisussa
 - Siirtovyöhykkeen perusteella johdetun ekvivalentin vasemman tukipisteen ja
   sisäpalkin efektiivisen jännevälin
 - Vasen reunakattotuoli → `beam.lp225.x125` ja oikea reunakattotuoli → `col.existing.inner.x7075`

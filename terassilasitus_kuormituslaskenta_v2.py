@@ -333,6 +333,16 @@ def surface_polygon_area_xz_m2(surface_obj):
     return abs(area2_mm2) / 2.0e6
 
 
+def surface_polygon_area_3d_m2(surface_obj):
+    poly = surface_obj["polygon"]
+    sx = sy = sz = 0.0
+    for p0, p1 in zip(poly, poly[1:] + poly[:1]):
+        sx += p0["y"] * p1["z"] - p0["z"] * p1["y"]
+        sy += p0["z"] * p1["x"] - p0["x"] * p1["z"]
+        sz += p0["x"] * p1["y"] - p0["y"] * p1["x"]
+    return 0.5 * math.sqrt(sx * sx + sy * sy + sz * sz) / 1.0e6
+
+
 def surface_slope_span_y_mm(surface_obj):
     poly = surface_obj["polygon"]
     y0 = min(p["y"] for p in poly)
@@ -1230,6 +1240,135 @@ gammaQ = 1.50
 psi0_W = 0.6
 psi0_snow = 0.7
 
+vertical_glass_E_Nmm2 = 70000.0
+vertical_glass_design_strength_Nmm2 = 50.0
+
+
+def glass_one_way_strip_check(q_uls_kNm2, q_sls_kNm2, span_mm, thickness_mm, E_Nmm2=vertical_glass_E_Nmm2):
+    span_mm = max(float(span_mm), 1.0e-9)
+    thickness_mm = max(float(thickness_mm), 1.0e-9)
+    W_mm3_per_m = 1000.0 * thickness_mm**2 / 6.0
+    I_mm4_per_m = 1000.0 * thickness_mm**3 / 12.0
+    M_Nmm_per_m = abs(q_uls_kNm2) * span_mm**2 / 8.0
+    sigma_Nmm2 = M_Nmm_per_m / W_mm3_per_m
+    delta_mm = 5.0 * abs(q_sls_kNm2) * span_mm**4 / (384.0 * E_Nmm2 * I_mm4_per_m)
+    return {
+        "span_mm": span_mm,
+        "thickness_mm": thickness_mm,
+        "M_kNm_per_m": M_Nmm_per_m / 1.0e6,
+        "sigma_Nmm2": sigma_Nmm2,
+        "eta_sigma_pct": 100.0 * sigma_Nmm2 / vertical_glass_design_strength_Nmm2,
+        "delta_mm": delta_mm,
+        "delta_ratio": span_mm / max(delta_mm, 1.0e-9),
+    }
+
+
+def vertical_glazing_group_label(surface_id):
+    if surface_id == "surf.triangle_glazing.gable":
+        return "Päätykolmiolasi"
+    if surface_id.startswith("surf.side_glazing.outer."):
+        return "Ulkoreunan liukulasit"
+    if surface_id.startswith("surf.side_glazing.wall."):
+        return "Seinän puolen aukkolasit"
+    if surface_id.startswith("surf.side_glazing."):
+        return "Sivujen liukulasit"
+    if surface_id.startswith("surf.gable_glazing."):
+        return "Sivujen yläkolmiot"
+    return surface_id
+
+
+def vertical_glazing_top_beam_id(surface_obj, bounds):
+    if not surface_obj["id"].startswith("surf.side_glazing.wall."):
+        return None
+    z_top_mm = bounds["z1_mm"]
+    for support_id in surface_obj.get("supported_by", []):
+        if not support_id.startswith("beam."):
+            continue
+        beam_obj = member_by_id_any(support_id)
+        beam_z_mm = max(float(beam_obj["axis_start"]["z"]), float(beam_obj["axis_end"]["z"]))
+        if abs(beam_z_mm - z_top_mm) <= 75.0:
+            return support_id
+    return None
+
+
+def vertical_glazing_top_rafter_side(surface_obj):
+    surface_id = surface_obj["id"]
+    if surface_id in {"surf.side_glazing.vasen", "surf.gable_glazing.vasen.yla"}:
+        return "left"
+    if surface_id in {"surf.side_glazing.oikea", "surf.gable_glazing.oikea.yla"}:
+        return "right"
+    return None
+
+
+def build_vertical_glazing_rows():
+    rows = []
+    for surface_obj in GEO.get("surfaces", []):
+        if surface_obj.get("type") not in {"side_glazing", "gable_glazing", "triangle_glazing"}:
+            continue
+        bounds = surface_bounds(surface_obj)
+        area_m2 = surface_polygon_area_3d_m2(surface_obj)
+        thickness_mm = float(surface_obj.get("thickness_mm", 8.0))
+        density_kg_m3 = float(surface_obj.get("density_kg_m3", 2500.0))
+        mass_kg = area_m2 * (thickness_mm / 1000.0) * density_kg_m3
+        height_m = (bounds["z1_mm"] - bounds["z0_mm"]) / 1000.0
+        span_m = max(bounds["x1_mm"] - bounds["x0_mm"], bounds["y1_mm"] - bounds["y0_mm"]) / 1000.0
+        top_line_wind_char_kNm = qp_z * cp_wall_net * area_m2 / max(2.0 * span_m, 1.0e-9)
+        panel_check = glass_one_way_strip_check(
+            gammaQ * qp_z * cp_wall_net,
+            qp_z * cp_wall_net,
+            height_m * 1000.0,
+            thickness_mm,
+        )
+        rows.append({
+            "id": surface_obj["id"],
+            "group": vertical_glazing_group_label(surface_obj["id"]),
+            "surface_type": surface_obj.get("type"),
+            "material": surface_obj.get("material", "lasi"),
+            "area_m2": area_m2,
+            "thickness_mm": thickness_mm,
+            "mass_kg": mass_kg,
+            "self_kN": mass_kg * 9.81 / 1000.0,
+            "height_m": height_m,
+            "span_m": span_m,
+            "wind_char_kN": qp_z * cp_wall_net * area_m2,
+            "wind_uls_kN": gammaQ * qp_z * cp_wall_net * area_m2,
+            "top_line_wind_char_kNm": top_line_wind_char_kNm,
+            "panel_check": panel_check,
+            "bounds": bounds,
+            "top_beam_id": vertical_glazing_top_beam_id(surface_obj, bounds),
+            "top_rafter_side": vertical_glazing_top_rafter_side(surface_obj),
+        })
+    return rows
+
+
+VERTICAL_GLAZING_ROWS = build_vertical_glazing_rows()
+VERTICAL_GLAZING_GROUPS = []
+for group in sorted({row["group"] for row in VERTICAL_GLAZING_ROWS}):
+    group_rows = [row for row in VERTICAL_GLAZING_ROWS if row["group"] == group]
+    VERTICAL_GLAZING_GROUPS.append({
+        "group": group,
+        "count": len(group_rows),
+        "area_m2": sum(row["area_m2"] for row in group_rows),
+        "self_kN": sum(row["self_kN"] for row in group_rows),
+        "wind_char_kN": sum(row["wind_char_kN"] for row in group_rows),
+        "wind_uls_kN": sum(row["wind_uls_kN"] for row in group_rows),
+    })
+VERTICAL_GLAZING_TOTAL = {
+    "area_m2": sum(row["area_m2"] for row in VERTICAL_GLAZING_ROWS),
+    "self_kN": sum(row["self_kN"] for row in VERTICAL_GLAZING_ROWS),
+    "wind_char_kN": sum(row["wind_char_kN"] for row in VERTICAL_GLAZING_ROWS),
+    "wind_uls_kN": sum(row["wind_uls_kN"] for row in VERTICAL_GLAZING_ROWS),
+}
+WALL_GLAZING_TOP_BEAM_LOADS = [
+    row for row in VERTICAL_GLAZING_ROWS
+    if row["id"].startswith("surf.side_glazing.wall.") and row["top_beam_id"] is not None
+]
+SIDE_GLAZING_TOP_RAFTER_LOADS = [
+    row for row in VERTICAL_GLAZING_ROWS
+    if row["top_rafter_side"] is not None
+]
+
+
 def ec5_rotational_spring_k_Nmm_per_rad(fastener_d_mm, fastener_count, effective_height_mm):
     kser_per_fastener_N_per_mm = rho_c24**1.5 * fastener_d_mm / 23.0
     return fastener_count * kser_per_fastener_N_per_mm * effective_height_mm**2 / 12.0
@@ -1976,6 +2115,8 @@ for side, member_obj in edge_rafters.items():
         "section_rotation_deg": props["section_rotation_deg"],
         "self_kNm": (b_mm / 1000.0) * (h_mm / 1000.0) * gamma_gl30c / math.cos(roof_slope_rad),
         "MRd_kNm": fm_d_gl30c * props["W_mm3"] / 1.0e6,
+        "MRd_z_kNm": fm_d_gl30c * props["W_horizontal_mm3"] / 1.0e6,
+        "I_horizontal_mm4": props["I_horizontal_mm4"],
         "VRd_kN": fv_d_gl30c * props["A_mm2"] / 1.5e3,
     }
 
@@ -3005,14 +3146,19 @@ def analyse_outer_beam_horizontal(q_line_kNm):
         interval_loads.append((start_mm, end_mm, q_line_kNm / 1000.0))
     nodes_mm = refine_nodes_mm(interval_points_mm, analysis_step_beam_mm)
     uniform = intervals_to_uniform_loads(nodes_mm, interval_loads)
-    response, internal, _ = solve_member_response(nodes_mm, outer_supports_x_mm, [], uniform, EI_Nmm2=E_gl30c * OUTER_BEAM_PROPS["I_horizontal_mm4"])
+    response, internal, delta = solve_member_response(nodes_mm, outer_supports_x_mm, [], uniform, EI_Nmm2=E_gl30c * OUTER_BEAM_PROPS["I_horizontal_mm4"])
     moment_gov = governing_moment(internal)
     return {
+        "q_line_kNm": q_line_kNm,
         "M_pos": internal["M_pos"],
         "M_neg": internal["M_neg"],
         "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
         "reactions_kN": response["reactions_kN"],
         "eta_M": moment_gov["value_kNm"] / OUTER_BEAM_MRd_z_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / OUTER_BEAM_VRd_kN * 100.0,
+        "delta_lim_mm": max(b - a for a, b in zip(outer_supports_x_mm, outer_supports_x_mm[1:])) / 300.0,
     }
 
 
@@ -3033,6 +3179,100 @@ def analyse_beam_horizontal_interval(member_obj, support_xs_mm, interval_x0_mm, 
         "delta": delta,
         "eta_M": moment_gov["value_kNm"] / MRd_kNm * 100.0,
         "eta_V": abs(internal["V_abs"]["value_kN"]) / VRd_kN * 100.0,
+    }
+
+
+def analyse_side_beam_glazing_wind(member_id, load_rows, wind_factor):
+    if not load_rows:
+        return None
+    member_obj = member_by_id_any(member_id)
+    y0_mm = float(member_obj["axis_start"]["y"])
+    y1_mm = float(member_obj["axis_end"]["y"])
+    support_ys_mm = sorted([y0_mm, y1_mm])
+    profile = member_obj["profile"]
+    props = member_rect_props(profile_b(member_obj), profile_h(member_obj), member_section_rotation_deg(member_obj))
+    MRd_kNm = fm_d_gl30c * props["W_horizontal_mm3"] / 1.0e6
+    VRd_kN = fv_d_gl30c * props["A_mm2"] / 1.5e3
+    node_points = [y0_mm, y1_mm]
+    interval_loads = []
+    for row in load_rows:
+        bounds = row["bounds"]
+        start_mm = max(min(y0_mm, y1_mm), bounds["y0_mm"])
+        end_mm = min(max(y0_mm, y1_mm), bounds["y1_mm"])
+        if end_mm <= start_mm + 1.0e-9:
+            continue
+        node_points.extend([start_mm, end_mm])
+        interval_loads.append((start_mm, end_mm, wind_factor * row["top_line_wind_char_kNm"] / 1000.0))
+    nodes_mm = refine_nodes_mm(node_points, analysis_step_beam_mm)
+    uniform = intervals_to_uniform_loads(nodes_mm, interval_loads)
+    response, internal, delta = solve_member_response(
+        nodes_mm,
+        support_ys_mm,
+        [],
+        uniform,
+        EI_Nmm2=E_gl30c * props["I_horizontal_mm4"],
+    )
+    moment_gov = governing_moment(internal)
+    return {
+        "id": member_id,
+        "profile": profile["name"],
+        "load_ids": [row["id"] for row in load_rows],
+        "q_line_char_kNm": sum(row["top_line_wind_char_kNm"] for row in load_rows),
+        "reactions_kN": response["reactions_kN"],
+        "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
+        "eta_M": moment_gov["value_kNm"] / MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / VRd_kN * 100.0,
+        "delta_lim_mm": (support_ys_mm[-1] - support_ys_mm[0]) / 300.0,
+    }
+
+
+def analyse_edge_rafter_glazing_wind(side, load_rows, wind_factor):
+    if not load_rows:
+        return None
+    member_obj = edge_rafters[side]
+    section = edge_rafter_section_by_side[side]
+    y0_mm = float(member_obj["axis_start"]["y"])
+    y1_mm = float(member_obj["axis_end"]["y"])
+    support_ys_mm = sorted([edge_inner_support_y_mm_by_side[side], edge_outer_support_y_mm_by_side[side]])
+    coord_min_mm = min(y0_mm, y1_mm)
+    coord_max_mm = max(y0_mm, y1_mm)
+    node_points = [y0_mm, y1_mm, *support_ys_mm]
+    interval_loads = []
+    for row in load_rows:
+        bounds = row["bounds"]
+        start_mm = max(coord_min_mm, bounds["y0_mm"])
+        end_mm = min(coord_max_mm, bounds["y1_mm"])
+        if end_mm <= start_mm + 1.0e-9:
+            continue
+        node_points.extend([start_mm, end_mm])
+        interval_loads.append((start_mm, end_mm, wind_factor * row["top_line_wind_char_kNm"] / 1000.0))
+    if not interval_loads:
+        return None
+    nodes_mm = refine_nodes_mm(node_points, analysis_step_beam_mm)
+    uniform = intervals_to_uniform_loads(nodes_mm, interval_loads)
+    response, internal, delta = solve_member_response(
+        nodes_mm,
+        support_ys_mm,
+        [],
+        uniform,
+        EI_Nmm2=E_gl30c * section["I_horizontal_mm4"],
+    )
+    moment_gov = governing_moment(internal)
+    return {
+        "side": side,
+        "id": member_obj["id"],
+        "profile": member_obj["profile"]["name"],
+        "load_ids": [row["id"] for row in load_rows],
+        "q_line_char_kNm": sum(row["top_line_wind_char_kNm"] for row in load_rows),
+        "reactions_kN": response["reactions_kN"],
+        "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
+        "eta_M": moment_gov["value_kNm"] / section["MRd_z_kNm"] * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / section["VRd_kN"] * 100.0,
+        "delta_lim_mm": (support_ys_mm[-1] - support_ys_mm[0]) / 300.0,
     }
 
 
@@ -3266,6 +3506,8 @@ OUTER_BEAM_H = {
     "ULS A": analyse_outer_beam_horizontal(gammaQ * psi0_W * q_outer_wind_h_char),
     "ULS B": analyse_outer_beam_horizontal(gammaQ * q_outer_wind_h_char),
     "ULS DRIFT": analyse_outer_beam_horizontal(gammaQ * psi0_W * q_outer_wind_h_char),
+    "SLS": analyse_outer_beam_horizontal(q_outer_wind_h_char),
+    "SLS DRIFT": analyse_outer_beam_horizontal(q_outer_wind_h_char),
 }
 inner_beam_horizontal_supports_x_mm = (
     inner_beam_direct_supports_x_mm
@@ -3305,6 +3547,60 @@ if gable_glazing_summary is not None:
                 EXISTING_BEAM_VRd_kN,
             ),
         }
+
+
+SIDE_BEAM_GLAZING_H = {}
+for case_key, factor in {
+    "ULS A": gammaQ * psi0_W,
+    "ULS B": gammaQ,
+    "ULS DRIFT": gammaQ * psi0_W,
+    "SLS": 1.0,
+    "SLS DRIFT": 1.0,
+}.items():
+    SIDE_BEAM_GLAZING_H[case_key] = {
+        member_id: analyse_side_beam_glazing_wind(
+            member_id,
+            [row for row in WALL_GLAZING_TOP_BEAM_LOADS if row["top_beam_id"] == member_id],
+            factor,
+        )
+        for member_id in sorted({row["top_beam_id"] for row in WALL_GLAZING_TOP_BEAM_LOADS})
+    }
+    SIDE_BEAM_GLAZING_H[case_key] = {
+        member_id: result
+        for member_id, result in SIDE_BEAM_GLAZING_H[case_key].items()
+        if result is not None
+    }
+
+EDGE_RAFTER_GLAZING_H = {}
+for case_key, factor in {
+    "ULS A": gammaQ * psi0_W,
+    "ULS B": gammaQ,
+    "ULS DRIFT": gammaQ * psi0_W,
+    "SLS": 1.0,
+    "SLS DRIFT": 1.0,
+}.items():
+    EDGE_RAFTER_GLAZING_H[case_key] = {
+        side: analyse_edge_rafter_glazing_wind(
+            side,
+            [row for row in SIDE_GLAZING_TOP_RAFTER_LOADS if row["top_rafter_side"] == side],
+            factor,
+        )
+        for side in sorted({row["top_rafter_side"] for row in SIDE_GLAZING_TOP_RAFTER_LOADS})
+    }
+    EDGE_RAFTER_GLAZING_H[case_key] = {
+        side: result
+        for side, result in EDGE_RAFTER_GLAZING_H[case_key].items()
+        if result is not None
+    }
+    if case_key in ULS_CASE_KEYS:
+        for side, result in EDGE_RAFTER_GLAZING_H[case_key].items():
+            vertical_eta_M = RESULTS[case_key]["edge_rafters"][side]["eta_M"]
+            horizontal_eta_M = result["eta_M"]
+            result["eta_vertical_M"] = vertical_eta_M
+            result["eta_biaxial"] = max(
+                vertical_eta_M + 0.7 * horizontal_eta_M,
+                0.7 * vertical_eta_M + horizontal_eta_M,
+            )
 
 
 # ── governing-yhteenvedot ───────────────────────────────────────────────────
@@ -3415,6 +3711,15 @@ outer_beam_interaction = {
     for case_key in ULS_CASE_KEYS
 }
 outer_beam_governing_case = max(outer_beam_interaction, key=outer_beam_interaction.get)
+outer_beam_h_governing_case = max(
+    ULS_CASE_KEYS,
+    key=lambda case_key: max(OUTER_BEAM_H[case_key]["eta_M"], OUTER_BEAM_H[case_key]["eta_V"]),
+)
+outer_beam_h_governing = OUTER_BEAM_H[outer_beam_h_governing_case]
+outer_beam_h_sls_delta_mm = max(
+    abs(OUTER_BEAM_H["SLS"]["delta"]["value_mm"]),
+    abs(OUTER_BEAM_H["SLS DRIFT"]["delta"]["value_mm"]),
+)
 inner_beam_governing_case = max(
     ULS_CASE_KEYS,
     key=lambda case_key: max(RESULTS[case_key]["inner_beam"]["eta_M"], RESULTS[case_key]["inner_beam"]["eta_V"]),
@@ -3478,6 +3783,40 @@ else:
     gable_glazing_h_governing = None
     gable_glazing_h_sls = None
     gable_glazing_h_sls_drift = None
+
+if any(SIDE_BEAM_GLAZING_H[case_key] for case_key in ULS_CASE_KEYS):
+    side_beam_glazing_governing_case = max(
+        ULS_CASE_KEYS,
+        key=lambda case_key: max(
+            max(result["eta_M"], result["eta_V"])
+            for result in SIDE_BEAM_GLAZING_H[case_key].values()
+        ) if SIDE_BEAM_GLAZING_H[case_key] else 0.0,
+    )
+    side_beam_glazing_governing = SIDE_BEAM_GLAZING_H[side_beam_glazing_governing_case]
+    side_beam_glazing_sls = SIDE_BEAM_GLAZING_H["SLS"]
+    side_beam_glazing_sls_drift = SIDE_BEAM_GLAZING_H["SLS DRIFT"]
+else:
+    side_beam_glazing_governing_case = None
+    side_beam_glazing_governing = {}
+    side_beam_glazing_sls = {}
+    side_beam_glazing_sls_drift = {}
+
+if any(EDGE_RAFTER_GLAZING_H[case_key] for case_key in ULS_CASE_KEYS):
+    edge_rafter_glazing_governing_case = max(
+        ULS_CASE_KEYS,
+        key=lambda case_key: max(
+            max(result["eta_biaxial"], result["eta_V"])
+            for result in EDGE_RAFTER_GLAZING_H[case_key].values()
+        ) if EDGE_RAFTER_GLAZING_H[case_key] else 0.0,
+    )
+    edge_rafter_glazing_governing = EDGE_RAFTER_GLAZING_H[edge_rafter_glazing_governing_case]
+    edge_rafter_glazing_sls = EDGE_RAFTER_GLAZING_H["SLS"]
+    edge_rafter_glazing_sls_drift = EDGE_RAFTER_GLAZING_H["SLS DRIFT"]
+else:
+    edge_rafter_glazing_governing_case = None
+    edge_rafter_glazing_governing = {}
+    edge_rafter_glazing_sls = {}
+    edge_rafter_glazing_sls_drift = {}
 
 outer_beam_sls_normal_delta_mm = abs(RESULTS["SLS"]["outer_beam"]["delta"]["value_mm"])
 outer_beam_sls_drift_delta_mm = abs(RESULTS["SLS DRIFT"]["outer_beam"]["delta"]["value_mm"])
@@ -3814,49 +4153,114 @@ if infill_glass_summary is not None:
             f"max |R| = {max_support_reaction:.2f} kN"
         )
 
-if gable_glazing_summary is not None:
-    inner_h = gable_glazing_h_governing["inner_beam"]
-    existing_h = gable_glazing_h_governing["existing_beam"]
-    inner_sls_delta = max(
-        abs(gable_glazing_h_sls["inner_beam"]["delta"]["value_mm"]),
-        abs(gable_glazing_h_sls_drift["inner_beam"]["delta"]["value_mm"]),
-    )
-    existing_sls_delta = max(
-        abs(gable_glazing_h_sls["existing_beam"]["delta"]["value_mm"]),
-        abs(gable_glazing_h_sls_drift["existing_beam"]["delta"]["value_mm"]),
-    )
-    inner_span_limit_mm = (max(inner_beam_horizontal_supports_x_mm) - min(inner_beam_horizontal_supports_x_mm)) / 300.0
-    existing_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
-    print("\n── PÄÄTYKOLMIOLASI – KUORMANSIIRTO ──────────────────────────────")
+if VERTICAL_GLAZING_ROWS:
+    print("\n── PYSTYLASITUKSET – OMAPAINO JA TUULI ──────────────────────────")
     print(
-        f"  Omapaino                      {gable_glazing_summary['total_kN']:.2f} kN -> "
-        f"beam.inner.new viivakuormana {gable_glazing_summary['self_line_kNm']:.3f} kN/m"
+        f"  Yhteensä                      A = {VERTICAL_GLAZING_TOTAL['area_m2']:.2f} m², "
+        f"Gk = {VERTICAL_GLAZING_TOTAL['self_kN']:.2f} kN, "
+        f"Wk = {VERTICAL_GLAZING_TOTAL['wind_char_kN']:.2f} kN"
     )
     print(
-        f"  Tuulijako                     50% alapalkille + 50% yläreunan 2×KP360×51-palkille "
-        f"(pystyreunaa ei hyvitetä)"
+        f"  Tuulipaine                    qp(z) = {qp_z:.2f} kN/m², cp,net = {cp_wall_net:.1f}, "
+        f"ULS tuuli = {gammaQ * qp_z * cp_wall_net:.2f} kN/m²"
     )
+    print("  Omapaino                      oletetaan alareunan kiskolle/lattialle; päätykolmiolasi erillistarkistuksena")
+    print(f"  {'Ryhmä':<28} {'kpl':>3} {'A':>7} {'Gk':>7} {'Wk':>7} {'W_ULS':>7}")
+    print(f"  {'-'*28} {'-'*3} {'-'*7} {'-'*7} {'-'*7} {'-'*7}")
+    for row in VERTICAL_GLAZING_GROUPS:
+        print(
+            f"  {row['group']:<28} {row['count']:>3d} {row['area_m2']:>6.2f} "
+            f"{row['self_kN']:>6.2f} {row['wind_char_kN']:>6.2f} {row['wind_uls_kN']:>6.2f}"
+        )
     print(
-        f"  Vaakatuet                     beam.inner.new x = {inner_beam_horizontal_supports_x_mm[0]:.0f} / {inner_beam_horizontal_supports_x_mm[-1]:.0f} mm; "
-        f"2×KP360×51 x = {inner_supports_x_mm[0]:.0f} / {inner_supports_x_mm[-1]:.0f} mm"
+        f"  Lasipaneelien mitoitus        yksisuuntainen ylä-/alakiskojen välinen kaista, "
+        f"f_d = {vertical_glass_design_strength_Nmm2:.0f} N/mm²"
     )
+    print(f"  {'Lasi':<34} {'L':>5} {'t':>4} {'σd':>7} {'ησ':>7} {'δ_sls':>8} {'δ/L':>7} {'σ-tila':>7}")
+    print(f"  {'-'*34} {'-'*5} {'-'*4} {'-'*7} {'-'*7} {'-'*8} {'-'*7} {'-'*7}")
+    for row in VERTICAL_GLAZING_ROWS:
+        check = row["panel_check"]
+        status = "OK" if check["eta_sigma_pct"] <= 100.0 else "YLITYS"
+        print(
+            f"  {row['id'].replace('surf.', ''):<34} {check['span_mm']:>5.0f} {check['thickness_mm']:>4.0f} "
+            f"{check['sigma_Nmm2']:>6.1f} {check['eta_sigma_pct']:>6.1f}% "
+            f"{check['delta_mm']:>7.1f} L/{check['delta_ratio']:>4.0f} {status:>7}"
+        )
+    print("  Huomio                        σ-tila koskee lasin alustavaa jännitystarkistusta; δ/L on valmistajalle annettava taipumatieto")
+    if gable_glazing_summary is not None:
+        inner_h = gable_glazing_h_governing["inner_beam"]
+        existing_h = gable_glazing_h_governing["existing_beam"]
+        inner_sls_delta = max(
+            abs(gable_glazing_h_sls["inner_beam"]["delta"]["value_mm"]),
+            abs(gable_glazing_h_sls_drift["inner_beam"]["delta"]["value_mm"]),
+        )
+        existing_sls_delta = max(
+            abs(gable_glazing_h_sls["existing_beam"]["delta"]["value_mm"]),
+            abs(gable_glazing_h_sls_drift["existing_beam"]["delta"]["value_mm"]),
+        )
+        inner_span_limit_mm = (max(inner_beam_horizontal_supports_x_mm) - min(inner_beam_horizontal_supports_x_mm)) / 300.0
+        existing_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
+        print(
+            f"  Päätykolmiolasin omapaino     {gable_glazing_summary['total_kN']:.2f} kN -> "
+            f"beam.inner.new viivakuormana {gable_glazing_summary['self_line_kNm']:.3f} kN/m"
+        )
+        print(
+            f"  Päätykolmiolasin vaakatuet    {gable_glazing_h_governing_case}, "
+            f"tuulijako 50/50 ala-/yläpalkille, qk = {gable_glazing_summary['wind_line_inner_char_kNm']:.3f} kN/m per palkki"
+        )
+        print(
+            f"    {'beam.inner.new':<24} Md,z = {inner_h['M_gov']['value_kNm']:.2f} kNm, "
+            f"η_M/η_V = {inner_h['eta_M']:.1f}%/{inner_h['eta_V']:.1f}%, "
+            f"δ = {inner_sls_delta:.2f}/{inner_span_limit_mm:.1f} mm, "
+            f"max H_tuki = {max(abs(value) for value in inner_h['reactions_kN'].values()):.2f} kN"
+        )
+        print(
+            f"    {'beam.existing.kp360x2':<24} Md,z = {existing_h['M_gov']['value_kNm']:.2f} kNm, "
+            f"η_M/η_V = {existing_h['eta_M']:.1f}%/{existing_h['eta_V']:.1f}%, "
+            f"δ = {existing_sls_delta:.2f}/{existing_span_limit_mm:.1f} mm, "
+            f"max H_tuki = {max(abs(value) for value in existing_h['reactions_kN'].values()):.2f} kN"
+        )
+    print(f"  Ulkoreunan yläreunapalkki     hallitseva vaakakuorma {outer_beam_h_governing_case}")
     print(
-        f"  Tuulikuorma yhteensä          {gable_glazing_summary['wind_char_total_kN']:.2f} kN, "
-        f"q_line,char = {gable_glazing_summary['wind_line_inner_char_kNm']:.3f} kN/m per palkki"
+        f"    {'beam.outer':<24} qk = {q_outer_wind_h_char:.3f} kN/m, "
+        f"Md,z = {outer_beam_h_governing['M_gov']['value_kNm']:.2f} kNm, "
+        f"η_M/η_V = {outer_beam_h_governing['eta_M']:.1f}%/{outer_beam_h_governing['eta_V']:.1f}%, "
+        f"δ = {outer_beam_h_sls_delta_mm:.2f}/{outer_beam_h_governing['delta_lim_mm']:.1f} mm, "
+        f"max H_tuki = {max(abs(value) for value in outer_beam_h_governing['reactions_kN'].values()):.2f} kN"
     )
-    print(f"  Hallitseva vaakakuorma        {gable_glazing_h_governing_case}")
-    print(
-        f"  beam.inner.new vaakataivutus  Md = {inner_h['M_gov']['value_kNm']:.2f} kNm, "
-        f"Vd = {abs(inner_h['V_abs']['value_kN']):.2f} kN, "
-        f"η_M/η_V = {inner_h['eta_M']:.1f}%/{inner_h['eta_V']:.1f}%, "
-        f"δ = {inner_sls_delta:.2f}/{inner_span_limit_mm:.1f} mm"
-    )
-    print(
-        f"  beam.existing.kp360x2         Md = {existing_h['M_gov']['value_kNm']:.2f} kNm, "
-        f"Vd = {abs(existing_h['V_abs']['value_kN']):.2f} kN, "
-        f"η_M/η_V = {existing_h['eta_M']:.1f}%/{existing_h['eta_V']:.1f}%, "
-        f"δ = {existing_sls_delta:.2f}/{existing_span_limit_mm:.1f} mm"
-    )
+    if side_beam_glazing_governing_case is not None:
+        print(f"  Seinänpuolen yläreunapalkit   hallitseva vaakakuorma {side_beam_glazing_governing_case}")
+        for member_id, row in side_beam_glazing_governing.items():
+            sls_row = side_beam_glazing_sls.get(member_id)
+            sls_drift_row = side_beam_glazing_sls_drift.get(member_id)
+            sls_delta = max(
+                abs(sls_row["delta"]["value_mm"]) if sls_row else 0.0,
+                abs(sls_drift_row["delta"]["value_mm"]) if sls_drift_row else 0.0,
+            )
+            print(
+                f"    {member_id:<24} qk = {row['q_line_char_kNm']:.3f} kN/m, "
+                f"Md = {row['M_gov']['value_kNm']:.2f} kNm, "
+                f"η_M/η_V = {row['eta_M']:.1f}%/{row['eta_V']:.1f}%, "
+                f"δ = {sls_delta:.2f}/{row['delta_lim_mm']:.1f} mm"
+            )
+    if edge_rafter_glazing_governing_case is not None:
+        print(f"  Sivulasien yläkiskot          hallitseva vaakakuorma {edge_rafter_glazing_governing_case}")
+        for side, row in edge_rafter_glazing_governing.items():
+            sls_row = edge_rafter_glazing_sls.get(side)
+            sls_drift_row = edge_rafter_glazing_sls_drift.get(side)
+            sls_delta = max(
+                abs(sls_row["delta"]["value_mm"]) if sls_row else 0.0,
+                abs(sls_drift_row["delta"]["value_mm"]) if sls_drift_row else 0.0,
+            )
+            print(
+                f"    {row['id']:<24} qk = {row['q_line_char_kNm']:.3f} kN/m, "
+                f"Md,z = {row['M_gov']['value_kNm']:.2f} kNm, "
+                f"η_y+z/η_V = {row['eta_biaxial']:.1f}%/{row['eta_V']:.1f}%, "
+                f"δ = {sls_delta:.2f}/{row['delta_lim_mm']:.1f} mm, "
+                f"max H_tuki = {max(abs(value) for value in row['reactions_kN'].values()):.2f} kN"
+            )
+        print("  Oletus                        sivulasien tuuli jakautuu ala- ja yläkiskolle; yläkisko tukeutuu reunakattotuoliin")
+    print("  Huomio                        beam.outer pysty+vaakavuorovaikutus esitetään myös ulkopalkkiosiossa")
 
 print("\n── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────")
 print(f"  Sivukaista vasen / oikea      {left_strip_width_m:.3f} / {right_strip_width_m:.3f} m")
@@ -4251,6 +4655,13 @@ print(f"    {GEOMETRY_PATH_LABEL}:n load_transfer.member_refs-metadatan mukaises
 print("    orren oma paino mallinnetaan viivakuormana.")
 print("  * Seinän täytekaistan ulkoreuna tukeutuu erilliselle tukiorrelle; sen")
 print("    reaktiot siirretään kattotuoleille, ei aurinkopaneelikentälle.")
+print("  * Pystylasitusten omapaino ja tuuli summataan geometriasta; seinänpuolen")
+print("    LP225×90-yläreunapalkit tarkistetaan vaakatuulen yläreunareaktiolle.")
+print("  * Pystylasitukset tarkistetaan alustavasti 8 mm lasilevynä yksisuuntaisella")
+print("    ylä-/alakiskojen välisellä tuulitaivutusmallilla; valmistajan mitoitus tarvitaan lopulliseksi.")
+print("  * Sivulasien tuulen yläkiskoreaktio lisätään reunakattotuolien heikon suunnan")
+print("    tarkistukseen; lasitusjärjestelmän lopullinen kiinnitys on varmistettava toimittajalta.")
+print("    Jos lasit ovat yläkannatteisia, myös niiden omapaino pitää lisätä yläkiskon rakenteille.")
 print("  * Päätykolmiolasin omapaino lisätään beam.inner.new-pystymalliin; tuulikuorma")
 print("    jaetaan konservatiivisesti 50/50 alapalkille ja yläreunan 2×KP360×51-palkille.")
 print("  * Ulkokulmien nurkkaorret mallinnetaan tuettuina toiseksi uloimpaan kattotuoliin ja")

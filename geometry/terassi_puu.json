@@ -94,6 +94,13 @@
       "count": 2
     },
     {
+      "id": "LP225x90",
+      "name": "LP225x90",
+      "material": "Liimapuu GL30c",
+      "b_mm": 90,
+      "h_mm": 225
+    },
+    {
       "id": "LP360x140",
       "name": "LP360x140",
       "material": "Liimapuu GL30c",
@@ -201,6 +208,20 @@
         "profile": "2xKP360x51",
         "axis_start": {"x": 0, "y": 1675, "z": 2750},
         "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "existing": true
+      },
+      {
+        "id": "beam.lp225.x125",
+        "profile": "LP225x90",
+        "axis_start": {"x": 125, "y": 0, "z": 2480},
+        "axis_end": {"x": 125, "y": 1750, "z": 2480},
+        "existing": true
+      },
+      {
+        "id": "beam.lp225.x7075",
+        "profile": "LP225x90",
+        "axis_start": {"x": 7075, "y": 0, "z": 3990},
+        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
         "existing": true
       },
       {
@@ -759,6 +780,8 @@
       "id": "surf.side_glazing.outer.vasen",
       "type": "side_glazing",
       "material": "lasi (liukulasi)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
       "openable": true,
       "supported_by": [
         "beam.outer",
@@ -784,6 +807,8 @@
       "id": "surf.side_glazing.outer.oikea",
       "type": "side_glazing",
       "material": "lasi (liukulasi)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
       "openable": true,
       "supported_by": [
         "beam.outer",
@@ -809,7 +834,14 @@
       "id": "surf.side_glazing.vasen",
       "type": "side_glazing",
       "material": "lasi (liukulasi)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
       "openable": true,
+      "supported_by": [
+        "kattotuoli.vasen",
+        "col.existing.inner.x125",
+        "col.outer.x0"
+      ],
       "placement": {
         "anchor": {"x": 125, "y": 1800, "z": 0},
         "u": {
@@ -829,7 +861,14 @@
       "id": "surf.side_glazing.oikea",
       "type": "side_glazing",
       "material": "lasi (liukulasi)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
       "openable": true,
+      "supported_by": [
+        "kattotuoli.oikea",
+        "col.existing.inner.x7075",
+        "col.outer.x7200"
+      ],
       "placement": {
         "anchor": {"x": 7075, "y": 1800, "z": 0},
         "u": {
@@ -846,9 +885,97 @@
       }
     },
     {
+      "id": "surf.side_glazing.wall.vasen",
+      "type": "side_glazing",
+      "material": "lasi (kiintea)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "openable": false,
+      "supported_by": [
+        "ref.house_wall",
+        "col.existing.inner.x125",
+        "beam.lp225.x125"
+      ],
+      "placement": {
+        "anchor": {"x": 125, "y": 0, "z": 0},
+        "u": {
+          "dir": "+y",
+          "length_mm": 1550
+        },
+        "v": {
+          "dir": "+z",
+          "length_mm": 2480
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "surf.side_glazing.wall.oikea.ala",
+      "type": "side_glazing",
+      "material": "lasi (kiintea)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "openable": false,
+      "supported_by": [
+        "ref.house_wall",
+        "col.existing.inner.x7075",
+        "beam.lp225.x7075"
+      ],
+      "placement": {
+        "anchor": {"x": 7075, "y": 0, "z": 0},
+        "u": {
+          "dir": "+y",
+          "length_mm": 1550
+        },
+        "v": {
+          "dir": "+z",
+          "length_mm": 2300
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "surf.side_glazing.wall.oikea.yla",
+      "type": "side_glazing",
+      "material": "lasi (kiintea)",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "openable": false,
+      "supported_by": [
+        "ref.house_wall",
+        "col.existing.inner.x7075",
+        "beam.lp225.x7075"
+      ],
+      "placement": {
+        "anchor": {"x": 7075, "y": 0, "z": 2300},
+        "u": {
+          "dir": "+y",
+          "length_mm": 1550
+        },
+        "v": {
+          "dir": "+z",
+          "length_mm": 1690
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
       "id": "surf.gable_glazing.vasen.yla",
       "type": "gable_glazing",
       "material": "lasi",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "supported_by": [
+        "kattotuoli.vasen",
+        "col.existing.inner.x125",
+        "col.outer.x0"
+      ],
       "placement": {
         "anchor": {"x": 125, "y": 1800, "z": 2000},
         "u": {
@@ -875,6 +1002,13 @@
       "id": "surf.gable_glazing.oikea.yla",
       "type": "gable_glazing",
       "material": "lasi",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "supported_by": [
+        "kattotuoli.oikea",
+        "col.existing.inner.x7075",
+        "col.outer.x7200"
+      ],
       "placement": {
         "anchor": {"x": 7075, "y": 1800, "z": 2000},
         "u": {
