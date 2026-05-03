@@ -635,6 +635,7 @@
         "polygon":      { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } },
         "material":     { "type": "string" },
         "thickness_mm": { "type": "number" },
+        "density_kg_m3": { "type": "number", "exclusiveMinimum": 0 },
         "mass_kg":      { "type": "number" },
         "count": {
           "type": "object",

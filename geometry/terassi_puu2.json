@@ -143,8 +143,11 @@
       "h_mm": 98
     },
     {
-      "id": "TBD",
-      "name": "TBD (profiili päättämättä)"
+      "id": "48x48",
+      "name": "C24 48x48",
+      "material": "Mitallistettu sahatavara",
+      "b_mm": 48,
+      "h_mm": 48
     }
   ],
   "members": {
@@ -248,8 +251,8 @@
       {
         "id": "orsi.vasen",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 2080, "z": 2690},
-        "axis_end": {"x": -369, "y": 2080, "z": 2690},
+        "axis_start": {"x": 750, "y": 2170, "z": 2679},
+        "axis_end": {"x": -369, "y": 2170, "z": 2679},
         "section_rotation_deg": -6.7,
         "existing": false,
         "pattern": {
@@ -261,8 +264,8 @@
       {
         "id": "orsi.oikea",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 2080, "z": 2690},
-        "axis_end": {"x": 7569, "y": 2080, "z": 2690},
+        "axis_start": {"x": 6450, "y": 2170, "z": 2679},
+        "axis_end": {"x": 7569, "y": 2170, "z": 2679},
         "section_rotation_deg": 6.7,
         "existing": false,
         "pattern": {
@@ -274,17 +277,25 @@
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 5150, "z": 2310},
-        "axis_end": {"x": -360, "y": 5610, "z": 2250},
+        "axis_start": {"x": 750, "y": 5240, "z": 2299},
+        "axis_end": {"x": -360, "y": 5700, "z": 2239},
         "section_rotation_deg": -5.1,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 5150, "z": 2310},
-        "axis_end": {"x": 7560, "y": 5610, "z": 2250},
+        "axis_start": {"x": 6450, "y": 5240, "z": 2299},
+        "axis_end": {"x": 7560, "y": 5700, "z": 2239},
         "section_rotation_deg": 5.1,
+        "existing": false
+      },
+      {
+        "id": "orsi.tuki",
+        "profile": "48x48",
+        "axis_start": {"x": 0, "y": 2125, "z": 2738},
+        "axis_end": {"x": 7200, "y": 2125, "z": 2738},
+        "section_rotation_deg": 7.2,
         "existing": false
       }
      ]
@@ -423,7 +434,7 @@
         "orsi.vasen",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 2100, "z": 2650},
+      "at": {"x": 754, "y": 2190, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -436,7 +447,7 @@
         "orsi.vasen",
         "kattotuoli.vasen"
       ],
-      "at": {"x": 125, "y": 2100, "z": 2650},
+      "at": {"x": 125, "y": 2190, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -458,7 +469,7 @@
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 2100, "z": 2650},
+      "at": {"x": 6424, "y": 2190, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -471,7 +482,7 @@
         "orsi.oikea",
         "kattotuoli.oikea"
       ],
-      "at": {"x": 7075, "y": 2100, "z": 2650},
+      "at": {"x": 7075, "y": 2190, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -493,7 +504,7 @@
         "orsi.vasen.45",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 5148, "z": 2310},
+      "at": {"x": 754, "y": 5238, "z": 2299},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -506,7 +517,7 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 310, "y": 5275, "z": 2286},
+      "at": {"x": 527, "y": 5275, "z": 2287},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -528,7 +539,7 @@
         "orsi.oikea.45",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 5139, "z": 2311},
+      "at": {"x": 6424, "y": 5229, "z": 2300},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -541,7 +552,7 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 6890, "y": 5275, "z": 2286},
+      "at": {"x": 6673, "y": 5275, "z": 2287},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -801,7 +812,7 @@
       ],
       "ref": "pt.beam.inner.new.axis_start",
       "placement": {
-        "anchor": {"x": -369, "y": 260, "z": -30},
+        "anchor": {"x": -369, "y": 350, "z": -41},
         "u": {
           "dir": "+x",
           "length_mm": 7938
@@ -818,9 +829,47 @@
       }
     },
     {
+      "id": "surf.wall_infill_glass",
+      "type": "roof_covering",
+      "material": "8 mm lasi, seinan viereinen taytekaista",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "supported_by": [
+        "beam.inner.new",
+        "orsi.tuki",
+        "kattotuoli.vasen",
+        "kattotuoli.0",
+        "kattotuoli.1",
+        "kattotuoli.2",
+        "kattotuoli.3",
+        "kattotuoli.4",
+        "kattotuoli.5",
+        "kattotuoli.oikea"
+      ],
+      "ref": "pt.beam.inner.new.axis_start",
+      "placement": {
+        "anchor": {"x": 0, "y": 0, "z": 3},
+        "u": {
+          "dir": "+x",
+          "length_mm": 7200
+        },
+        "v": {
+          "dir": "+y",
+          "slope_deg": 7.2,
+          "slope_sense": "-z",
+          "slope_length_mm": 353
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
       "id": "surf.triangle_glazing.gable",
       "type": "triangle_glazing",
       "material": "lasi",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
       "placement": {
         "anchor": {"x": 1550, "y": 1800, "z": 2770},
         "u": {

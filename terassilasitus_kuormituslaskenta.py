@@ -247,6 +247,93 @@ roof_inner_x0_mm = roof_inner_pts[0]["x"]
 roof_inner_x1_mm = roof_inner_pts[-1]["x"]
 roof_inner_z0_mm = roof_inner_pts[0]["z"]
 roof_inner_z1_mm = roof_inner_pts[-1]["z"]
+
+
+def optional_surface(sid):
+    try:
+        return surface(GEO, sid)
+    except KeyError:
+        return None
+
+
+def surface_bounds(surface_obj):
+    poly = surface_obj["polygon"]
+    return {
+        "x0_mm": min(p["x"] for p in poly),
+        "x1_mm": max(p["x"] for p in poly),
+        "y0_mm": min(p["y"] for p in poly),
+        "y1_mm": max(p["y"] for p in poly),
+        "z0_mm": min(p["z"] for p in poly),
+        "z1_mm": max(p["z"] for p in poly),
+    }
+
+
+def rectangle_projected_area_m2(bounds):
+    return (bounds["x1_mm"] - bounds["x0_mm"]) * (bounds["y1_mm"] - bounds["y0_mm"]) / 1.0e6
+
+
+def surface_polygon_area_xz_m2(surface_obj):
+    poly = surface_obj["polygon"]
+    area2_mm2 = 0.0
+    for p0, p1 in zip(poly, poly[1:] + poly[:1]):
+        area2_mm2 += p0["x"] * p1["z"] - p1["x"] * p0["z"]
+    return abs(area2_mm2) / 2.0e6
+
+
+def surface_slope_span_y_mm(surface_obj):
+    poly = surface_obj["polygon"]
+    y0 = min(p["y"] for p in poly)
+    y1 = max(p["y"] for p in poly)
+    inner = sorted([p for p in poly if p["y"] == y0], key=lambda p: p["x"])[0]
+    outer = sorted([p for p in poly if p["y"] == y1], key=lambda p: p["x"])[0]
+    return math.hypot(outer["y"] - inner["y"], outer["z"] - inner["z"])
+
+
+def surface_slope_span_to_y_mm(surface_obj, y_mm):
+    poly = surface_obj["polygon"]
+    y0 = min(p["y"] for p in poly)
+    y1 = max(p["y"] for p in poly)
+    if abs(y1 - y0) <= 1e-9:
+        return 0.0
+    ratio = clamp((y_mm - y0) / (y1 - y0), 0.0, 1.0)
+    return ratio * surface_slope_span_y_mm(surface_obj)
+
+
+infill_glass = optional_surface("surf.wall_infill_glass")
+infill_glass_summary = None
+if infill_glass is not None:
+    infill_bounds = surface_bounds(infill_glass)
+    infill_width_mm = infill_bounds["x1_mm"] - infill_bounds["x0_mm"]
+    infill_depth_mm = infill_bounds["y1_mm"] - infill_bounds["y0_mm"]
+    infill_slope_span_mm = surface_slope_span_y_mm(infill_glass)
+    infill_area_m2 = rectangle_projected_area_m2(infill_bounds)
+    infill_slope_area_m2 = infill_width_mm * infill_slope_span_mm / 1.0e6
+else:
+    infill_bounds = None
+    infill_width_mm = 0.0
+    infill_depth_mm = 0.0
+    infill_slope_span_mm = 0.0
+    infill_area_m2 = 0.0
+    infill_slope_area_m2 = 0.0
+
+gable_glazing = optional_surface("surf.triangle_glazing.gable")
+gable_glazing_summary = None
+if gable_glazing is not None:
+    gable_bounds = surface_bounds(gable_glazing)
+    gable_poly = gable_glazing["polygon"]
+    gable_area_m2 = surface_polygon_area_xz_m2(gable_glazing)
+    bottom_z_mm = min(p["z"] for p in gable_poly)
+    bottom_pts = sorted([p for p in gable_poly if abs(p["z"] - bottom_z_mm) <= 1e-6], key=lambda p: p["x"])
+    gable_bottom_x0_mm = float(bottom_pts[0]["x"])
+    gable_bottom_x1_mm = float(bottom_pts[-1]["x"])
+    gable_base_length_m = (gable_bottom_x1_mm - gable_bottom_x0_mm) / 1000.0
+else:
+    gable_bounds = None
+    gable_area_m2 = 0.0
+    gable_bottom_x0_mm = 0.0
+    gable_bottom_x1_mm = 0.0
+    gable_base_length_m = 0.0
+
 panel_joint_y_mm = 0.5 * (roof_y0_mm + roof_y1_mm)
 panel_frame_edge_offset_mm = 15.0
 DEFAULT_ROOF_LOAD_TRANSFER_RULE = {
@@ -447,6 +534,40 @@ edge_rafters = {
 
 purlins_all = sorted(expanded_members(GEO, "purlins"), key=lambda item: item["id"])
 
+infill_support_purlin = None
+infill_support_purlin_support_rows = []
+infill_support_purlin_support_xs_mm = []
+infill_support_purlin_y_mm = 0.0
+infill_support_span_mm = infill_slope_span_mm
+infill_outer_overhang_mm = 0.0
+if infill_glass is not None:
+    infill_supported_ids = set(infill_glass.get("supported_by", []))
+    infill_support_purlins = [m for m in purlins_all if m["id"] in infill_supported_ids]
+    if len(infill_support_purlins) != 1:
+        raise ValueError(
+            "surf.wall_infill_glass must list exactly one purlin support in supported_by "
+            f"(found {[m['id'] for m in infill_support_purlins]})"
+        )
+    infill_support_purlin = infill_support_purlins[0]
+    infill_support_purlin_y_mm = float(infill_support_purlin["axis_start"]["y"])
+    infill_support_span_mm = surface_slope_span_to_y_mm(infill_glass, infill_support_purlin_y_mm)
+    infill_outer_overhang_mm = max(0.0, infill_slope_span_mm - infill_support_span_mm)
+    for support_id in infill_glass.get("supported_by", []):
+        if support_id not in MEMBERS_BY_ID:
+            continue
+        if support_id in {edge_rafter_id("left"), edge_rafter_id("right")} or (
+            support_id.startswith(INTERIOR_RAFTER_PREFIX) and support_id.split(".")[-1].isdigit()
+        ):
+            support_member = member_by_id_any(support_id)
+            infill_support_purlin_support_rows.append({
+                "member_id": support_id,
+                "x_mm": float(support_member["axis_start"]["x"]),
+            })
+    infill_support_purlin_support_rows = sorted(infill_support_purlin_support_rows, key=lambda row: row["x_mm"])
+    if len(infill_support_purlin_support_rows) < 2:
+        raise ValueError("surf.wall_infill_glass support purlin needs at least two rafter supports in supported_by")
+    infill_support_purlin_support_xs_mm = [row["x_mm"] for row in infill_support_purlin_support_rows]
+
 
 def is_horizontal_side_purlin(member_obj):
     if not member_obj["id"].startswith(side_purlin_prefix("left")) and not member_obj["id"].startswith(side_purlin_prefix("right")):
@@ -570,6 +691,8 @@ rafter_b_mm = profile_b(interior_rafters[0])
 rafter_h_mm = profile_h(interior_rafters[0])
 purlin_b_mm = profile_b(left_purlins[0])
 purlin_h_mm = profile_h(left_purlins[0])
+infill_support_purlin_b_mm = profile_b(infill_support_purlin) if infill_support_purlin is not None else 0.0
+infill_support_purlin_h_mm = profile_h(infill_support_purlin) if infill_support_purlin is not None else 0.0
 outer_beam_b_mm = profile_b(outer_beam)
 outer_beam_h_mm = profile_h(outer_beam)
 inner_beam_b_mm = profile_b(inner_beam)
@@ -819,6 +942,30 @@ panels_total_kN = panel_total_mass_kg * 9.81 / 1000.0
 gk_panels = panels_total_kN / roof_area_m2
 gk_fixings = 0.05
 gk_roofing = gk_panels + gk_fixings
+if infill_glass is not None:
+    infill_glass_thickness_mm = float(infill_glass["thickness_mm"])
+    infill_glass_density_kg_m3 = float(infill_glass.get("density_kg_m3", 2500.0))
+    infill_glass_mass_kg = infill_slope_area_m2 * (infill_glass_thickness_mm / 1000.0) * infill_glass_density_kg_m3
+    infill_glass_total_kN = infill_glass_mass_kg * 9.81 / 1000.0
+    gk_infill_glass = infill_glass_total_kN / infill_area_m2
+else:
+    infill_glass_thickness_mm = 0.0
+    infill_glass_density_kg_m3 = 0.0
+    infill_glass_mass_kg = 0.0
+    infill_glass_total_kN = 0.0
+    gk_infill_glass = 0.0
+if gable_glazing is not None:
+    gable_glass_thickness_mm = float(gable_glazing.get("thickness_mm", 8.0))
+    gable_glass_density_kg_m3 = float(gable_glazing.get("density_kg_m3", 2500.0))
+    gable_glass_mass_kg = gable_area_m2 * (gable_glass_thickness_mm / 1000.0) * gable_glass_density_kg_m3
+    gable_glass_total_kN = gable_glass_mass_kg * 9.81 / 1000.0
+    gable_glass_line_self_kNm = gable_glass_total_kN / max(gable_base_length_m, 1.0e-9)
+else:
+    gable_glass_thickness_mm = 0.0
+    gable_glass_density_kg_m3 = 0.0
+    gable_glass_mass_kg = 0.0
+    gable_glass_total_kN = 0.0
+    gable_glass_line_self_kNm = 0.0
 
 sk = 2.0
 mu1 = 0.8
@@ -845,18 +992,45 @@ w_up_closed = cp_net_up_closed * qp_z
 
 cp_wall_net = 1.0
 q_outer_wind_h_char = qp_z * cp_wall_net * (outer_glazing_height_m / 2.0)
+if gable_glazing is not None:
+    gable_wind_share_per_beam = 0.50
+    gable_wind_char_total_kN = qp_z * cp_wall_net * gable_area_m2
+    gable_wind_char_to_inner_kN = gable_wind_share_per_beam * gable_wind_char_total_kN
+    gable_wind_char_to_existing_kN = gable_wind_share_per_beam * gable_wind_char_total_kN
+    gable_wind_line_inner_char_kNm = gable_wind_char_to_inner_kN / max(gable_base_length_m, 1.0e-9)
+    gable_wind_line_existing_char_kNm = gable_wind_char_to_existing_kN / max(gable_base_length_m, 1.0e-9)
+    gable_glazing_summary = {
+        "material": gable_glazing.get("material", "lasi"),
+        "thickness_mm": gable_glass_thickness_mm,
+        "area_m2": gable_area_m2,
+        "mass_kg": gable_glass_mass_kg,
+        "total_kN": gable_glass_total_kN,
+        "self_line_kNm": gable_glass_line_self_kNm,
+        "x0_mm": gable_bottom_x0_mm,
+        "x1_mm": gable_bottom_x1_mm,
+        "base_length_m": gable_base_length_m,
+        "wind_char_total_kN": gable_wind_char_total_kN,
+        "wind_share_per_beam": gable_wind_share_per_beam,
+        "wind_line_inner_char_kNm": gable_wind_line_inner_char_kNm,
+        "wind_line_existing_char_kNm": gable_wind_line_existing_char_kNm,
+    }
 
 rho_c24 = 420.0
 gamma_c24 = rho_c24 * 9.81 / 1000.0
 gamma_gl30c = 5.0
+rho_lvl = 480.0
+gamma_lvl = rho_lvl * 9.81 / 1000.0
 
 rafter_self_kNm = (rafter_b_mm / 1000.0) * (rafter_h_mm / 1000.0) * gamma_c24 / math.cos(roof_slope_rad)
 purlin_self_kNm = (purlin_b_mm / 1000.0) * (purlin_h_mm / 1000.0) * gamma_c24
+infill_support_purlin_self_kNm = (infill_support_purlin_b_mm / 1000.0) * (infill_support_purlin_h_mm / 1000.0) * gamma_c24
 outer_beam_self_kNm = (outer_beam_b_mm / 1000.0) * (outer_beam_h_mm / 1000.0) * gamma_gl30c
 inner_beam_self_kNm = (inner_beam_b_mm / 1000.0) * (inner_beam_h_mm / 1000.0) * gamma_gl30c
+existing_beam_self_kNm = (existing_beam_b_mm / 1000.0) * (existing_beam_h_mm / 1000.0) * gamma_lvl
 
 E_c24 = 11000.0
 E_gl30c = 13000.0
+E_lvl = 13800.0
 kmod_c24 = 0.8
 gammaM_c24 = 1.3
 fm_d_c24 = kmod_c24 * 24.0 / gammaM_c24
@@ -864,6 +1038,10 @@ fv_d_c24 = kmod_c24 * 4.0 / gammaM_c24
 kmod_gl30c = 0.8
 fm_d_gl30c = kmod_gl30c * 30.0 / 1.25
 fv_d_gl30c = kmod_gl30c * 3.5 / 1.25
+kmod_lvl = 0.8
+gammaM_lvl = 1.2
+fm_d_lvl = kmod_lvl * 44.0 / gammaM_lvl
+fv_d_lvl = kmod_lvl * 4.5 / gammaM_lvl
 
 gammaG = 1.35
 gammaQ = 1.50
@@ -1080,6 +1258,179 @@ for x_mm in sorted({roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m 
 critical_drift = max(DRIFT_SUMMARY, key=lambda item: (item["s_peak_kNm2"], item["h_m"], item["x_mm"]))
 
 
+def glass_strip_response(q_kNm2, span_mm, thickness_mm, E_Nmm2=70000.0):
+    q_N_per_mm = q_kNm2
+    W_mm3_per_m = 1000.0 * thickness_mm**2 / 6.0
+    I_mm4_per_m = 1000.0 * thickness_mm**3 / 12.0
+    M_Nmm_per_m = q_N_per_mm * span_mm**2 / 8.0
+    delta_mm = 5.0 * q_N_per_mm * span_mm**4 / (384.0 * E_Nmm2 * I_mm4_per_m)
+    return {
+        "M_kNm_per_m": M_Nmm_per_m / 1.0e6,
+        "sigma_Nmm2": M_Nmm_per_m / W_mm3_per_m,
+        "delta_mm": delta_mm,
+    }
+
+
+def glass_strip_response_with_outer_support(q_kNm2, support_span_mm, total_span_mm, thickness_mm, E_Nmm2=70000.0):
+    q_N_per_mm = abs(q_kNm2)
+    W_mm3_per_m = 1000.0 * thickness_mm**2 / 6.0
+    I_mm4_per_m = 1000.0 * thickness_mm**3 / 12.0
+    support_span_mm = max(support_span_mm, 1.0e-9)
+    total_span_mm = max(total_span_mm, support_span_mm)
+    overhang_mm = max(0.0, total_span_mm - support_span_mm)
+    if overhang_mm <= 1e-9:
+        return glass_strip_response(q_N_per_mm, support_span_mm, thickness_mm, E_Nmm2)
+    outer_reaction_N_per_mm = q_N_per_mm * total_span_mm**2 / (2.0 * support_span_mm)
+    inner_reaction_N_per_mm = q_N_per_mm * total_span_mm - outer_reaction_N_per_mm
+    max_pos_x_mm = clamp(inner_reaction_N_per_mm / max(q_N_per_mm, 1.0e-9), 0.0, support_span_mm)
+    M_pos_Nmm_per_m = inner_reaction_N_per_mm * max_pos_x_mm - q_N_per_mm * max_pos_x_mm**2 / 2.0
+    M_neg_Nmm_per_m = q_N_per_mm * overhang_mm**2 / 2.0
+    M_Nmm_per_m = max(M_pos_Nmm_per_m, M_neg_Nmm_per_m)
+    delta_mm = 5.0 * q_N_per_mm * support_span_mm**4 / (384.0 * E_Nmm2 * I_mm4_per_m)
+    return {
+        "M_kNm_per_m": M_Nmm_per_m / 1.0e6,
+        "sigma_Nmm2": M_Nmm_per_m / W_mm3_per_m,
+        "delta_mm": delta_mm,
+    }
+
+
+def glass_strip_support_reactions_kN_per_m(q_kNm2, support_span_mm, total_span_mm):
+    support_span_m = max(support_span_mm / 1000.0, 1.0e-9)
+    total_span_m = max(total_span_mm / 1000.0, support_span_m)
+    if total_span_m <= support_span_m + 1.0e-9:
+        outer_reaction = q_kNm2 * total_span_m / 2.0
+    else:
+        outer_reaction = q_kNm2 * total_span_m**2 / (2.0 * support_span_m)
+    inner_reaction = q_kNm2 * total_span_m - outer_reaction
+    return inner_reaction, outer_reaction
+
+
+if infill_glass is not None:
+    infill_glass_design_strength_Nmm2 = 10.0
+    infill_glass_deflection_limit_mm = infill_support_span_mm / 200.0
+    infill_check_xs_mm = sorted({
+        infill_bounds["x0_mm"],
+        infill_bounds["x1_mm"],
+        *[float(m["axis_start"]["x"]) for m in rafters_all],
+    })
+    infill_depth_rows = [
+        (infill_bounds["y0_mm"], "seinareuna"),
+        (0.5 * (infill_bounds["y0_mm"] + infill_bounds["y1_mm"]), "kaistan keskella"),
+        (infill_bounds["y1_mm"], "ulkoreuna"),
+    ]
+    infill_snow_rows = []
+    for y_mm, label in infill_depth_rows:
+        row = max(
+            (
+                {
+                    "label": label,
+                    "x_mm": x_mm,
+                    "y_mm": y_mm,
+                    "s_char_kNm2": drift_snow_kNm2(x_mm, y_mm),
+                }
+                for x_mm in infill_check_xs_mm
+            ),
+            key=lambda item: (item["s_char_kNm2"], item["x_mm"]),
+        )
+        row["uls_snow_kNm2"] = gammaQ * row["s_char_kNm2"]
+        infill_snow_rows.append(row)
+    critical_infill_snow = max(infill_snow_rows, key=lambda item: (item["s_char_kNm2"], item["x_mm"]))
+    infill_uls_A_kNm2 = gammaG * gk_infill_glass + gammaQ * s_roof + gammaQ * psi0_W * w_down
+    infill_uls_drift_kNm2 = gammaG * gk_infill_glass + gammaQ * critical_infill_snow["s_char_kNm2"]
+    infill_uls_down_kNm2 = max(infill_uls_A_kNm2, infill_uls_drift_kNm2)
+    infill_sls_drift_kNm2 = gk_infill_glass + critical_infill_snow["s_char_kNm2"]
+    infill_uplift_kNm2 = 0.9 * gk_infill_glass - gammaQ * abs(w_up_closed)
+    infill_uls_response = glass_strip_response_with_outer_support(
+        infill_uls_down_kNm2,
+        infill_support_span_mm,
+        infill_slope_span_mm,
+        infill_glass_thickness_mm,
+    )
+    infill_sls_response = glass_strip_response_with_outer_support(
+        infill_sls_drift_kNm2,
+        infill_support_span_mm,
+        infill_slope_span_mm,
+        infill_glass_thickness_mm,
+    )
+    infill_uplift_response = glass_strip_response_with_outer_support(
+        abs(infill_uplift_kNm2),
+        infill_support_span_mm,
+        infill_slope_span_mm,
+        infill_glass_thickness_mm,
+    )
+    infill_inner_reaction_kN_per_m, infill_outer_reaction_kN_per_m = glass_strip_support_reactions_kN_per_m(
+        infill_uls_down_kNm2,
+        infill_support_span_mm,
+        infill_slope_span_mm,
+    )
+    infill_glass_summary = {
+        "material": infill_glass.get("material", "lasi"),
+        "thickness_mm": infill_glass_thickness_mm,
+        "density_kg_m3": infill_glass_density_kg_m3,
+        "width_mm": infill_width_mm,
+        "depth_mm": infill_depth_mm,
+        "span_mm": infill_support_span_mm,
+        "total_span_mm": infill_slope_span_mm,
+        "outer_overhang_mm": infill_outer_overhang_mm,
+        "outer_support_member_id": infill_support_purlin["id"],
+        "outer_support_y_mm": infill_support_purlin_y_mm,
+        "area_m2": infill_area_m2,
+        "slope_area_m2": infill_slope_area_m2,
+        "mass_kg": infill_glass_mass_kg,
+        "total_kN": infill_glass_total_kN,
+        "gk_kNm2": gk_infill_glass,
+        "snow_rows": infill_snow_rows,
+        "critical_snow": critical_infill_snow,
+        "uls_A_kNm2": infill_uls_A_kNm2,
+        "uls_drift_kNm2": infill_uls_drift_kNm2,
+        "uls_down_kNm2": infill_uls_down_kNm2,
+        "sls_drift_kNm2": infill_sls_drift_kNm2,
+        "uplift_kNm2": infill_uplift_kNm2,
+        "uplift_sigma_Nmm2": infill_uplift_response["sigma_Nmm2"],
+        "inner_support_reaction_kN_per_m": infill_inner_reaction_kN_per_m,
+        "outer_support_reaction_kN_per_m": infill_outer_reaction_kN_per_m,
+        "M_kNm_per_m": infill_uls_response["M_kNm_per_m"],
+        "sigma_Nmm2": infill_uls_response["sigma_Nmm2"],
+        "sigma_limit_Nmm2": infill_glass_design_strength_Nmm2,
+        "eta_sigma_pct": 100.0 * infill_uls_response["sigma_Nmm2"] / infill_glass_design_strength_Nmm2,
+        "delta_mm": infill_sls_response["delta_mm"],
+        "delta_limit_mm": infill_glass_deflection_limit_mm,
+        "eta_delta_pct": 100.0 * infill_sls_response["delta_mm"] / infill_glass_deflection_limit_mm,
+    }
+
+
+def infill_area_load_kNm2_for_case(case_key):
+    if infill_glass_summary is None:
+        return 0.0
+    if case_key == "ULS A":
+        return infill_glass_summary["uls_A_kNm2"]
+    if case_key == "ULS B":
+        return gammaG * gk_infill_glass + gammaQ * psi0_snow * s_roof
+    if case_key == "ULS DRIFT":
+        return infill_glass_summary["uls_drift_kNm2"]
+    if case_key == "SLS":
+        return gk_infill_glass + s_roof
+    if case_key == "SLS DRIFT":
+        return infill_glass_summary["sls_drift_kNm2"]
+    if case_key == "UPLIFT":
+        return infill_glass_summary["uplift_kNm2"]
+    raise KeyError(f"Unsupported infill load case: {case_key}")
+
+
+def infill_support_reactions_for_case(case_key):
+    q_kNm2 = infill_area_load_kNm2_for_case(case_key)
+    inner_reaction, outer_reaction = glass_strip_support_reactions_kN_per_m(
+        q_kNm2,
+        infill_support_span_mm,
+        infill_slope_span_mm,
+    )
+    return {
+        "q_kNm2": q_kNm2,
+        "inner_reaction_kN_per_m": inner_reaction,
+        "outer_reaction_kN_per_m": outer_reaction,
+    }
+
+
 def dedupe_panel_checkpoints(points):
     deduped = []
     seen = set()
@@ -1279,18 +1630,37 @@ def make_edge_rect_depth_fn(side):
 
 RAfter_PROPS = member_rect_props(rafter_b_mm, rafter_h_mm, member_section_rotation_deg(interior_rafters[0]))
 PURLIN_PROPS = member_rect_props(purlin_b_mm, purlin_h_mm, member_section_rotation_deg(left_purlins[0]))
+INFILL_SUPPORT_PURLIN_PROPS = (
+    member_rect_props(infill_support_purlin_b_mm, infill_support_purlin_h_mm, member_section_rotation_deg(infill_support_purlin))
+    if infill_support_purlin is not None
+    else None
+)
 OUTER_BEAM_PROPS = member_rect_props(outer_beam_b_mm, outer_beam_h_mm, member_section_rotation_deg(outer_beam))
 INNER_BEAM_PROPS = member_rect_props(inner_beam_b_mm, inner_beam_h_mm, member_section_rotation_deg(inner_beam))
+EXISTING_BEAM_PROPS = member_rect_props(existing_beam_b_mm, existing_beam_h_mm, member_section_rotation_deg(existing_beam))
 
 RAfter_MRd_kNm = fm_d_c24 * RAfter_PROPS["W_mm3"] / 1.0e6
 RAfter_VRd_kN = fv_d_c24 * RAfter_PROPS["A_mm2"] / 1.5e3
 PURLIN_MRd_kNm = fm_d_c24 * PURLIN_PROPS["W_mm3"] / 1.0e6
 PURLIN_VRd_kN = fv_d_c24 * PURLIN_PROPS["A_mm2"] / 1.5e3
+INFILL_SUPPORT_PURLIN_MRd_kNm = (
+    fm_d_c24 * INFILL_SUPPORT_PURLIN_PROPS["W_mm3"] / 1.0e6
+    if INFILL_SUPPORT_PURLIN_PROPS is not None
+    else 0.0
+)
+INFILL_SUPPORT_PURLIN_VRd_kN = (
+    fv_d_c24 * INFILL_SUPPORT_PURLIN_PROPS["A_mm2"] / 1.5e3
+    if INFILL_SUPPORT_PURLIN_PROPS is not None
+    else 0.0
+)
 OUTER_BEAM_MRd_y_kNm = fm_d_gl30c * OUTER_BEAM_PROPS["W_mm3"] / 1.0e6
 OUTER_BEAM_VRd_kN = fv_d_gl30c * OUTER_BEAM_PROPS["A_mm2"] / 1.5e3
 OUTER_BEAM_MRd_z_kNm = fm_d_gl30c * OUTER_BEAM_PROPS["W_horizontal_mm3"] / 1.0e6
 INNER_BEAM_MRd_kNm = fm_d_gl30c * INNER_BEAM_PROPS["W_mm3"] / 1.0e6
+INNER_BEAM_MRd_z_kNm = fm_d_gl30c * INNER_BEAM_PROPS["W_horizontal_mm3"] / 1.0e6
 INNER_BEAM_VRd_kN = fv_d_gl30c * INNER_BEAM_PROPS["A_mm2"] / 1.5e3
+EXISTING_BEAM_MRd_z_kNm = fm_d_lvl * EXISTING_BEAM_PROPS["W_horizontal_mm3"] / 1.0e6
+EXISTING_BEAM_VRd_kN = fv_d_lvl * EXISTING_BEAM_PROPS["A_mm2"] / 1.5e3
 
 edge_rafter_section_by_side = {}
 for side, member_obj in edge_rafters.items():
@@ -1821,15 +2191,27 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     }
 
 
-def analyse_beam_case(member_obj, support_xs_mm, point_loads_kN, gamma_self, E_Nmm2, section_I_mm4, MRd_kNm, VRd_kN):
+def analyse_beam_case(member_obj, support_xs_mm, point_loads_kN, gamma_self, E_Nmm2, section_I_mm4, MRd_kNm, VRd_kN, extra_uniform_intervals=None):
     x0_mm = float(member_obj["axis_start"]["x"])
     x1_mm = float(member_obj["axis_end"]["x"])
     if member_obj["id"] == "beam.outer":
         self_kNm = outer_beam_self_kNm
     else:
         self_kNm = inner_beam_self_kNm
-    nodes_mm = refine_nodes_mm([x0_mm, x1_mm, *support_xs_mm, *[x_mm for x_mm, _ in point_loads_kN]], analysis_step_beam_mm)
+    extra_uniform_intervals = [] if extra_uniform_intervals is None else list(extra_uniform_intervals)
+    nodes_mm = refine_nodes_mm(
+        [
+            x0_mm,
+            x1_mm,
+            *support_xs_mm,
+            *[x_mm for x_mm, _ in point_loads_kN],
+            *[x_mm for interval in extra_uniform_intervals for x_mm in interval[:2]],
+        ],
+        analysis_step_beam_mm,
+    )
     uniform = uniform_loads_for_nodes(nodes_mm, gamma_self * self_kNm / 1000.0)
+    if extra_uniform_intervals:
+        uniform = combine_uniform_loads(uniform, intervals_to_uniform_loads(nodes_mm, extra_uniform_intervals))
     response, internal, delta = solve_member_response(nodes_mm, support_xs_mm, point_loads_kN, uniform, EI_Nmm2=E_Nmm2 * section_I_mm4)
     moment_gov = governing_moment(internal)
     return {
@@ -1865,6 +2247,82 @@ def analyse_outer_beam_horizontal(q_line_kNm):
     }
 
 
+def analyse_beam_horizontal_interval(member_obj, support_xs_mm, interval_x0_mm, interval_x1_mm, q_line_kNm, E_Nmm2, section_I_mm4, MRd_kNm, VRd_kN):
+    x0_mm = float(member_obj["axis_start"]["x"])
+    x1_mm = float(member_obj["axis_end"]["x"])
+    nodes_mm = refine_nodes_mm([x0_mm, x1_mm, *support_xs_mm, interval_x0_mm, interval_x1_mm], analysis_step_beam_mm)
+    uniform = intervals_to_uniform_loads(nodes_mm, [(interval_x0_mm, interval_x1_mm, q_line_kNm / 1000.0)])
+    response, internal, delta = solve_member_response(nodes_mm, support_xs_mm, [], uniform, EI_Nmm2=E_Nmm2 * section_I_mm4)
+    moment_gov = governing_moment(internal)
+    return {
+        "q_line_kNm": q_line_kNm,
+        "reactions_kN": response["reactions_kN"],
+        "M_pos": internal["M_pos"],
+        "M_neg": internal["M_neg"],
+        "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
+        "eta_M": moment_gov["value_kNm"] / MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / VRd_kN * 100.0,
+    }
+
+
+def analyse_infill_support_purlin_case(case_key):
+    if infill_glass_summary is None:
+        return None
+    case = CASE_DEFS[case_key]
+    member_obj = infill_support_purlin
+    member_props = INFILL_SUPPORT_PURLIN_PROPS
+    loads = infill_support_reactions_for_case(case_key)
+    x0_mm = float(member_obj["axis_start"]["x"])
+    x1_mm = float(member_obj["axis_end"]["x"])
+    load_x0_mm = max(min(x0_mm, x1_mm), infill_bounds["x0_mm"])
+    load_x1_mm = min(max(x0_mm, x1_mm), infill_bounds["x1_mm"])
+    nodes_mm = refine_nodes_mm(
+        [x0_mm, x1_mm, load_x0_mm, load_x1_mm, *infill_support_purlin_support_xs_mm],
+        analysis_step_beam_mm,
+    )
+    glass_uniform = intervals_to_uniform_loads(
+        nodes_mm,
+        [(load_x0_mm, load_x1_mm, loads["outer_reaction_kN_per_m"] / 1000.0)],
+    )
+    self_uniform = intervals_to_uniform_loads(
+        nodes_mm,
+        [(min(x0_mm, x1_mm), max(x0_mm, x1_mm), case["gamma_self"] * infill_support_purlin_self_kNm / 1000.0)],
+    )
+    uniform = combine_uniform_loads(glass_uniform, self_uniform)
+    response, internal, delta = solve_member_response(
+        nodes_mm,
+        infill_support_purlin_support_xs_mm,
+        [],
+        uniform,
+        EI_Nmm2=E_c24 * member_props["I_mm4"],
+    )
+    moment_gov = governing_moment(internal)
+    support_rows = []
+    for row in infill_support_purlin_support_rows:
+        support_rows.append({
+            **row,
+            "R_kN": response["reactions_kN"][row["x_mm"]],
+        })
+    span_points = [x0_mm, *infill_support_purlin_support_xs_mm, x1_mm]
+    max_span_mm = max(abs(b_mm - a_mm) for a_mm, b_mm in zip(span_points, span_points[1:]))
+    return {
+        "id": member_obj["id"],
+        "profile": member_obj["profile"]["name"],
+        "support_y_mm": infill_support_purlin_y_mm,
+        "q_glass_line_kNm": loads["outer_reaction_kN_per_m"],
+        "q_total_line_kNm": load_stats(uniform)["avg_kNm"],
+        "support_rows": support_rows,
+        "M_gov": moment_gov,
+        "V_abs": internal["V_abs"],
+        "delta": delta,
+        "delta_lim_mm": max_span_mm / 300.0,
+        "eta_M": moment_gov["value_kNm"] / INFILL_SUPPORT_PURLIN_MRd_kNm * 100.0,
+        "eta_V": abs(internal["V_abs"]["value_kN"]) / INFILL_SUPPORT_PURLIN_VRd_kN * 100.0,
+    }
+
+
 def analyse_case(case_key):
     case = CASE_DEFS[case_key]
     roof_area_kNm2_at = case["roof_area_kNm2_at"]
@@ -1883,6 +2341,7 @@ def analyse_case(case_key):
                 analyse_corner_purlin_case(side, member_obj, corner_purlin_trib_width_m[member_id], roof_area_kNm2_at, gamma_self)
             )
     corner_purlin_results = {side: rows for side, rows in corner_purlin_results.items() if rows}
+    infill_support_purlin_result = analyse_infill_support_purlin_case(case_key)
 
     left_inner_point_loads = [(item["support_inner_y_mm"], item["R_inner_kN"]) for item in purlins["left"]]
     right_inner_point_loads = [(item["support_inner_y_mm"], item["R_inner_kN"]) for item in purlins["right"]]
@@ -1914,6 +2373,19 @@ def analyse_case(case_key):
             else:
                 raise ValueError(f"Unsupported corner purlin outer support target for {corner_result['id']}: {outer_target_member_id}")
 
+    if infill_support_purlin_result is not None:
+        for row in infill_support_purlin_result["support_rows"]:
+            target_member_id = row["member_id"]
+            point_load = (infill_support_purlin_result["support_y_mm"], row["R_kN"])
+            if target_member_id in interior_rafter_point_loads:
+                interior_rafter_point_loads[target_member_id].append(point_load)
+            elif target_member_id == edge_rafters["left"]["id"]:
+                edge_rafter_point_loads["left"].append(point_load)
+            elif target_member_id == edge_rafters["right"]["id"]:
+                edge_rafter_point_loads["right"].append(point_load)
+            else:
+                raise ValueError(f"Unsupported infill support purlin target: {target_member_id}")
+
     interior_results = []
     for idx, rafter_obj in enumerate(interior_rafters):
         point_loads = list(interior_rafter_point_loads.get(rafter_obj["id"], []))
@@ -1939,6 +2411,21 @@ def analyse_case(case_key):
             if result["outer_support_member_id"] == "beam.outer":
                 outer_beam_point_loads.append((result["support_outer_x_mm"], result["R_outer_kN"]))
 
+    inner_beam_extra_uniform_intervals = []
+    if infill_glass_summary is not None:
+        infill_reactions = infill_support_reactions_for_case(case_key)
+        inner_beam_extra_uniform_intervals.append((
+            infill_bounds["x0_mm"],
+            infill_bounds["x1_mm"],
+            infill_reactions["inner_reaction_kN_per_m"] / 1000.0,
+        ))
+    if gable_glazing_summary is not None:
+        inner_beam_extra_uniform_intervals.append((
+            gable_glazing_summary["x0_mm"],
+            gable_glazing_summary["x1_mm"],
+            gamma_self * gable_glazing_summary["self_line_kNm"] / 1000.0,
+        ))
+
     outer_beam_result = analyse_beam_case(
         outer_beam,
         outer_supports_x_mm,
@@ -1958,11 +2445,13 @@ def analyse_case(case_key):
         INNER_BEAM_PROPS["I_vertical_mm4"],
         INNER_BEAM_MRd_kNm,
         INNER_BEAM_VRd_kN,
+        extra_uniform_intervals=inner_beam_extra_uniform_intervals,
     )
 
     return {
         "case": case,
         "purlins": purlins,
+        "infill_support_purlin": infill_support_purlin_result,
         "corner_purlins": corner_purlin_results,
         "interior_rafters": interior_results,
         "edge_rafters": edge_results,
@@ -1979,6 +2468,39 @@ OUTER_BEAM_H = {
     "ULS B": analyse_outer_beam_horizontal(gammaQ * q_outer_wind_h_char),
     "ULS DRIFT": analyse_outer_beam_horizontal(gammaQ * psi0_W * q_outer_wind_h_char),
 }
+GABLE_GLAZING_H = {}
+if gable_glazing_summary is not None:
+    for case_key, factor in {
+        "ULS A": gammaQ * psi0_W,
+        "ULS B": gammaQ,
+        "ULS DRIFT": gammaQ * psi0_W,
+        "SLS": 1.0,
+        "SLS DRIFT": 1.0,
+    }.items():
+        GABLE_GLAZING_H[case_key] = {
+            "inner_beam": analyse_beam_horizontal_interval(
+                inner_beam,
+                inner_supports_x_mm,
+                gable_glazing_summary["x0_mm"],
+                gable_glazing_summary["x1_mm"],
+                factor * gable_glazing_summary["wind_line_inner_char_kNm"],
+                E_gl30c,
+                INNER_BEAM_PROPS["I_horizontal_mm4"],
+                INNER_BEAM_MRd_z_kNm,
+                INNER_BEAM_VRd_kN,
+            ),
+            "existing_beam": analyse_beam_horizontal_interval(
+                existing_beam,
+                inner_supports_x_mm,
+                gable_glazing_summary["x0_mm"],
+                gable_glazing_summary["x1_mm"],
+                factor * gable_glazing_summary["wind_line_existing_char_kNm"],
+                E_lvl,
+                EXISTING_BEAM_PROPS["I_horizontal_mm4"],
+                EXISTING_BEAM_MRd_z_kNm,
+                EXISTING_BEAM_VRd_kN,
+            ),
+        }
 
 
 # ── governing-yhteenvedot ───────────────────────────────────────────────────
@@ -2012,6 +2534,24 @@ for side in ("left", "right"):
         chosen["uplift_edge_kN"] = uplift["R_edge_kN"]
         chosen["uplift_inner_kN"] = uplift["R_inner_kN"]
         purlin_design_results[side].append(chosen)
+
+infill_support_purlin_design = None
+if RESULTS["ULS A"]["infill_support_purlin"] is not None:
+    infill_support_purlin_design = max(
+        (with_case(RESULTS[case_key]["infill_support_purlin"], case_key) for case_key in ULS_CASE_KEYS),
+        key=member_eta_value,
+    )
+    infill_support_purlin_sls = max(
+        (with_case(RESULTS[case_key]["infill_support_purlin"], case_key) for case_key in SLS_CASE_KEYS),
+        key=lambda item: abs(item["delta"]["value_mm"]),
+    )
+    infill_support_purlin_uplift = RESULTS["UPLIFT"]["infill_support_purlin"]
+    infill_support_purlin_design["eta_gov"] = member_eta_value(infill_support_purlin_design)
+    infill_support_purlin_design["sls_delta_mm"] = abs(infill_support_purlin_sls["delta"]["value_mm"])
+    infill_support_purlin_design["sls_case_key"] = infill_support_purlin_sls["case_key"]
+    infill_support_purlin_design["uplift_reaction_min_kN"] = min(
+        row["R_kN"] for row in infill_support_purlin_uplift["support_rows"]
+    )
 
 corner_purlin_design_results = {}
 for side in ("left", "right"):
@@ -2076,6 +2616,24 @@ inner_beam_governing_case = max(
     key=lambda case_key: max(RESULTS[case_key]["inner_beam"]["eta_M"], RESULTS[case_key]["inner_beam"]["eta_V"]),
 )
 inner_beam_governing = RESULTS[inner_beam_governing_case]["inner_beam"]
+if GABLE_GLAZING_H:
+    gable_glazing_h_governing_case = max(
+        ULS_CASE_KEYS,
+        key=lambda case_key: max(
+            GABLE_GLAZING_H[case_key]["inner_beam"]["eta_M"],
+            GABLE_GLAZING_H[case_key]["inner_beam"]["eta_V"],
+            GABLE_GLAZING_H[case_key]["existing_beam"]["eta_M"],
+            GABLE_GLAZING_H[case_key]["existing_beam"]["eta_V"],
+        ),
+    )
+    gable_glazing_h_governing = GABLE_GLAZING_H[gable_glazing_h_governing_case]
+    gable_glazing_h_sls = GABLE_GLAZING_H["SLS"]
+    gable_glazing_h_sls_drift = GABLE_GLAZING_H["SLS DRIFT"]
+else:
+    gable_glazing_h_governing_case = None
+    gable_glazing_h_governing = None
+    gable_glazing_h_sls = None
+    gable_glazing_h_sls_drift = None
 
 outer_beam_sls_normal_delta_mm = abs(RESULTS["SLS"]["outer_beam"]["delta"]["value_mm"])
 outer_beam_sls_drift_delta_mm = abs(RESULTS["SLS DRIFT"]["outer_beam"]["delta"]["value_mm"])
@@ -2177,6 +2735,17 @@ print(DW)
 print("\n── GEOMETRIA ─────────────────────────────────────────────────────")
 print(f"  Geometria                     geometry/terassi_puu.json")
 print(f"  Paneelikenttä                 {roof_width_mm:.0f} × {roof_depth_mm:.0f} mm  ({roof_area_m2:.2f} m²)")
+if infill_glass_summary is not None:
+    print(
+        f"  Seinän täytekaista            {infill_glass_summary['width_mm']:.0f} × {infill_glass_summary['depth_mm']:.0f} mm  "
+        f"({infill_glass_summary['area_m2']:.2f} m²), {infill_glass_summary['thickness_mm']:.0f} mm lasi, "
+        f"ulkoreuna -> {infill_glass_summary['outer_support_member_id']}"
+    )
+if gable_glazing_summary is not None:
+    print(
+        f"  Päätykolmiolasi               x = {gable_glazing_summary['x0_mm']:.0f}…{gable_glazing_summary['x1_mm']:.0f} mm, "
+        f"A = {gable_glazing_summary['area_m2']:.2f} m², {gable_glazing_summary['thickness_mm']:.0f} mm lasi"
+    )
 print(f"  Kattokaltevuus y-suunnassa    {roof_slope_deg:.1f}°")
 print(f"  Sisäkattotuolit               {len(interior_rafters)} kpl  @ {interior_rafter_xs_mm[1]-interior_rafter_xs_mm[0]:.0f} mm")
 print(f"  Reunakattotuolit              2 kpl  @ x = {edge_rafters['left']['axis_start']['x']:.0f} / {edge_rafters['right']['axis_start']['x']:.0f} mm")
@@ -2185,6 +2754,11 @@ print(
     f"  (vasen y = {', '.join(f'{y_mm:.0f}' for y_mm in purlin_y_positions_mm['left'])} mm;"
     f" oikea y = {', '.join(f'{y_mm:.0f}' for y_mm in purlin_y_positions_mm['right'])} mm)"
 )
+if infill_support_purlin is not None:
+    print(
+        f"  Täytekaistan tukiorsi         {infill_support_purlin['id']} "
+        f"{infill_support_purlin['profile']['name']} @ y = {infill_support_purlin_y_mm:.0f} mm"
+    )
 if corner_purlins:
     print(f"  Nurkkaorret y-suunnassa       {len(corner_purlins)} kpl  @ x = " + ", ".join(f"{float(item['axis_start']['x']):.0f}" for item in corner_purlins) + " mm")
 print(f"  Kattotuolien tuet sisa/ulko   y = {interior_inner_support_y_mm:.0f} / {interior_outer_support_y_mm:.0f} mm")
@@ -2204,6 +2778,16 @@ print(f"  Sisäpalkin tuet               x = " + " / ".join(f"{x_mm:.0f}" for x_
 print("\n── KUORMAT ───────────────────────────────────────────────────────")
 print(f"  Paneelit                      {panel_count['nx']}×{panel_count['ny']} = {panel_count_total} kpl, {panels_total_kN:.2f} kN")
 print(f"  Pysyvä katekuorma             gk = {gk_roofing:.3f} kN/m²  (paneelit {gk_panels:.3f} + kiinnikkeet {gk_fixings:.2f})")
+if infill_glass_summary is not None:
+    print(
+        f"  Täytekaistan lasi             {infill_glass_summary['mass_kg']:.0f} kg = "
+        f"{infill_glass_summary['total_kN']:.2f} kN, gk = {infill_glass_summary['gk_kNm2']:.3f} kN/m²"
+    )
+if gable_glazing_summary is not None:
+    print(
+        f"  Päätykolmiolasi               {gable_glazing_summary['mass_kg']:.0f} kg = "
+        f"{gable_glazing_summary['total_kN']:.2f} kN, omapaino alapalkille {gable_glazing_summary['self_line_kNm']:.3f} kN/m"
+    )
 print(f"  Lumi                          sk = {sk:.1f} kN/m², μ1 = {mu1:.1f}  →  s = {s_roof:.2f} kN/m²")
 print(f"  Tuuli katolle                 qp(z={z_ref_m:.1f} m) = {qp_z:.3f} kN/m²")
 print(f"    alas (auki)                 cp,net = {cp_net_down:+.2f}  →  w = {w_down:.3f} kN/m²")
@@ -2271,6 +2855,108 @@ for row in critical_panel_check_rows:
         f"  {row['label']:<24} {row['y_mm']:>7.0f} {row['s_char_kNm2']:>7.2f} "
         f"{row['uls_kNm2']:>7.2f} {row['eta_pct']:>6.1f}% "
         f"{('OK' if row['ok'] else 'YLITYS'):>8}"
+    )
+
+if infill_glass_summary is not None:
+    infill_status = "OK" if infill_glass_summary["eta_sigma_pct"] <= 100.0 and infill_glass_summary["eta_delta_pct"] <= 100.0 else "YLITTYY"
+    print("\n── SEINÄN TÄYTEKAISTA – 8 mm LASI ────────────────────────────────")
+    print(f"  Materiaali                    {infill_glass_summary['material']}")
+    print(
+        f"  Kantosuunta                    seinältä {infill_glass_summary['outer_support_member_id']}:lle, "
+        f"L = {infill_glass_summary['span_mm']:.0f} mm"
+        + (
+            f" (+ ulkoreunan ylitys {infill_glass_summary['outer_overhang_mm']:.0f} mm)"
+            if infill_glass_summary["outer_overhang_mm"] > 1.0
+            else ""
+        )
+    )
+    print(
+        f"  Pinta-ala / massa              {infill_glass_summary['area_m2']:.2f} m² / "
+        f"{infill_glass_summary['mass_kg']:.0f} kg"
+    )
+    print(
+        f"  Mitoittava lumi                {infill_glass_summary['critical_snow']['label']}, "
+        f"x = {infill_glass_summary['critical_snow']['x_mm']:.0f} mm, "
+        f"y = {infill_glass_summary['critical_snow']['y_mm']:.0f} mm, "
+        f"s_kin = {infill_glass_summary['critical_snow']['s_char_kNm2']:.2f} kN/m²"
+    )
+    print(
+        f"  ULS alas                       A = {infill_glass_summary['uls_A_kNm2']:.2f}, "
+        f"DRIFT = {infill_glass_summary['uls_drift_kNm2']:.2f} -> "
+        f"{infill_glass_summary['uls_down_kNm2']:.2f} kN/m²"
+    )
+    print(
+        f"  Uplift                         {infill_glass_summary['uplift_kNm2']:.2f} kN/m², "
+        f"σ = {infill_glass_summary['uplift_sigma_Nmm2']:.1f} N/mm²"
+    )
+    print(
+        f"  Taivutus                       M = {infill_glass_summary['M_kNm_per_m']:.3f} kNm/m, "
+        f"σ = {infill_glass_summary['sigma_Nmm2']:.1f}/{infill_glass_summary['sigma_limit_Nmm2']:.1f} N/mm², "
+        f"η = {infill_glass_summary['eta_sigma_pct']:.1f}%"
+    )
+    print(
+        f"  Taipuma SLS DRIFT              δ = {infill_glass_summary['delta_mm']:.2f}/"
+        f"{infill_glass_summary['delta_limit_mm']:.2f} mm, η = {infill_glass_summary['eta_delta_pct']:.1f}%"
+    )
+    print(
+        f"  Tukireaktiot ULS               beam.inner.new {infill_glass_summary['inner_support_reaction_kN_per_m']:.2f} kN/m, "
+        f"{infill_glass_summary['outer_support_member_id']} {infill_glass_summary['outer_support_reaction_kN_per_m']:.2f} kN/m  -> {infill_status}"
+    )
+    if infill_support_purlin_design is not None:
+        max_support_reaction = max(abs(row["R_kN"]) for row in infill_support_purlin_design["support_rows"])
+        print(
+            f"  Tukiorren tarkistus            {infill_support_purlin_design['id']} {infill_support_purlin_design['profile']}, "
+            f"{infill_support_purlin_design['case_key']}: Md = {infill_support_purlin_design['M_gov']['value_kNm']:.2f} kNm, "
+            f"η_M/η_V = {infill_support_purlin_design['eta_M']:.1f}%/{infill_support_purlin_design['eta_V']:.1f}%, "
+            f"δ = {infill_support_purlin_design['sls_delta_mm']:.2f}/{infill_support_purlin_design['delta_lim_mm']:.1f} mm"
+        )
+        print(
+            f"  Tukiorren kuormareitti         {len(infill_support_purlin_design['support_rows'])} kattotuolitukea, "
+            f"max |R| = {max_support_reaction:.2f} kN"
+        )
+
+if gable_glazing_summary is not None:
+    inner_h = gable_glazing_h_governing["inner_beam"]
+    existing_h = gable_glazing_h_governing["existing_beam"]
+    inner_sls_delta = max(
+        abs(gable_glazing_h_sls["inner_beam"]["delta"]["value_mm"]),
+        abs(gable_glazing_h_sls_drift["inner_beam"]["delta"]["value_mm"]),
+    )
+    existing_sls_delta = max(
+        abs(gable_glazing_h_sls["existing_beam"]["delta"]["value_mm"]),
+        abs(gable_glazing_h_sls_drift["existing_beam"]["delta"]["value_mm"]),
+    )
+    inner_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
+    existing_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
+    print("\n── PÄÄTYKOLMIOLASI – KUORMANSIIRTO ──────────────────────────────")
+    print(
+        f"  Omapaino                      {gable_glazing_summary['total_kN']:.2f} kN -> "
+        f"beam.inner.new viivakuormana {gable_glazing_summary['self_line_kNm']:.3f} kN/m"
+    )
+    print(
+        f"  Tuulijako                     50% alapalkille + 50% yläreunan 2×KP360×51-palkille "
+        f"(pystyreunaa ei hyvitetä)"
+    )
+    print(
+        f"  Vaakatuet                     beam.inner.new x = {inner_supports_x_mm[0]:.0f} / {inner_supports_x_mm[-1]:.0f} mm; "
+        f"2×KP360×51 x = {inner_supports_x_mm[0]:.0f} / {inner_supports_x_mm[-1]:.0f} mm"
+    )
+    print(
+        f"  Tuulikuorma yhteensä          {gable_glazing_summary['wind_char_total_kN']:.2f} kN, "
+        f"q_line,char = {gable_glazing_summary['wind_line_inner_char_kNm']:.3f} kN/m per palkki"
+    )
+    print(f"  Hallitseva vaakakuorma        {gable_glazing_h_governing_case}")
+    print(
+        f"  beam.inner.new vaakataivutus  Md = {inner_h['M_gov']['value_kNm']:.2f} kNm, "
+        f"Vd = {abs(inner_h['V_abs']['value_kN']):.2f} kN, "
+        f"η_M/η_V = {inner_h['eta_M']:.1f}%/{inner_h['eta_V']:.1f}%, "
+        f"δ = {inner_sls_delta:.2f}/{inner_span_limit_mm:.1f} mm"
+    )
+    print(
+        f"  beam.existing.kp360x2         Md = {existing_h['M_gov']['value_kNm']:.2f} kNm, "
+        f"Vd = {abs(existing_h['V_abs']['value_kN']):.2f} kN, "
+        f"η_M/η_V = {existing_h['eta_M']:.1f}%/{existing_h['eta_V']:.1f}%, "
+        f"δ = {existing_sls_delta:.2f}/{existing_span_limit_mm:.1f} mm"
     )
 
 print("\n── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────")
@@ -2537,6 +3223,10 @@ print("  * Reunapaneelin ulkopuolikas siirtyy geometry/terassi_puu.json:n")
 print("    load_transfer.member_refs- ja tributary_width_mm-metadatan mukaisesti orsien kautta;")
 print("    reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa.")
 print("  * Orsien oma paino mallinnetaan viivakuormana.")
+print("  * Seinän täytekaistan ulkoreuna tukeutuu erilliselle tukiorrelle; sen")
+print("    reaktiot siirretään kattotuoleille, ei aurinkopaneelikentälle.")
+print("  * Päätykolmiolasin omapaino lisätään beam.inner.new-pystymalliin; tuulikuorma")
+print("    jaetaan konservatiivisesti 50/50 alapalkille ja yläreunan 2×KP360×51-palkille.")
 print("  * Ulkokulmien nurkkaorret mallinnetaan tuettuina toiseksi uloimpaan kattotuoliin ja")
 print("    ulkopalkin ulkoreunalta kantavina ulokkeina; reunatuki voi siksi olla vetava.")
 print("  * Liitosten tuki- ja rotaatiomallit luetaan geometry/terassi_puu.json:n")

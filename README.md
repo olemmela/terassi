@@ -70,6 +70,11 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
   eli `reference = axis_end`, `offset_mm = -15`)
 - Aurinkopaneelien kinostumatarkistuksen valmistajan etupuolen 5.40 kN/m²
   mekaanista rajaa vasten, nykygeometrian mitoittavalla paneelisarakkeella
+- Seinän viereisen 8 mm lasisen täytekaistan omapaino-, lumi-/kinostuma-,
+  noste-, taivutus- ja taipumatarkistuksen sekä ulkoreunan tukiorren kuormareitin
+  kattotuoleille
+- Päätykolmiolasin omapainon alapalkille sekä tuulikuorman 50/50-jaon
+  alapalkille ja yläreunan `2×KP360×51`-palkille, vaakataivutuksena tarkistettuna
 - X-suuntaisten orsien ulomman tuen geometrian `support_line_ref`-metadatasta
   kuormapuolen tukireunaan asti, ei kattotuolin akselikeskilinjalle
 - Jäsenten poikkileikkauksen kierrot `section_rotation_deg`-kentästä niin viewerissä
@@ -112,6 +117,8 @@ kaistalevyliitoksilla.
 - `transfer_link`-liitospisteistä luettujen kaistalevyjen jousijäykkyyden
 - Kaistalevyjen M12-pulttien ja puun reunapuristuksen kapasiteettitarkistukset
 - Kaistalevyjen teräslevyn in-plane shear -tarkistuksen
+- Seinän viereisen 8 mm lasisen täytekaistan, sen ulkoreunan tukiorren sekä
+  päätykolmiolasin omapaino- ja tuulikuormien tarkistukset kuten pääpuuratkaisussa
 - Siirtovyöhykkeen perusteella johdetun ekvivalentin vasemman tukipisteen ja
   sisäpalkin efektiivisen jännevälin
 - Vasen reunakattotuoli → `beam.lp225.x125` ja oikea reunakattotuoli → `col.existing.inner.x7075`
