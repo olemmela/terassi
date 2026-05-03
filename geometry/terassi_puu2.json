@@ -221,7 +221,7 @@
         "id": "kattotuoli.0",
         "profile": "198x48",
         "axis_start": {"x": 754, "y": 1750, "z": 2660},
-        "axis_end": {"x": 754, "y": 5749, "z": 2180},
+        "axis_end": {"x": 754, "y": 5630, "z": 2200},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -248,75 +248,43 @@
       {
         "id": "orsi.vasen",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 1970, "z": 2685},
-        "axis_end": {"x": -369, "y": 1970, "z": 2685},
+        "axis_start": {"x": 750, "y": 2080, "z": 2690},
+        "axis_end": {"x": -369, "y": 2080, "z": 2690},
         "section_rotation_deg": -6.7,
         "existing": false,
         "pattern": {
-          "count": 7,
-          "offset": {"x": 0, "y": 450, "z": -55},
+          "count": 6,
+          "offset": {"x": 0, "y": 600, "z": -75},
           "id_template": "orsi.vasen.{i}"
         }
       },
       {
         "id": "orsi.oikea",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 1970, "z": 2685},
-        "axis_end": {"x": 7569, "y": 1970, "z": 2685},
+        "axis_start": {"x": 6450, "y": 2080, "z": 2690},
+        "axis_end": {"x": 7569, "y": 2080, "z": 2690},
         "section_rotation_deg": 6.7,
         "existing": false,
         "pattern": {
-          "count": 7,
-          "offset": {"x": 0, "y": 450, "z": -55},
+          "count": 6,
+          "offset": {"x": 0, "y": 600, "z": -75},
           "id_template": "orsi.oikea.{i}"
         }
       },
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 725, "y": 4800, "z": 2340},
-        "axis_end": {"x": -350, "y": 5730, "z": 2230},
+        "axis_start": {"x": 750, "y": 5150, "z": 2310},
+        "axis_end": {"x": -360, "y": 5610, "z": 2250},
         "section_rotation_deg": -5.1,
-        "existing": false
-      },
-      {
-        "id": "orsi.vasen.22",
-        "profile": "98x48",
-        "axis_start": {"x": 725, "y": 4900, "z": 2340},
-        "axis_end": {"x": 200, "y": 5749, "z": 2230},
-        "section_rotation_deg": -3.5,
-        "existing": false
-      },
-      {
-        "id": "orsi.vasen.67",
-        "profile": "98x48",
-        "axis_start": {"x": 725, "y": 4740, "z": 2350},
-        "axis_end": {"x": -350, "y": 5200, "z": 2290},
-        "section_rotation_deg": -6.2,
-        "existing": false
-      },
-      {
-        "id": "orsi.oikea.22",
-        "profile": "98x48",
-        "axis_start": {"x": 6475, "y": 4900, "z": 2330},
-        "axis_end": {"x": 7000, "y": 5749, "z": 2230},
-        "section_rotation_deg": 3.5,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6475, "y": 4800, "z": 2340},
-        "axis_end": {"x": 7560, "y": 5730, "z": 2230},
+        "axis_start": {"x": 6450, "y": 5150, "z": 2310},
+        "axis_end": {"x": 7560, "y": 5610, "z": 2250},
         "section_rotation_deg": 5.1,
-        "existing": false
-      },
-      {
-        "id": "orsi.oikea.67",
-        "profile": "98x48",
-        "axis_start": {"x": 6475, "y": 4740, "z": 2350},
-        "axis_end": {"x": 7550, "y": 5200, "z": 2290},
-        "section_rotation_deg": 6.2,
         "existing": false
       }
      ]
@@ -450,113 +418,60 @@
     },
     {
       "id": "con.orsi.vasen.on.kattotuoli.0",
-      "type": "notched_over",
+      "type": "supported_on",
       "members": [
         "orsi.vasen",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 1970, "z": 2650},
+      "at": {"x": 754, "y": 2100, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
+      }
+    },
+    {
+      "id": "con.orsi.vasen.on.kattotuoli.vasen",
+      "type": "notched_over",
+      "members": [
+        "orsi.vasen",
+        "kattotuoli.vasen"
+      ],
+      "at": {"x": 125, "y": 2100, "z": 2650},
+      "analysis": {
+        "support_model": "pinned",
+        "support_line_ref": "support_outer_edge"
       },
       "cuts": [
         {
           "kind": "bevel_notch",
           "side": "bottom",
           "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
+          "depth_mm": 30,
+          "length_mm": 270
         }
       ]
     },
     {
-      "id": "con.kattotuoli.vasen.on.orsi.vasen",
-      "type": "supported_on",
-      "members": [
-        "kattotuoli.vasen",
-        "orsi.vasen"
-      ],
-      "at": {"x": 125, "y": 1970, "z": 2650}
-    },
-    {
-      "id": "con.orsi.vasen.on.kattotuoli.vasen",
-      "type": "supported_on",
-      "members": [
-        "orsi.vasen",
-        "kattotuoli.vasen"
-      ],
-      "at": {"x": 125, "y": 1970, "z": 2650},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
-      }
-    },
-    {
       "id": "con.orsi.oikea.on.kattotuoli.5",
-      "type": "notched_over",
+      "type": "supported_on",
       "members": [
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 1970, "z": 2650},
+      "at": {"x": 6424, "y": 2100, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
-      },
-      "cuts": [
-        {
-          "kind": "bevel_notch",
-          "side": "bottom",
-          "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
-        }
-      ]
+      }
     },
     {
       "id": "con.kattotuoli.oikea.on.orsi.oikea",
-      "type": "supported_on",
-      "members": [
-        "kattotuoli.oikea",
-        "orsi.oikea"
-      ],
-      "at": {"x": 7075, "y": 1970, "z": 2650}
-    },
-    {
-      "id": "con.orsi.oikea.on.kattotuoli.oikea",
-      "type": "supported_on",
+      "type": "notched_over",
       "members": [
         "orsi.oikea",
         "kattotuoli.oikea"
       ],
-      "at": {"x": 7075, "y": 1970, "z": 2650},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
-      }
-    },
-    {
-      "id": "con.orsi.vasen.67.on.kattotuoli.0",
-      "type": "supported_on",
-      "members": [
-        "orsi.vasen.67",
-        "kattotuoli.0"
-      ],
-      "at": {"x": 754, "y": 4740, "z": 2303},
-      "analysis": {
-          "support_model": "pinned",
-          "support_line_ref": "support_centerline"
-      }
-    },
-    {
-      "id": "con.orsi.vasen.67.on.kattotuoli.vasen",
-      "type": "notched_over",
-      "members": [
-        "orsi.vasen.67",
-        "kattotuoli.vasen"
-      ],
-      "at": {"x": 125, "y": 4996, "z": 2280},
+      "at": {"x": 7075, "y": 2100, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -566,8 +481,8 @@
           "kind": "bevel_notch",
           "side": "bottom",
           "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
+          "depth_mm": 30,
+          "length_mm": 270
         }
       ]
     },
@@ -578,7 +493,7 @@
         "orsi.vasen.45",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 4800, "z": 2303},
+      "at": {"x": 754, "y": 5148, "z": 2310},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -591,7 +506,7 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 175, "y": 5275, "z": 2245},
+      "at": {"x": 310, "y": 5275, "z": 2286},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -601,78 +516,8 @@
           "kind": "bevel_notch",
           "side": "bottom",
           "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
-        }
-      ]
-    },
-    {
-      "id": "con.orsi.vasen.22.on.kattotuoli.0",
-      "type": "supported_on",
-      "members": [
-        "orsi.vasen.22",
-        "kattotuoli.0"
-      ],
-      "at": {"x": 754, "y": 4900, "z": 2303},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_centerline"
-      }
-    },
-    {
-      "id": "con.orsi.vasen.22.on.outer_beam",
-      "type": "notched_over",
-      "members": [
-        "orsi.vasen.22",
-        "beam.outer"
-      ],
-      "at": {"x": 493, "y": 5275, "z": 2245},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
-      },
-      "cuts": [
-        {
-          "kind": "bevel_notch",
-          "side": "bottom",
-          "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
-        }
-      ]
-    },
-    {
-      "id": "con.orsi.oikea.67.on.kattotuoli.5",
-      "type": "supported_on",
-      "members": [
-        "orsi.oikea.67",
-        "kattotuoli.5"
-      ],
-      "at": {"x": 6424, "y": 4740, "z": 2303},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_centerline"
-      }
-    },
-    {
-      "id": "con.orsi.oikea.67.on.kattotuoli.oikea",
-      "type": "notched_over",
-      "members": [
-        "orsi.oikea.67",
-        "kattotuoli.oikea"
-      ],
-      "at": {"x": 7075, "y": 4996, "z": 2280},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
-      },
-      "cuts": [
-        {
-          "kind": "bevel_notch",
-          "side": "bottom",
-          "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 350
+          "depth_mm": 30,
+          "length_mm": 400
         }
       ]
     },
@@ -683,7 +528,7 @@
         "orsi.oikea.45",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 4800, "z": 2303},
+      "at": {"x": 6424, "y": 5139, "z": 2311},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -696,7 +541,7 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 7025, "y": 5275, "z": 2255},
+      "at": {"x": 6890, "y": 5275, "z": 2286},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -706,43 +551,8 @@
           "kind": "bevel_notch",
           "side": "bottom",
           "reference": "axis_end",
-          "depth_mm": 50,
-          "length_mm": 450
-        }
-      ]
-    },
-    {
-      "id": "con.orsi.oikea.22.on.kattotuoli.5",
-      "type": "supported_on",
-      "members": [
-        "orsi.oikea.22",
-        "kattotuoli.5"
-      ],
-      "at": {"x": 6424, "y": 4900, "z": 2303},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_centerline"
-      }
-    },
-    {
-      "id": "con.orsi.oikea.22.on.outer_beam",
-      "type": "notched_over",
-      "members": [
-        "orsi.oikea.22",
-        "beam.outer"
-      ],
-      "at": {"x": 6707, "y": 5275, "z": 2255},
-      "analysis": {
-        "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
-      },
-      "cuts": [
-        {
-          "kind": "bevel_notch",
-          "side": "bottom",
-          "reference": "axis_end",
-          "depth_mm": 60,
-          "length_mm": 440
+          "depth_mm": 30,
+          "length_mm": 400
         }
       ]
     },
@@ -927,12 +737,11 @@
       "type": "solar_panel_array",
       "material": "Longi Himo X10 LR7 aurinkopaneeli",
       "thickness_mm": 30,
-      "mass_kg": 350,
       "count": {
         "nx": 7,
         "ny": 2,
-        "unit_size_mm": {"x": 1134, "y": 1990, "z": 30},
-        "unit_mass_kg": 25
+        "unit_size_mm": {"x": 1134, "y": 1800, "z": 30},
+        "unit_mass_kg": 23.4
       },
       "load_transfer": {
         "to_members": [
@@ -944,51 +753,64 @@
               "orsi.vasen.3",
               "orsi.vasen.4",
               "orsi.vasen.5",
-              "orsi.vasen.6",
               "orsi.oikea.0",
               "orsi.oikea.1",
               "orsi.oikea.2",
               "orsi.oikea.3",
               "orsi.oikea.4",
-              "orsi.oikea.5",
-              "orsi.oikea.6"
+              "orsi.oikea.5"
             ],
             "model": "point",
             "reference": "axis_end",
-            "offset_mm": -15
+            "offset_mm": -15,
+            "tributary_width_mm": 567
           },
           {
             "member_refs": [
               "orsi.vasen.45",
-              "orsi.vasen.22",
-              "orsi.vasen.67",
-              "orsi.oikea.22",
-              "orsi.oikea.45",
-              "orsi.oikea.67"
+              "orsi.oikea.45"
             ],
             "model": "point",
             "reference": "axis_end",
-            "offset_mm": -15
+            "offset_mm": -15,
+            "tributary_width_mm": 567
           }
         ]
       },
       "supported_by": [
         "kattotuoli.0",
-        "beam.inner.new",
-        "beam.outer"
+        "kattotuoli.1",
+        "kattotuoli.2",
+        "kattotuoli.3",
+        "kattotuoli.4",
+        "kattotuoli.5",
+        "orsi.vasen.0",
+        "orsi.vasen.1",
+        "orsi.vasen.2",
+        "orsi.vasen.3",
+        "orsi.vasen.4",
+        "orsi.vasen.5",
+        "orsi.oikea.0",
+        "orsi.oikea.1",
+        "orsi.oikea.2",
+        "orsi.oikea.3",
+        "orsi.oikea.4",
+        "orsi.oikea.5",
+        "orsi.vasen.45",
+        "orsi.oikea.45"
       ],
       "ref": "pt.beam.inner.new.axis_start",
       "placement": {
-        "anchor": {"x": -369, "y": 0, "z": -30},
+        "anchor": {"x": -369, "y": 260, "z": -30},
         "u": {
           "dir": "+x",
           "length_mm": 7938
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 6.9,
+          "slope_deg": 7.2,
           "slope_sense": "-z",
-          "slope_length_mm": 3980
+          "slope_length_mm": 3600
         }
       },
       "local_shape": {

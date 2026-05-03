@@ -38,7 +38,7 @@ from existing_beam_checks import (
     katos_existing_context,
 )
 from foundation_checks import foundation_checks_from_envelope, foundation_report_lines
-from geometry_loader import expanded_members, load, member, surface, reference, profile_b, profile_h
+from geometry_loader import expanded_connections, expanded_members, load, member, surface, reference, profile_b, profile_h
 from portaikko_loads import existing_column_extra_loads_by_case as portaikko_existing_column_extra_loads_by_case
 from structural_geometry import member_axis_length_mm, project_point_to_member_s_mm
 from terrace_column_loads import (
@@ -130,18 +130,53 @@ GEO = load(GEOMETRY_NAME)
 FOUNDATION_GEO = load("katos.json")
 KATOS_EXISTING_CTX = katos_existing_context()
 CONNECTIONS = {conn["id"]: conn for conn in GEO["connections"]}
+CONNECTION_INSTANCES = expanded_connections(GEO)
 MEMBERS_BY_ID = {}
 for group_name in GEO["members"]:
     for member_obj in expanded_members(GEO, group_name):
         MEMBERS_BY_ID[member_obj["id"]] = member_obj
 
 
-def connection_by_members(member_a_id, member_b_id):
+def connections_by_members(member_a_id, member_b_id, connection_objs=None):
+    if connection_objs is None:
+        connection_objs = GEO["connections"]
     wanted = {member_a_id, member_b_id}
-    for conn in GEO["connections"]:
-        if set(conn.get("members", [])) == wanted:
-            return conn
-    raise KeyError(f"Connection not found for members: {member_a_id}, {member_b_id}")
+    return [
+        conn
+        for conn in connection_objs
+        if set(conn.get("members", [])) == wanted
+    ]
+
+
+def connection_by_members(member_a_id, member_b_id, predicate=None, description="connection", connection_objs=None):
+    matches = connections_by_members(member_a_id, member_b_id, connection_objs=connection_objs)
+    if predicate is not None:
+        matches = [conn for conn in matches if predicate(conn)]
+    if not matches:
+        raise KeyError(f"{description} not found for members: {member_a_id}, {member_b_id}")
+    if len(matches) == 1:
+        return matches[0]
+    analysis_matches = [conn for conn in matches if conn.get("analysis")]
+    if len(analysis_matches) == 1:
+        return analysis_matches[0]
+    return matches[0]
+
+
+def optional_connection_by_members(member_a_id, member_b_id, predicate=None, connection_objs=None):
+    try:
+        return connection_by_members(member_a_id, member_b_id, predicate=predicate, connection_objs=connection_objs)
+    except KeyError:
+        return None
+
+
+def support_connection(member_id, support_member_id, support_line_ref, connection_objs=None):
+    return connection_by_members(
+        member_id,
+        support_member_id,
+        predicate=lambda conn: conn.get("analysis", {}).get("support_line_ref") == support_line_ref,
+        description=f"{support_line_ref} support connection",
+        connection_objs=connection_objs,
+    )
 
 
 def member_by_id_any(member_id):
@@ -186,8 +221,16 @@ def member_column_connections(member_id, column_prefix=None):
     )
 
 
-def connection_cut(connection_id, kind=None):
-    cuts = CONNECTIONS[connection_id].get("cuts", [])
+def connection_cut(connection, kind=None):
+    if connection is None:
+        return None
+    if isinstance(connection, str):
+        connection_obj = CONNECTIONS.get(connection)
+        if connection_obj is None:
+            return None
+    else:
+        connection_obj = connection
+    cuts = connection_obj.get("cuts", [])
     if kind is None:
         return cuts[0] if cuts else None
     for cut in cuts:
@@ -268,10 +311,20 @@ DEFAULT_ROOF_LOAD_TRANSFER_RULE = {
 
 def roof_load_transfer_rule(member_id):
     load_transfer = roof.get("load_transfer", {})
-    for rule in load_transfer.get("to_members", []):
+    rules = load_transfer.get("to_members", [])
+    for rule in rules:
         if member_id in rule.get("member_refs", []):
-            return merge_analysis_dict(DEFAULT_ROOF_LOAD_TRANSFER_RULE, rule)
+            merged = dict(DEFAULT_ROOF_LOAD_TRANSFER_RULE)
+            merged.update(rule)
+            return merged
+    if rules:
+        raise KeyError(f"surf.solar_panels.load_transfer missing rule for {member_id}")
     return dict(DEFAULT_ROOF_LOAD_TRANSFER_RULE)
+
+
+def load_transfer_tributary_width_mm(member_id, fallback_width_mm):
+    rule = roof_load_transfer_rule(member_id)
+    return float(rule.get("tributary_width_mm", fallback_width_mm))
 
 
 LOAD_TRANSFER_REFERENCE_LABELS = {
@@ -300,7 +353,8 @@ def format_load_transfer_rule(member_ids):
     ref_label = LOAD_TRANSFER_REFERENCE_LABELS[rule["reference"]]
     offset_mm = float(rule.get("offset_mm", 0.0))
     if rule["model"] == "point":
-        return f"kuorma pisteenä {offset_mm:+.0f} mm {ref_label}; omapaino viivakuormana"
+        width_text = f", b_trib {float(rule['tributary_width_mm']):.0f} mm" if "tributary_width_mm" in rule else ""
+        return f"kuorma pisteenä {offset_mm:+.0f} mm {ref_label}{width_text}; omapaino viivakuormana"
     if rule["model"] == "partial_uniform":
         return (
             f"kuorma osaviivakuormana {offset_mm:+.0f} mm {ref_label}, "
@@ -600,34 +654,81 @@ def make_inner_beam_fit_notch_depth_functions():
     return zones_mm, depth_functions
 
 interior_rafter_xs_mm = [float(m["axis_start"]["x"]) for m in interior_rafters]
-interior_direct_ranges_mm = tributary_ranges_mm(interior_rafter_xs_mm, interior_rafter_xs_mm[0], interior_rafter_xs_mm[-1])
+left_strip_geom_width_mm = interior_rafter_xs_mm[0] - roof_x0_mm
+right_strip_geom_width_mm = roof_x1_mm - interior_rafter_xs_mm[-1]
+left_strip_load_width_mm = min(
+    left_strip_geom_width_mm,
+    load_transfer_tributary_width_mm(left_purlins[0]["id"], left_strip_geom_width_mm),
+)
+right_strip_load_width_mm = min(
+    right_strip_geom_width_mm,
+    load_transfer_tributary_width_mm(right_purlins[0]["id"], right_strip_geom_width_mm),
+)
+interior_direct_ranges_mm = tributary_ranges_mm(
+    interior_rafter_xs_mm,
+    roof_x0_mm + left_strip_load_width_mm,
+    roof_x1_mm - right_strip_load_width_mm,
+)
 interior_direct_widths_m = [(b_mm - a_mm) / 1000.0 for a_mm, b_mm in interior_direct_ranges_mm]
-left_strip_width_m = (interior_rafter_xs_mm[0] - roof_x0_mm) / 1000.0
-right_strip_width_m = (roof_x1_mm - interior_rafter_xs_mm[-1]) / 1000.0
+left_strip_width_m = left_strip_load_width_mm / 1000.0
+right_strip_width_m = right_strip_load_width_mm / 1000.0
 
 purlin_y_positions_mm = {
     side: [float(m["axis_start"]["y"]) for m in group]
     for side, group in purlins_by_side.items()
 }
+
+
+def member_y_at_s_mm(member_obj, s_mm):
+    length_mm = max(member_axis_length_mm(member_obj), 1.0e-9)
+    t = clamp(s_mm / length_mm, 0.0, 1.0)
+    return float(member_obj["axis_start"]["y"]) + t * (float(member_obj["axis_end"]["y"]) - float(member_obj["axis_start"]["y"]))
+
+
+def load_transfer_y_position_mm(member_obj):
+    rule = roof_load_transfer_rule(member_obj["id"])
+    length_mm = member_axis_length_mm(member_obj)
+    if rule.get("reference") == "axis_start":
+        reference_s_mm = 0.0
+    else:
+        reference_s_mm = length_mm
+    s_mm = clamp(reference_s_mm + float(rule.get("offset_mm", 0.0)), 0.0, length_mm)
+    return member_y_at_s_mm(member_obj, s_mm)
+
+
 purlin_y_boundary_positions_mm = {}
 purlin_trib_ranges_mm = {}
 purlin_trib_heights_m = {}
+corner_purlin_y_ranges_mm = {}
+corner_purlin_y_ranges_by_id = {}
+corner_purlin_y_depths_m = {}
 for side, group in purlins_by_side.items():
-    positions_mm = [float(m["axis_start"]["y"]) for m in group]
-    corner_boundary_candidates_mm = [
-        min(float(m["axis_start"]["y"]), float(m["axis_end"]["y"]))
-        for m in corner_purlins_by_side.get(side, [])
+    entries = [
+        ("horizontal", member_obj["id"], float(member_obj["axis_start"]["y"]))
+        for member_obj in group
+    ] + [
+        ("corner", member_obj["id"], load_transfer_y_position_mm(member_obj))
+        for member_obj in corner_purlins_by_side.get(side, [])
     ]
-    boundary_positions_mm = positions_mm[:]
-    if corner_boundary_candidates_mm:
-        first_corner_y_mm = min(corner_boundary_candidates_mm)
-        if all(abs(first_corner_y_mm - y_mm) > 1e-6 for y_mm in boundary_positions_mm):
-            boundary_positions_mm.append(first_corner_y_mm)
-    boundary_positions_mm = sorted(boundary_positions_mm)
-    purlin_y_boundary_positions_mm[side] = boundary_positions_mm
-    all_ranges_mm = tributary_ranges_mm(boundary_positions_mm, roof_y0_mm, roof_y1_mm)
-    purlin_trib_ranges_mm[side] = all_ranges_mm[: len(positions_mm)]
+    entries = sorted(entries, key=lambda item: (item[2], item[0], item[1]))
+    all_ranges_mm = tributary_ranges_mm([pos_mm for _, _, pos_mm in entries], roof_y0_mm, roof_y1_mm)
+    range_by_entry = {
+        (kind, member_id): range_mm
+        for (kind, member_id, _), range_mm in zip(entries, all_ranges_mm)
+    }
+    purlin_y_boundary_positions_mm[side] = [pos_mm for kind, _, pos_mm in entries if kind == "horizontal"]
+    purlin_trib_ranges_mm[side] = [
+        range_by_entry[("horizontal", member_obj["id"])]
+        for member_obj in group
+    ]
     purlin_trib_heights_m[side] = [(b_mm - a_mm) / 1000.0 for a_mm, b_mm in purlin_trib_ranges_mm[side]]
+    corner_purlin_y_ranges_mm[side] = [
+        range_by_entry[("corner", member_obj["id"])]
+        for member_obj in corner_purlins_by_side.get(side, [])
+    ]
+    for member_obj, range_mm in zip(corner_purlins_by_side.get(side, []), corner_purlin_y_ranges_mm[side]):
+        corner_purlin_y_ranges_by_id[member_obj["id"]] = range_mm
+    corner_purlin_y_depths_m[side] = [(b_mm - a_mm) / 1000.0 for a_mm, b_mm in corner_purlin_y_ranges_mm[side]]
 
 rafter_b_mm = profile_b(interior_rafters[0])
 rafter_h_mm = profile_h(interior_rafters[0])
@@ -668,6 +769,8 @@ edge_outer_support_y_mm_by_side = {
     for side in ("left", "right")
 }
 rafter_analysis_start_y_mm = min(interior_inner_support_y_mm, min(float(m["axis_start"]["y"]) for m in rafters_all))
+drift_obstacle_y_mm = float(GEO.get("_points_by_id", {}).get("pt.beam.inner.new.axis_start", {}).get("y", roof_y0_mm))
+drift_depth_m = max(0.0, (roof_y1_mm - drift_obstacle_y_mm) / 1000.0)
 rafter_analysis_end_y_mm = max(float(m["axis_end"]["y"]) for m in rafters_all)
 
 outer_beam_y_half_mm = outer_beam_b_mm / 2.0
@@ -680,34 +783,102 @@ birdsmouth_start_depth_mm = max(0.0, birdsmouth_heel_depth_mm - birdsmouth_seat_
 birdsmouth_zone_mm = (birdsmouth_anchor_y_mm - birdsmouth_seat_proj_mm, birdsmouth_anchor_y_mm)
 
 edge_top_notch_info = {
-    "left": rect_notch_info("con.kattotuoli.vasen.on.orsi.vasen"),
-    "right": rect_notch_info("con.kattotuoli.oikea.on.orsi.oikea"),
+    side: rect_notch_info(optional_connection_by_members(
+        edge_rafter_id(side),
+        side_purlin_root_id(side),
+        predicate=lambda conn: connection_cut(conn, "rect_notch") is not None,
+    ))
+    for side in ("left", "right")
 }
 edge_top_notch_ref = next((item for item in edge_top_notch_info.values() if item["active"]), None)
 edge_rect_depth_mm = edge_top_notch_ref["depth_mm"] if edge_top_notch_ref else 0.0
 edge_rect_length_mm = edge_top_notch_ref["length_mm"] if edge_top_notch_ref else 0.0
-edge_purlin_support_ys_mm = {side: positions_mm[:] for side, positions_mm in purlin_y_positions_mm.items()}
-interior_purlin_support_ys_mm = {side: positions_mm[:] for side, positions_mm in purlin_y_positions_mm.items()}
 
+interior_edge_rafter_ids = {
+    "left": interior_rafters[0]["id"],
+    "right": interior_rafters[-1]["id"],
+}
+
+
+def purlin_edge_support_notch_info(connection_obj):
+    rect_info = rect_notch_info(connection_obj)
+    if rect_info["active"]:
+        rect_info["kind"] = "rect_notch"
+        return rect_info
+    bevel_info = bevel_notch_info(connection_obj)
+    if bevel_info["active"]:
+        bevel_info["kind"] = "bevel_notch"
+        return bevel_info
+    rect_info["kind"] = None
+    return rect_info
+
+
+purlin_inner_support_connections_by_id = {}
+purlin_edge_support_connections_by_id = {}
+purlin_inner_support_points_by_id = {}
+purlin_edge_support_center_points_by_id = {}
+purlin_edge_support_line_points_by_id = {}
+purlin_inner_notch_info_by_id = {}
+purlin_edge_notch_info_by_id = {}
+
+for side, group in purlins_by_side.items():
+    for member_obj in group:
+        member_id = member_obj["id"]
+        inner_conn = support_connection(
+            member_id,
+            interior_edge_rafter_ids[side],
+            "support_centerline",
+            connection_objs=CONNECTION_INSTANCES,
+        )
+        edge_conn = support_connection(
+            member_id,
+            edge_rafter_id(side),
+            "support_outer_edge",
+            connection_objs=CONNECTION_INSTANCES,
+        )
+        purlin_inner_support_connections_by_id[member_id] = inner_conn
+        purlin_edge_support_connections_by_id[member_id] = edge_conn
+        purlin_inner_support_points_by_id[member_id] = connection_support_point(inner_conn, member_id)
+        purlin_edge_support_center_points_by_id[member_id] = connection_support_point(edge_conn, member_id, "support_centerline")
+        purlin_edge_support_line_points_by_id[member_id] = connection_support_point(edge_conn, member_id, "support_outer_edge")
+        purlin_inner_notch_info_by_id[member_id] = bevel_notch_info(inner_conn)
+        purlin_edge_notch_info_by_id[member_id] = purlin_edge_support_notch_info(edge_conn)
+
+purlin_inner_support_connections = {
+    side: purlin_inner_support_connections_by_id[group[0]["id"]]
+    for side, group in purlins_by_side.items()
+}
+purlin_edge_support_connections = {
+    side: purlin_edge_support_connections_by_id[group[0]["id"]]
+    for side, group in purlins_by_side.items()
+}
 purlin_inner_notch_info = {
-    "left": bevel_notch_info("con.orsi.vasen.on.kattotuoli.0"),
-    "right": bevel_notch_info("con.orsi.oikea.on.kattotuoli.5"),
+    side: purlin_inner_notch_info_by_id[group[0]["id"]]
+    for side, group in purlins_by_side.items()
 }
 purlin_edge_notch_info = {
-    "left": rect_notch_info("con.orsi.vasen.on.kattotuoli.vasen"),
-    "right": rect_notch_info("con.orsi.oikea.on.kattotuoli.oikea"),
+    side: purlin_edge_notch_info_by_id[group[0]["id"]]
+    for side, group in purlins_by_side.items()
+}
+edge_purlin_support_ys_mm = {
+    side: [float(purlin_edge_support_line_points_by_id[member_obj["id"]]["y"]) for member_obj in group]
+    for side, group in purlins_by_side.items()
+}
+interior_purlin_support_ys_mm = {
+    side: [float(purlin_inner_support_points_by_id[member_obj["id"]]["y"]) for member_obj in group]
+    for side, group in purlins_by_side.items()
 }
 purlin_edge_notch_ref = next((item for item in purlin_edge_notch_info.values() if item["active"]), None)
 purlin_edge_notch_depth_mm = purlin_edge_notch_ref["depth_mm"] if purlin_edge_notch_ref else 0.0
 purlin_edge_notch_length_mm = purlin_edge_notch_ref["length_mm"] if purlin_edge_notch_ref else 0.0
-left_purlin_inner_support_conn = CONNECTIONS["con.orsi.vasen.on.kattotuoli.0"]
-right_purlin_inner_support_conn = CONNECTIONS["con.orsi.oikea.on.kattotuoli.5"]
-left_purlin_edge_support_conn = CONNECTIONS["con.orsi.vasen.on.kattotuoli.vasen"]
-right_purlin_edge_support_conn = CONNECTIONS["con.orsi.oikea.on.kattotuoli.oikea"]
-left_purlin_support_x_mm = float(connection_support_point(left_purlin_inner_support_conn, side_purlin_root_id("left"))["x"])
-right_purlin_support_x_mm = float(connection_support_point(right_purlin_inner_support_conn, side_purlin_root_id("right"))["x"])
-left_purlin_edge_support_center_x_mm = float(connection_support_point(left_purlin_edge_support_conn, side_purlin_root_id("left"), "support_centerline")["x"])
-right_purlin_edge_support_center_x_mm = float(connection_support_point(right_purlin_edge_support_conn, side_purlin_root_id("right"), "support_centerline")["x"])
+left_purlin_inner_support_conn = purlin_inner_support_connections["left"]
+right_purlin_inner_support_conn = purlin_inner_support_connections["right"]
+left_purlin_edge_support_conn = purlin_edge_support_connections["left"]
+right_purlin_edge_support_conn = purlin_edge_support_connections["right"]
+left_purlin_support_x_mm = float(purlin_inner_support_points_by_id[left_purlins[0]["id"]]["x"])
+right_purlin_support_x_mm = float(purlin_inner_support_points_by_id[right_purlins[0]["id"]]["x"])
+left_purlin_edge_support_center_x_mm = float(purlin_edge_support_center_points_by_id[left_purlins[0]["id"]]["x"])
+right_purlin_edge_support_center_x_mm = float(purlin_edge_support_center_points_by_id[right_purlins[0]["id"]]["x"])
 corner_purlin_inner_support_connections = {}
 corner_purlin_inner_support_points = {}
 corner_purlin_inner_support_member_ids = {}
@@ -717,7 +888,22 @@ corner_purlin_outer_support_member_ids = {}
 corner_purlin_outer_notch_info = {}
 corner_purlin_trib_width_m = {}
 side_corner_strip_outer_x_mm = {"left": roof_x0_mm, "right": roof_x1_mm}
-side_corner_strip_inner_x_mm = {"left": interior_rafter_xs_mm[0], "right": interior_rafter_xs_mm[-1]}
+side_corner_strip_width_mm = {
+    "left": min(
+        left_strip_geom_width_mm,
+        load_transfer_tributary_width_mm(corner_purlins_by_side.get("left", left_purlins)[0]["id"], left_strip_load_width_mm)
+        if corner_purlins_by_side.get("left") else left_strip_load_width_mm,
+    ),
+    "right": min(
+        right_strip_geom_width_mm,
+        load_transfer_tributary_width_mm(corner_purlins_by_side.get("right", right_purlins)[0]["id"], right_strip_load_width_mm)
+        if corner_purlins_by_side.get("right") else right_strip_load_width_mm,
+    ),
+}
+side_corner_strip_inner_x_mm = {
+    "left": roof_x0_mm + side_corner_strip_width_mm["left"],
+    "right": roof_x1_mm - side_corner_strip_width_mm["right"],
+}
 inactive_bevel_notch_info = {
     "active": False,
     "depth_mm": 0.0,
@@ -758,17 +944,16 @@ for side, members in corner_purlins_by_side.items():
         corner_purlin_outer_notch_info[member_id] = bevel_notch_info(outer_conn["id"])
 
 for side, members in corner_purlins_by_side.items():
-    outer_x_mm = side_corner_strip_outer_x_mm[side]
-    inner_x_mm = side_corner_strip_inner_x_mm[side]
-    strip_width_mm = abs(inner_x_mm - outer_x_mm)
     ordered = sorted(
         members,
-        key=lambda member_obj: abs(corner_purlin_outer_support_points[member_obj["id"]]["x"] - outer_x_mm),
+        key=load_transfer_y_position_mm,
     )
     corner_purlins_by_side[side] = ordered
-    support_offsets_mm = [abs(corner_purlin_outer_support_points[member_obj["id"]]["x"] - outer_x_mm) for member_obj in ordered]
-    for member_obj, (a_mm, b_mm) in zip(ordered, tributary_ranges_mm(support_offsets_mm, 0.0, strip_width_mm)):
-        corner_purlin_trib_width_m[member_obj["id"]] = (b_mm - a_mm) / 1000.0
+    for member_obj in ordered:
+        a_mm, b_mm = corner_purlin_y_ranges_by_id.get(member_obj["id"], (roof_y1_mm, roof_y1_mm))
+        member_length_mm = max(member_axis_length_mm(member_obj), 1.0e-9)
+        corner_area_mm2 = (b_mm - a_mm) * side_corner_strip_width_mm[side]
+        corner_purlin_trib_width_m[member_obj["id"]] = corner_area_mm2 / member_length_mm / 1000.0
 
 outer_glazing_surfaces = [surface(GEO, "surf.side_glazing.outer.vasen"), surface(GEO, "surf.side_glazing.outer.oikea")]
 outer_glazing_intervals = []
@@ -1117,8 +1302,8 @@ def drift_snow_kNm2(x_mm, y_mm):
     h_local_m = local_wall_height_m_at_x(x_mm)
     if h_local_m <= 1e-9:
         return s_roof
-    ls_m, _, _, _, s_peak_kNm2 = snow_drift_params(h_local_m, roof_depth_m, sk, mu1_=mu1)
-    distance_m = max(0.0, (y_mm - roof_y0_mm) / 1000.0)
+    ls_m, _, _, _, s_peak_kNm2 = snow_drift_params(h_local_m, drift_depth_m, sk, mu1_=mu1)
+    distance_m = max(0.0, (y_mm - drift_obstacle_y_mm) / 1000.0)
     s_drift_local = s_peak_kNm2 * max(0.0, 1.0 - distance_m / ls_m)
     return max(s_roof, s_drift_local)
 
@@ -1126,7 +1311,7 @@ def drift_snow_kNm2(x_mm, y_mm):
 def drift_snow_kNm2_from_height(h_m, y_offset_mm):
     if h_m <= 1e-9:
         return s_roof
-    ls_m, _, _, _, s_peak_kNm2 = snow_drift_params(h_m, roof_depth_m, sk, mu1_=mu1)
+    ls_m, _, _, _, s_peak_kNm2 = snow_drift_params(h_m, drift_depth_m, sk, mu1_=mu1)
     distance_m = max(0.0, y_offset_mm / 1000.0)
     s_drift_local = s_peak_kNm2 * max(0.0, 1.0 - distance_m / ls_m)
     return max(s_roof, s_drift_local)
@@ -1174,7 +1359,7 @@ def existing_structure_case_key(case_key):
 DRIFT_SUMMARY = []
 for x_mm in sorted({roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m in rafters_all]}):
     h_local_m = local_wall_height_m_at_x(x_mm)
-    ls_m, mu2, mu2_h, _, s_peak_kNm2 = snow_drift_params(h_local_m, roof_depth_m, sk, mu1_=mu1)
+    ls_m, mu2, mu2_h, _, s_peak_kNm2 = snow_drift_params(h_local_m, drift_depth_m, sk, mu1_=mu1)
     DRIFT_SUMMARY.append({
         "x_mm": x_mm,
         "h_m": h_local_m,
@@ -1220,7 +1405,7 @@ PANEL_COLUMN_SUMMARY = []
 for panel_col_index in range(panel_count_x):
     x_center_mm = roof_x0_mm + (panel_col_index + 0.5) * roof_width_mm / max(panel_count_x, 1)
     h_local_m = local_wall_height_m_at_x(x_center_mm)
-    ls_m, mu2, mu2_h, s_base_kNm2, s_peak_kNm2 = snow_drift_params(h_local_m, roof_depth_m, sk, mu1_=mu1)
+    ls_m, mu2, mu2_h, s_base_kNm2, s_peak_kNm2 = snow_drift_params(h_local_m, drift_depth_m, sk, mu1_=mu1)
     uls_inner_kNm2 = gammaQ * drift_snow_kNm2(x_center_mm, roof_y0_mm)
     PANEL_COLUMN_SUMMARY.append({
         "index": panel_col_index + 1,
@@ -1251,7 +1436,7 @@ for dy_mm, label in panel_depth_checkpoints(roof_depth_mm, panel_count_y):
 critical_panel_check = max(critical_panel_check_rows, key=lambda item: (item["uls_kNm2"], -item["y_mm"]))
 critical_panel_ok = all(item["ok"] for item in critical_panel_check_rows)
 panel_char_limit_kNm2 = panel_front_snow_cap_kNm2 / gammaQ
-critical_panel_y_offset_mm = critical_panel_check["y_mm"] - roof_y0_mm
+critical_panel_y_offset_mm = critical_panel_check["y_mm"] - drift_obstacle_y_mm
 panel_height_limit_m = wall_height_limit_for_panel_capacity(panel_front_snow_cap_kNm2, critical_panel_y_offset_mm)
 panel_height_margin_mm = None if panel_height_limit_m is None else 1000.0 * (critical_panel_column["h_m"] - panel_height_limit_m)
 panel_char_margin_kNm2 = critical_panel_check["s_char_kNm2"] - panel_char_limit_kNm2
@@ -1307,7 +1492,7 @@ def make_end_referenced_rect_notch_depth_fn(info, end_coord_mm, inward_positive_
 
 
 def make_purlin_notch_depth_fn(member_obj, side):
-    info = purlin_inner_notch_info[side]
+    info = purlin_inner_notch_info_by_id[member_obj["id"]]
     if not info["active"]:
         def depth_fn(_x_mm):
             return 0.0
@@ -1324,13 +1509,23 @@ def make_purlin_notch_depth_fn(member_obj, side):
     return make_end_referenced_bevel_notch_depth_fn(info, notch_end_x_mm, inward_positive_sign)
 
 
-def make_purlin_edge_notch_depth_fn(side):
-    info = purlin_edge_notch_info[side]
-    support_x_mm = left_purlin_edge_support_center_x_mm if side == "left" else right_purlin_edge_support_center_x_mm
+def make_purlin_edge_notch_depth_fn(member_obj, side):
+    info = purlin_edge_notch_info_by_id[member_obj["id"]]
+    support_x_mm = float(purlin_edge_support_center_points_by_id[member_obj["id"]]["x"])
     if not info["active"]:
         def depth_fn(_x_mm):
             return 0.0
         return (support_x_mm, support_x_mm), depth_fn, False
+
+    if info.get("kind") == "bevel_notch":
+        start_x_mm = float(member_obj["axis_start"]["x"])
+        end_x_mm = float(member_obj["axis_end"]["x"])
+        member_axis_positive_sign = 1.0 if end_x_mm >= start_x_mm else -1.0
+        if info["reference"] not in {"axis_start", "axis_end"}:
+            raise ValueError(f"Unsupported bevel notch reference: {info['reference']}")
+        notch_end_x_mm = start_x_mm if info["reference"] == "axis_start" else end_x_mm
+        inward_positive_sign = member_axis_positive_sign if info["reference"] == "axis_start" else -member_axis_positive_sign
+        return make_end_referenced_bevel_notch_depth_fn(info, notch_end_x_mm, inward_positive_sign)
 
     zone = tuple(sorted((support_x_mm + info["offset_mm"], support_x_mm + info["offset_mm"] + info["length_mm"])))
 
@@ -1424,8 +1619,8 @@ for side, member_obj in edge_rafters.items():
         "VRd_kN": fv_d_gl30c * props["A_mm2"] / 1.5e3,
     }
 
-left_purlin_edge_support_line_x_mm = float(connection_support_point(left_purlin_edge_support_conn, side_purlin_root_id("left"), "support_outer_edge")["x"])
-right_purlin_edge_support_line_x_mm = float(connection_support_point(right_purlin_edge_support_conn, side_purlin_root_id("right"), "support_outer_edge")["x"])
+left_purlin_edge_support_line_x_mm = float(purlin_edge_support_line_points_by_id[left_purlins[0]["id"]]["x"])
+right_purlin_edge_support_line_x_mm = float(purlin_edge_support_line_points_by_id[right_purlins[0]["id"]]["x"])
 
 
 analysis_step_member_mm = 100.0
@@ -1504,6 +1699,7 @@ def roof_load_application_from_rule(roof_uniform_loads, load_rule, reference_pos
 
 def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_self):
     member_obj = left_purlins[index] if side == "left" else right_purlins[index]
+    member_id = member_obj["id"]
     axis_start_x_mm = float(member_obj["axis_start"]["x"])
     axis_end_x_mm = float(member_obj["axis_end"]["x"])
     x0_mm = min(float(member_obj["axis_start"]["x"]), float(member_obj["axis_end"]["x"]))
@@ -1512,22 +1708,25 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
     member_props = member_rect_props(purlin_b_mm, purlin_h_mm, member_section_rotation_deg(member_obj))
     member_MRd_kNm = fm_d_c24 * member_props["W_mm3"] / 1.0e6
     member_VRd_kN = fv_d_c24 * member_props["A_mm2"] / 1.5e3
+    inner_support_point = purlin_inner_support_points_by_id[member_id]
+    edge_support_center_point = purlin_edge_support_center_points_by_id[member_id]
+    edge_support_line_point = purlin_edge_support_line_points_by_id[member_id]
+    interior_support_x_mm = float(inner_support_point["x"])
+    edge_support_x_mm = float(edge_support_line_point["x"])
+    support_center_x_mm = float(edge_support_center_point["x"])
     if side == "left":
-        edge_support_x_mm = left_purlin_edge_support_line_x_mm
-        supports = [edge_support_x_mm, left_purlin_support_x_mm]
+        supports = [edge_support_x_mm, interior_support_x_mm]
     else:
-        edge_support_x_mm = right_purlin_edge_support_line_x_mm
-        supports = [right_purlin_support_x_mm, edge_support_x_mm]
+        supports = [interior_support_x_mm, edge_support_x_mm]
 
     inner_notch_zone_mm, inner_notch_depth_fn, inner_notch_active = make_purlin_notch_depth_fn(member_obj, side)
-    edge_notch_zone_mm, edge_notch_depth_fn, edge_notch_active = make_purlin_edge_notch_depth_fn(side)
+    edge_notch_zone_mm, edge_notch_depth_fn, edge_notch_active = make_purlin_edge_notch_depth_fn(member_obj, side)
     depth_functions = [inner_notch_depth_fn] if inner_notch_active else []
     if edge_notch_active:
         depth_functions.append(edge_notch_depth_fn)
     section_h_fn = combined_section_h(purlin_h_mm, depth_functions)
 
     outer_edge_x_mm = x0_mm if side == "left" else x1_mm
-    support_center_x_mm = left_purlin_edge_support_center_x_mm if side == "left" else right_purlin_edge_support_center_x_mm
     roof_load_rule = roof_load_transfer_rule(member_obj["id"])
     roof_reference_positions_mm = {
         "axis_start": axis_start_x_mm,
@@ -1550,7 +1749,13 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
         )
         node_points.extend([roof_load_start_mm, roof_load_end_mm])
     nodes_mm = refine_nodes_mm(node_points, analysis_step_member_mm)
-    roof_uniform = roof_area_uniform_loads(nodes_mm, member_y_mm, roof_area_kNm2_at, trib_height_m, axis="x")
+    member_axis_width_mm = max(1.0e-9, x1_mm - x0_mm)
+    load_tributary_width_mm = min(
+        member_axis_width_mm,
+        float(roof_load_rule.get("tributary_width_mm", member_axis_width_mm)),
+    )
+    roof_load_width_factor = load_tributary_width_mm / member_axis_width_mm
+    roof_uniform = roof_area_uniform_loads(nodes_mm, member_y_mm, roof_area_kNm2_at, trib_height_m * roof_load_width_factor, axis="x")
     self_uniform = uniform_loads_for_nodes(nodes_mm, gamma_self * purlin_self_kNm / 1000.0)
     q_line_stats = load_stats(combine_uniform_loads(roof_uniform, self_uniform))
     point_loads, roof_applied_uniform, panel_load_mode = roof_load_application_from_rule(
@@ -1590,7 +1795,7 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
             x_end_mm=inner_notch_zone_mm[1],
             step_mm=1.0,
         )
-        notch_candidates.append({"label": bevel_notch_label(purlin_inner_notch_info[side]), **inner_notch})
+        notch_candidates.append({"label": bevel_notch_label(purlin_inner_notch_info_by_id[member_id]), **inner_notch})
     if edge_notch_active:
         edge_notch = sample_net_section_utilization(
             response["elements"],
@@ -1602,10 +1807,10 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
             x_end_mm=edge_notch_zone_mm[1],
             step_mm=1.0,
         )
-        notch_candidates.append({"label": "edge_rect", **edge_notch})
+        edge_label = "edge_rect" if purlin_edge_notch_info_by_id[member_id].get("kind") == "rect_notch" else bevel_notch_label(purlin_edge_notch_info_by_id[member_id])
+        notch_candidates.append({"label": edge_label, **edge_notch})
     notch = max(notch_candidates, key=lambda item: item["eta_gov"]["value_pct"])
 
-    interior_support_x_mm = left_purlin_support_x_mm if side == "left" else right_purlin_support_x_mm
     return {
         "id": member_obj["id"],
         "trib_height_m": trib_height_m,
@@ -1614,6 +1819,7 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
         "q_line_max_kNm": q_line_stats["max_kNm"],
         "panel_load_mode": panel_load_mode,
         "panel_point_load_kN": panel_point_load_kN,
+        "load_tributary_width_m": load_tributary_width_mm / 1000.0,
         "M_gov": moment_gov,
         "V_abs": internal["V_abs"],
         "delta": delta,
@@ -1623,13 +1829,17 @@ def analyse_purlin_case(side, index, trib_height_m, roof_area_kNm2_at, gamma_sel
         "VRd_kN": member_VRd_kN,
         "R_edge_kN": response["reactions_kN"][edge_support_x_mm],
         "R_inner_kN": response["reactions_kN"][interior_support_x_mm],
+        "support_inner_x_mm": interior_support_x_mm,
+        "support_inner_y_mm": float(inner_support_point["y"]),
+        "support_edge_x_mm": edge_support_x_mm,
+        "support_edge_y_mm": float(edge_support_line_point["y"]),
         "eta_M": moment_gov["value_kNm"] / member_MRd_kNm * 100.0,
         "eta_V": abs(internal["V_abs"]["value_kN"]) / member_VRd_kN * 100.0,
         "notch": notch,
         "inner_notch": inner_notch,
         "edge_notch": edge_notch,
         "notch_zones_mm": {"inner": inner_notch_zone_mm, "edge": edge_notch_zone_mm if edge_notch_active else None},
-        "h_net_min_mm": purlin_h_mm - max(purlin_inner_notch_info[side]["depth_mm"], purlin_edge_notch_info[side]["depth_mm"]),
+        "h_net_min_mm": purlin_h_mm - max(purlin_inner_notch_info_by_id[member_id]["depth_mm"], purlin_edge_notch_info_by_id[member_id]["depth_mm"]),
     }
 
 
@@ -2904,6 +3114,7 @@ print(f"  ULS B kattokuorma             {roof_area_uls_B:.3f} kN/m²  (1.35G + 1
 print(f"  ULS DRIFT kattokuorma         1.35G + 1.5·S_kin(x,y)")
 print(f"  Uplift-kattokuorma            {roof_area_uplift:.3f} kN/m²  (0.9G + 1.5W↑)")
 print(f"  Seinää vasten h(x)            {h_seina_left_m:.2f} … {h_seina_right_m:.2f} m")
+print(f"  Kinostuman alku               y = {drift_obstacle_y_mm:.0f} mm, paneelikentän sisäreuna y = {roof_y0_mm:.0f} mm")
 print(f"    hallitseva x                {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
 print(f"    s_kin,max / s@y_in          {critical_drift['s_peak_kNm2']:.2f} / {critical_drift['s_inner_rafter_kNm2']:.2f} kN/m²")
 
@@ -2974,9 +3185,23 @@ print(
 )
 print(f"  Paatybevel ulokepaassa        {format_labeled_bevel_notch_specs(purlin_inner_notch_info)}")
 if purlin_edge_notch_ref is not None:
-    print(f"  Lovi reunatuella              rect_notch {purlin_edge_notch_depth_mm:.0f} × {purlin_edge_notch_length_mm:.0f} mm, h_net,min = {critical_purlin['h_net_min_mm']:.0f} mm")
+    if purlin_edge_notch_ref.get("kind") == "bevel_notch":
+        edge_notch_desc = f"bevel_notch {purlin_edge_notch_ref.get('side')} {purlin_edge_notch_depth_mm:.0f} × {purlin_edge_notch_length_mm:.0f} mm"
+    else:
+        edge_notch_desc = f"rect_notch {purlin_edge_notch_depth_mm:.0f} × {purlin_edge_notch_length_mm:.0f} mm"
+    print(f"  Lovi reunatuella              {edge_notch_desc}, h_net,min = {critical_purlin['h_net_min_mm']:.0f} mm")
 else:
     print("  Lovi reunatuella              ei lovea")
+print(
+    f"  Tukilinjat vasen              x_sisä = {left_purlin_support_x_mm:.0f} mm, "
+    f"x_reuna = {left_purlin_edge_support_line_x_mm:.0f} mm; "
+    f"y_conn = {' / '.join(f'{y_mm:.0f}' for y_mm in edge_purlin_support_ys_mm['left'])} mm"
+)
+print(
+    f"  Tukilinjat oikea              x_sisä = {right_purlin_support_x_mm:.0f} mm, "
+    f"x_reuna = {right_purlin_edge_support_line_x_mm:.0f} mm; "
+    f"y_conn = {' / '.join(f'{y_mm:.0f}' for y_mm in edge_purlin_support_ys_mm['right'])} mm"
+)
 print()
 print(f"  {'ID':<15} {'b_trib':>7} {'q_avg':>7} {'R_edge':>8} {'R_inner':>8} {'Md':>7} {'η_M':>7} {'η_V':>7} {'η_lovi':>8} {'δ_sls':>9}")
 print(f"  {'-'*15} {'-'*7} {'-'*7} {'-'*8} {'-'*8} {'-'*7} {'-'*7} {'-'*7} {'-'*8} {'-'*9}")

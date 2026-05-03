@@ -666,7 +666,8 @@
         "model":        { "type": "string", "enum": ["point", "uniform", "partial_uniform"] },
         "reference":    { "$ref": "#/$defs/load_transfer_reference" },
         "offset_mm":    { "type": "number", "default": 0 },
-        "length_mm":    { "type": "number", "exclusiveMinimum": 0 }
+        "length_mm":    { "type": "number", "exclusiveMinimum": 0 },
+        "tributary_width_mm": { "type": "number", "exclusiveMinimum": 0 }
       },
       "allOf": [
         {

@@ -5,12 +5,12 @@
 
 ── GEOMETRIA ─────────────────────────────────────────────────────
   Geometria                     geometry/terassi_puu2.json
-  Paneelikenttä                 7938 × 3951 mm  (31.36 m²)
-  Kattokaltevuus y-suunnassa    6.9°
+  Paneelikenttä                 7938 × 3572 mm  (28.35 m²)
+  Kattokaltevuus y-suunnassa    7.2°
   Sisäkattotuolit               6 kpl  @ 1134 mm
   Reunakattotuolit              2 kpl  @ x = 125 / 7075 mm
-  Orret / purlins x-suunnassa   14 kpl  (vasen y = 1970, 2420, 2870, 3320, 3770, 4220, 4670 mm; oikea y = 1970, 2420, 2870, 3320, 3770, 4220, 4670 mm)
-  Nurkkaorret y-suunnassa       6 kpl  @ x = 725, 725, 725, 6475, 6475, 6475 mm
+  Orret / purlins x-suunnassa   12 kpl  (vasen y = 2080, 2680, 3280, 3880, 4480, 5080 mm; oikea y = 2080, 2680, 3280, 3880, 4480, 5080 mm)
+  Nurkkaorret y-suunnassa       2 kpl  @ x = 750, 6450 mm
   Kattotuolien tuet sisa/ulko   y = 1845 / 5275 mm
   Reunakattotuolien sisatuet    vasen y = 1750 mm / oikea y = 1800 mm
   Sisäpään liitos               Palkkikenkä N 48x136, 5.0x40 ankkuriruuvi, kθ ≈ 69.2 kNm/rad
@@ -22,107 +22,104 @@
   Kaistalevy / pultitus         ulko 10 mm + sisa 5 mm, 80 × 280 mm, 1 × M12 8.8 / jasen
 
 ── KUORMAT ───────────────────────────────────────────────────────
-  Paneelit                      7×2 = 14 kpl, 3.43 kN
-  Pysyvä katekuorma             gk = 0.159 kN/m²  (paneelit 0.109 + kiinnikkeet 0.05)
+  Paneelit                      7×2 = 14 kpl, 3.21 kN
+  Pysyvä katekuorma             gk = 0.163 kN/m²  (paneelit 0.113 + kiinnikkeet 0.05)
   Lumi                          sk = 2.0 kN/m², μ1 = 0.8  →  s = 1.60 kN/m²
   Tuuli katolle                 qp(z=4.5 m) = 0.515 kN/m²
     alas (auki)                 cp,net = +0.80  →  w = 0.412 kN/m²
     imu (kiinni)                cp,net = -1.12  →  w = -0.577 kN/m²
-  ULS A kattokuorma             2.986 kN/m²  (1.35G + 1.5S + 1.5·0.6W↓)
-  ULS B kattokuorma             1.895 kN/m²  (1.35G + 1.5·0.7S)
+  ULS A kattokuorma             2.991 kN/m²  (1.35G + 1.5S + 1.5·0.6W↓)
+  ULS B kattokuorma             1.901 kN/m²  (1.35G + 1.5·0.7S)
   ULS DRIFT kattokuorma         1.35G + 1.5·S_kin(x,y)
-  Uplift-kattokuorma            -0.721 kN/m²  (0.9G + 1.5W↑)
+  Uplift-kattokuorma            -0.718 kN/m²  (0.9G + 1.5W↑)
   Seinää vasten h(x)            0.29 … 1.82 m
-    hallitseva x                7569 mm, ls = 3.95 m, μ2 = 1.92
+  Kinostuman alku               y = 1800 mm, paneelikentän sisäreuna y = 2060 mm
+    hallitseva x                7569 mm, ls = 3.83 m, μ2 = 1.92
     s_kin,max / s@y_in          3.85 / 3.80 kN/m²
 
 ── PANEELIT ──────────────────────────────────────────────────────
   Tyyppi                        Longi Himo X10 LR7 aurinkopaneeli
-  Moduuli                       1134 × 1990 × 30 mm, 25 kg/kpl
-  Kenttä                        7 × 2 = 14 kpl, lappeella 7938 × 3980 mm, vaakaprojektio 7938 × 3951 mm
-  Kokonaismassa                 350 kg = 3.43 kN
+  Moduuli                       1134 × 1800 × 30 mm, 23 kg/kpl
+  Kenttä                        7 × 2 = 14 kpl, lappeella 7938 × 3600 mm, vaakaprojektio 7938 × 3572 mm
+  Kokonaismassa                 328 kg = 3.21 kN
   Kinostumatarkistus            etupuolen mekaaninen raja 5.40 kN/m², ULS = 1.5·s_kin
-  Mitoittava paneelisarake      7/7, x = 7002 mm, h = 1.80 m, ls = 3.95 m, s_peak = 3.60 kN/m²
-  Mitoittava piste              sisäreuna, y = 1800 mm, ULS = 5.40/5.40 kN/m², η = 100.0%  -> OK
-  Rajan alitus edellyttää       s_kin <= 3.60 kN/m², h <= 1.80 m @ sisäreuna
-  Nykyinen ylitys / varmuus     ΔULS = -0.00 kN/m², Δs_kin = -0.00 kN/m², Δh = -1 mm
+  Mitoittava paneelisarake      7/7, x = 7002 mm, h = 1.80 m, ls = 3.83 m, s_peak = 3.60 kN/m²
+  Mitoittava piste              sisäreuna, y = 2060 mm, ULS = 5.03/5.40 kN/m², η = 93.2%  -> OK
+  Rajan alitus edellyttää       s_kin <= 3.60 kN/m², h <= 1.93 m @ sisäreuna
+  Nykyinen ylitys / varmuus     ΔULS = -0.37 kN/m², Δs_kin = -0.25 kN/m², Δh = -132 mm
 
   Tarkistuspisteet              kriittinen sarake 7/7
   Sijainti                  y [mm]   s_kin     ULS       η     Tila
   ------------------------ ------- ------- ------- ------- --------
-  sisäreuna                   1800    3.60    5.40  100.0%       OK
-  200 mm sisäreunasta         2000    3.42    5.12   94.9%       OK
-  1. rivin puoliväli          2788    2.70    4.05   75.0%       OK
-  rivisauma                   3776    1.80    2.70   50.0%       OK
-  2. rivin puoliväli          4763    1.60    2.40   44.4%       OK
-  ulkoreuna                   5751    1.60    2.40   44.4%       OK
+  sisäreuna                   2060    3.35    5.03   93.2%       OK
+  200 mm sisäreunasta         2260    3.17    4.75   88.0%       OK
+  1. rivin puoliväli          2953    2.52    3.77   69.9%       OK
+  rivisauma                   3846    1.68    2.52   46.6%       OK
+  2. rivin puoliväli          4739    1.60    2.40   44.4%       OK
+  ulkoreuna                   5632    1.60    2.40   44.4%       OK
 
 ── ORRET X-SUUNNASSA 98×48 C24 ──────────────────────────────────
-  Sivukaista vasen / oikea      1.123 / 1.145 m
-  Tributäärikorkeudet           vasen: 0.395 / 0.450 / 0.450 / 0.450 / 0.450 / 0.450 / 0.260 m | oikea: 0.395 / 0.450 / 0.450 / 0.450 / 0.450 / 0.450 / 0.260 m
+  Sivukaista vasen / oikea      0.567 / 0.567 m
+  Tributäärikorkeudet           vasen: 0.320 / 0.600 / 0.600 / 0.600 / 0.600 / 0.562 m | oikea: 0.320 / 0.600 / 0.600 / 0.600 / 0.600 / 0.562 m
   Poikkileikkauksen kierto      vasen: -6.7° | oikea: +6.7°
-  Paneelikehikko                kuorma pisteenä -15 mm axis_end-päästä; omapaino viivakuormana
+  Paneelikehikko                kuorma pisteenä -15 mm axis_end-päästä, b_trib 567 mm; omapaino viivakuormana
   MRd = 1.07 kNm,  VRd = 7.72 kN,  δ_lim vasen / oikea = 2.3 / 2.4 mm
-  Paatybevel ulokepaassa        bevel_notch bottom vasen: 50 × 350 mm | oikea: 50 × 350 mm
-  Lovi reunatuella              ei lovea
+  Paatybevel ulokepaassa        ei bevel-lovea
+  Lovi reunatuella              bevel_notch bottom 30 × 270 mm, h_net,min = 68 mm
+  Tukilinjat vasen              x_sisä = 754 mm, x_reuna = 68 mm; y_conn = 2100 / 2700 / 3300 / 3900 / 4500 / 5100 mm
+  Tukilinjat oikea              x_sisä = 6424 mm, x_reuna = 7132 mm; y_conn = 2100 / 2700 / 3300 / 3900 / 4500 / 5100 mm
 
   ID               b_trib   q_avg   R_edge  R_inner      Md     η_M     η_V   η_lovi     δ_sls
   --------------- ------- ------- -------- -------- ------- ------- ------- -------- ---------
-  orsi.vasen.0      0.395   1.206     2.16    -0.81   0.56   52.4%   17.3%    41.7%  1.48/2.3
-  orsi.vasen.1      0.450   1.370     2.46    -0.92   0.64   59.7%   19.7%    47.4%  1.68/2.3
-  orsi.vasen.2      0.450   1.370     2.46    -0.92   0.64   59.7%   19.7%    47.4%  1.68/2.3
-  orsi.vasen.3      0.450   1.370     2.46    -0.92   0.64   59.7%   19.7%    47.4%  1.68/2.3
-  orsi.vasen.4      0.450   1.370     2.46    -0.92   0.64   59.7%   19.7%    47.4%  1.68/2.3
-  orsi.vasen.5      0.450   1.370     2.46    -0.92   0.64   59.7%   19.7%    47.4%  1.68/2.3
-  orsi.vasen.6      0.260   0.803     1.43    -0.53   0.37   34.6%   11.4%    27.5%  0.97/2.3
-  orsi.oikea.0      0.395   2.150     3.90    -1.44   1.03   96.1%   31.7%    76.3%  3.12/2.4
-  orsi.oikea.1      0.450   2.169     3.94    -1.45   1.04   97.0%   31.9%    77.0%  3.15/2.4
-  orsi.oikea.2      0.450   1.893     3.43    -1.27   0.90   84.5%   27.8%    67.1%  2.75/2.4
-  orsi.oikea.3      0.450   1.617     2.93    -1.08   0.77   72.0%   23.7%    57.2%  2.34/2.4
-  orsi.oikea.4      0.450   1.370     2.48    -0.91   0.65   60.9%   20.1%    48.4%  1.94/2.4
-  orsi.oikea.5      0.450   1.370     2.48    -0.91   0.65   60.9%   20.1%    48.4%  1.74/2.4
-  orsi.oikea.6      0.260   0.803     1.44    -0.52   0.38   35.3%   11.7%    28.0%  1.01/2.4
-  Kriittinen orsi               orsi.oikea.1  (ULS DRIFT, η = 97.0%)
-    q_avg / q_max               2.169 / 2.310 kN/m
-    Reaktio reunakattotuolelle  3.94 kN,  sisäkattotuolille -1.45 kN
-    Governing lovi              axis_end_bevel_bottom / M_netto = 77.0%
+  orsi.vasen.0      0.320   0.511     0.90    -0.33   0.23   21.7%    7.2%    13.1%  0.56/2.3
+  orsi.vasen.1      0.600   0.936     1.67    -0.62   0.43   40.5%   13.4%    24.4%  1.04/2.3
+  orsi.vasen.2      0.600   0.936     1.67    -0.62   0.43   40.5%   13.4%    24.4%  1.04/2.3
+  orsi.vasen.3      0.600   0.936     1.67    -0.62   0.43   40.5%   13.4%    24.4%  1.04/2.3
+  orsi.vasen.4      0.600   0.936     1.67    -0.62   0.43   40.5%   13.4%    24.4%  1.04/2.3
+  orsi.vasen.5      0.562   0.878     1.57    -0.58   0.41   38.0%   12.5%    22.9%  0.97/2.3
+  orsi.oikea.0      0.320   0.873     1.57    -0.57   0.41   38.4%   12.7%    23.2%  1.14/2.4
+  orsi.oikea.1      0.600   1.356     2.45    -0.90   0.64   60.3%   19.9%    36.4%  1.79/2.4
+  orsi.oikea.2      0.600   1.100     1.98    -0.73   0.52   48.7%   16.1%    29.4%  1.44/2.4
+  orsi.oikea.3      0.600   0.936     1.68    -0.61   0.44   41.3%   13.6%    24.9%  1.11/2.4
+  orsi.oikea.4      0.600   0.936     1.68    -0.61   0.44   41.3%   13.6%    24.9%  1.07/2.4
+  orsi.oikea.5      0.562   0.878     1.58    -0.57   0.41   38.7%   12.8%    23.4%  1.01/2.4
+  Kriittinen orsi               orsi.oikea.1  (ULS DRIFT, η = 60.3%)
+    q_avg / q_max               1.356 / 1.443 kN/m
+    Reaktio reunakattotuolelle  2.45 kN,  sisäkattotuolille -0.90 kN
+    Governing lovi              axis_end_bevel_bottom / M_netto = 36.4%
 
 ── NURKKAORRET Y-SUUNNASSA 98×48 C24 ────────────────────────────
   Kantotapa                     tuet geometrian mukaan toiseksi uloimpaan kattotuoliin ja ulompaan reunajaseneen
-  Tributäärileveydet            left: 0.490 / 0.213 / 0.420 m | right: 0.490 / 0.213 / 0.442 m
-  Poikkileikkauksen kierto      left: -6.2 … -3.5° | right: +3.5 … +6.2°
-  Paneelikuorma                 kuorma pisteenä -15 mm axis_end-päästä; omapaino viivakuormana
-  Paatybevelit vinoissa orsissa rafter-tuet bevel_notch bottom 50 × 350 mm; beam.outer bevel_notch bottom 50 × 350 mm / 50 × 450 mm / 60 × 440 mm, h_net,min = 38 mm
+  Tributäärileveydet            left: 0.137 m | right: 0.137 m
+  Poikkileikkauksen kierto      left: -5.1 … -5.1° | right: +5.1 … +5.1°
+  Paneelikuorma                 kuorma pisteenä -15 mm axis_end-päästä, b_trib 567 mm; omapaino viivakuormana
+  Paatybevelit vinoissa orsissa beam.outer bevel_notch bottom 30 × 400 mm, h_net,min = 68 mm
 
   ID                    b_trib   q_avg     R_in    R_out      Md     η_M     η_V   η_lovi     δ_sls
   -------------------- ------- ------- -------- -------- ------- ------- ------- -------- ---------
-  orsi.vasen.67          0.490   1.490    -1.08     2.82   0.77   71.7%   22.4%    53.6%  2.20/1.5
-  orsi.vasen.45          0.213   0.661    -0.75     1.70   0.59   54.1%   12.0%    28.1%  2.71/2.2
-  orsi.vasen.22          0.420   1.280    -1.25     2.53   0.62   56.6%   16.5%    38.5%  1.65/1.7
-  orsi.oikea.67          0.490   1.490    -1.08     2.82   0.77   71.7%   22.4%    53.6%  2.20/1.5
-  orsi.oikea.45          0.213   0.661    -0.77     1.72   0.60   55.1%   12.0%    36.7%  2.94/2.2
-  orsi.oikea.22          0.442   1.346    -1.32     2.67   0.66   59.6%   17.3%    53.4%  2.05/1.7
-  Kriittinen nurkkaorsi         orsi.vasen.67  (ULS A, η = 71.7%)
-    q_avg / q_max               1.490 / 1.490 kN/m
-    Reaktio sisatuelle          -1.08 kN,  ulkotuella 2.82 kN (kattotuoli.vasen)
-    Governing lovi              axis_end_bevel_bottom / M_netto = 53.6%
+  orsi.vasen.45          0.137   0.435    -0.74     1.26   0.36   32.9%    9.8%    17.6%  1.52/2.4
+  orsi.oikea.45          0.137   0.435    -0.74     1.26   0.36   32.9%    9.8%    17.6%  1.52/2.4
+  Kriittinen nurkkaorsi         orsi.vasen.45  (ULS A, η = 32.9%)
+    q_avg / q_max               0.435 / 0.435 kN/m
+    Reaktio sisatuelle          -0.74 kN,  ulkotuella 1.26 kN (beam.outer)
+    Governing lovi              axis_end_bevel_bottom / M_netto = 17.6%
 
 ── SISÄKATTOTUOLIT 198×48 C24 ───────────────────────────────────
-  Suora paneelikaista           0.567 / 1.134 / 1.134 / 1.134 / 1.134 / 0.567 m
+  Suora paneelikaista           1.123 / 1.134 / 1.134 / 1.134 / 1.134 / 1.145 m
   MRd = 4.63 kNm,  VRd = 15.60 kN,  δ_lim = 11.4 mm
   Ulkotuki                      birdsmouth heel = 85 mm, seat = 570 mm, h_net,min = 113 mm
 
   ID           b_dir   purlin   q_avg     R_in    R_out      Md     η_M     η_V   η_lovi     δ_sls
   ---------- ------- -------- ------- -------- -------- ------- ------- ------- -------- ---------
-  kattotuoli.0   0.567    -9.02   1.746    -0.86    -1.18   1.27   27.5%   17.1%    39.5%  2.39/11.4
-  kattotuoli.1   1.134     0.00   3.439     6.39     7.37   4.40   94.9%   38.9%    64.8%  9.30/11.4
-  kattotuoli.2   1.134     0.00   3.439     6.39     7.37   4.40   94.9%   38.9%    64.8%  9.32/11.4
-  kattotuoli.3   1.134     0.00   3.439     6.39     7.37   4.40   94.9%   38.9%    64.8%  9.65/11.4
-  kattotuoli.4   1.134     0.00   3.439     6.39     7.37   4.40   94.9%   38.9%    64.8% 10.40/11.4
-  kattotuoli.5   0.567    -9.04   1.746    -0.83    -1.23   1.29   27.8%   17.4%    40.2%  2.93/11.4
-  Kriittinen sisäkattotuoli     kattotuoli.1  (ULS A, η = 94.9%)
-    q_avg / q_max               3.439 / 3.439 kN/m
-    Birdsmouth-nettotarkistus   M_netto = 64.8% @ y = 4652 mm
+  kattotuoli.0   1.123    -4.14   3.412     4.73     4.37   3.06   66.0%   28.2%    42.8%  6.44/11.4
+  kattotuoli.1   1.134     0.00   3.445     6.45     6.92   4.49   96.8%   39.3%    66.2%  9.53/11.4
+  kattotuoli.2   1.134     0.00   3.445     6.45     6.92   4.49   96.8%   39.3%    66.2%  9.54/11.4
+  kattotuoli.3   1.134     0.00   3.445     6.45     6.92   4.49   96.8%   39.3%    66.2%  9.86/11.4
+  kattotuoli.4   1.134     0.00   3.445     6.45     6.92   4.49   96.8%   39.3%    66.2% 10.56/11.4
+  kattotuoli.5   1.145    -4.44   3.865     6.28     4.28   3.29   71.0%   36.6%    43.5%  7.93/11.4
+  Kriittinen sisäkattotuoli     kattotuoli.1  (ULS A, η = 96.8%)
+    q_avg / q_max               3.445 / 3.445 kN/m
+    Birdsmouth-nettotarkistus   M_netto = 66.2% @ y = 4669 mm
     Lovisyvyys h/3              ylittaa ohjesaannon -> vaatii erillisen detaljimitoituksen
 
 ── REUNAKATTOTUOLIT GL30c ───────────────────────────────────────
@@ -133,83 +130,83 @@
 
   ID            P_orret  g_self     R_in    R_out      Md     η_M     η_V   η_lovi     δ_sls
   ------------ -------- ------- -------- -------- ------- ------- ------- -------- ---------
-  kattotuoli.vasen    18.71   0.176     9.63     9.71   8.66   46.5%   25.1%     0.0%  4.70/11.8
-  kattotuoli.oikea    22.54   0.176    13.41     9.75   9.81   52.7%   34.7%     0.0%  5.78/11.6
-  Kriittinen reunakattotuoli    kattotuoli.oikea  (ULS DRIFT, η = 52.7%)
+  kattotuoli.vasen     9.16   0.176     4.38     5.40   4.49   24.1%   14.0%     0.0%  2.45/11.8
+  kattotuoli.oikea    10.40   0.176     5.70     5.32   4.98   26.7%   14.7%     0.0%  2.92/11.6
+  Kriittinen reunakattotuoli    kattotuoli.oikea  (ULS DRIFT, η = 26.7%)
     Lovitarkistus               ei lovea
 
 ── ULKOPALKKI LP225x115 ───────────────────────────────────
   MRd,y = 18.63 kNm,  MRd,z = 9.52 kNm,  VRd = 38.64 kN
-  Pystymomentti A / B / DRIFT   8.45 / 5.52 / 7.53 kNm
+  Pystymomentti A / B / DRIFT   9.30 / 6.06 / 8.34 kNm
   Vaakamomentti A / B / DRIFT   0.69 / 1.16 / 0.69 kNm
-  Vuorovaikutus η               A: 50.5%  /  B: 38.1%  /  DRIFT: 45.5%  →  ULS A
-  Taipuma SLS / DRIFT           1.59 / 1.59 / 11.6 mm  OK ✓
-  Pystykuormat kattotuoleilta   max 9.71 kN @ x = 125 mm (ULS A)
-  Tulos                         η_v = 45.3%,  η_int = 50.5%  OK ✓
+  Vuorovaikutus η               A: 55.0%  /  B: 41.1%  /  DRIFT: 49.9%  →  ULS A
+  Taipuma SLS / DRIFT           1.93 / 2.05 / 11.6 mm  OK ✓
+  Pystykuormat kattotuoleilta   max 6.92 kN @ x = 1888 mm (ULS A)
+  Tulos                         η_v = 49.9%,  η_int = 55.0%  OK ✓
 
 ── SISÄPALKKI LP315x115 ─────────────────────────────────────
   MRd = 36.51 kNm,  VRd = 54.10 kN
-  Hallitseva tapaus             ULS A
-  Md,max                        24.35 kNm @ x = 4156 mm
-  Vd,max                        15.22 kN
-  Pilarireaktiot suorilla tuilla  10.98 kN @ x = 6950 mm
+  Hallitseva tapaus             ULS DRIFT
+  Md,max                        26.66 kNm @ x = 4156 mm
+  Vd,max                        17.95 kN
+  Pilarireaktiot suorilla tuilla  17.95 kN @ x = 6950 mm
   Aktiiviset omat tuet          x = 6950 mm
-  Ekvivalentti vasen tukipiste  x ≈ 825 mm  ->  L_eff ≈ 6125 mm
-  Siirtyvä voima 2xKP360x51:lle   20.76 kN
-  Taipuma SLS / DRIFT           15.59 / 17.23 / 20.4 mm  OK ✓
+  Ekvivalentti vasen tukipiste  x ≈ 807 mm  ->  L_eff ≈ 6143 mm
+  Siirtyvä voima 2xKP360x51:lle   24.65 kN
+  Taipuma SLS / DRIFT           17.39 / 19.50 / 20.5 mm  OK ✓
   Sovituslovi beam.existing.kp360x2:lla  top 180 × 800 mm, h_net,min = 135 mm @ x = 170 mm
-  Loven nettoh-tarkistus        ULS A, V_netto = 29.9% @ x = 890 mm
-  Tulos                         η_M = 66.7%,  η_V = 28.1%,  η_lovi = 29.9%  OK ✓
+  Loven nettoh-tarkistus        ULS A, V_netto = 30.8% @ x = 890 mm
+  Tulos                         η_M = 73.0%,  η_V = 33.2%,  η_lovi = 30.8%  OK ✓
 
 ── SIIRTOVYÖHYKE LP315x115 -> 2xKP360x51 ─────────────────
   Hallitseva tapaus             ULS A
-  Siirtyvä voima yhteensa       20.76 kN
-  Ekvivalentti vasen tukipiste  x = 825 mm  ->  L_eff = 6125 mm
-  Kriittinen kaistalevy         Kaistalevy 4 / 4, Fd = 14.06 kN, η_fast = 24.9%, η_levy = 5.7%
+  Siirtyvä voima yhteensa       25.68 kN
+  Ekvivalentti vasen tukipiste  x = 803 mm  ->  L_eff = 6147 mm
+  Kriittinen kaistalevy         Kaistalevy 4 / 4, Fd = 15.95 kN, η_fast = 28.2%, η_levy = 6.5%
   Lovialueen pienin h_net/linkki Kaistalevy 1 / 4, h_net = 162 mm, levy/jäsen = 140 mm (levy yht. 280 mm), Δh = +22 mm  OK ✓
 
   ID                             x        k       Fd    η_fast    η_levy   h_net  levy/j      Δh   M12/tarve
   ------------------------- ------ -------- -------- --------- --------- ------- ------- ------- -----------
-  Kaistalevy 1 / 4             290     5.65     6.22     11.0%      2.5%     162     140     +22    1/    1
-  Kaistalevy 2 / 4             490     5.65     0.00      0.0%      0.0%     207     140     +67    1/    1
-  Kaistalevy 3 / 4             690     5.65     6.70     11.9%      2.7%     252     140    +112    1/    1
-  Kaistalevy 4 / 4             890     5.65    14.06     24.9%      5.7%     297     140    +157    1/    1
+  Kaistalevy 1 / 4             290     5.65     5.05      8.9%      2.1%     162     140     +22    1/    1
+  Kaistalevy 2 / 4             490     5.65     1.39      2.5%      0.6%     207     140     +67    1/    1
+  Kaistalevy 3 / 4             690     5.65     8.34     14.8%      3.4%     252     140    +112    1/    1
+  Kaistalevy 4 / 4             890     5.65    15.95     28.2%      6.5%     297     140    +157    1/    1
 
 ── OLEMASSA OLEVA LP225x90 @ x125 ───────────────────────
   Hallitseva tapaus             ULS A
-  Pistekuormat y = 900 mm: 8.78 kN / 1750 mm: 9.63 kN
-  Tukireaktiot seinä / pilari   3.63 / 14.78 kN
-  Md,max / Vd,max               3.27 kNm @ y = 900 mm / 14.78 kN
-  Tulos                         η_M = 27.6%,  η_V = 60.1%  OK ✓
+  Pistekuormat y = 900 mm: 8.78 kN / 1750 mm: 4.38 kN
+  Tukireaktiot seinä / pilari   3.87 / 9.30 kN
+  Md,max / Vd,max               3.48 kNm @ y = 900 mm / 9.30 kN
+  Tulos                         η_M = 29.4%,  η_V = 37.8%  OK ✓
 
 ── OLEMASSA OLEVA 2xKP360x51 (vanha katos + puu2) ───────────────
   MRd = 64.63 kNm,  VRd = 73.44 kN
   Hallitseva tapaus             ULS A
-  Md,max                        27.69 kNm @ x = 3000 mm
-  Vd,max                        29.81 kN
-  Pilarireaktiot yhteensa       26.31 / 15.81 kN
-  Taipuma SLS / DRIFT           16.02 / 23.2 mm  OK ✓
-  Tulos                         η_M = 52.7%,  η_V = 50.0%,  η_LTB = 52.7%  OK ✓
+  Md,max                        29.49 kNm @ x = 3000 mm
+  Vd,max                        34.28 kN
+  Pilarireaktiot yhteensa       31.97 / 16.25 kN
+  Taipuma SLS / DRIFT           17.12 / 23.2 mm  OK ✓
+  Tulos                         η_M = 56.2%,  η_V = 57.5%,  η_LTB = 56.2%  OK ✓
 
 ── PILARIKUORMAT JA NOSTO ───────────────────────────────────────
   Ulkopalkin reaktiot ULS A / UPLIFT [kN]:
-    x =  125 mm               15.43 /  -2.95
-    x = 3600 mm               25.48 /  -5.05
-    x = 7075 mm               15.36 /  -2.94
-  Sisäpalkin reaktiot ULS A / UPLIFT [kN]:
-    x = 6950 mm               10.98 /  -1.73
+    x =  125 mm               12.38 /  -2.25
+    x = 3600 mm               26.37 /  -5.26
+    x = 7075 mm               12.37 /  -2.26
+  Sisäpalkin reaktiot ULS DRIFT / UPLIFT [kN]:
+    x = 6950 mm               17.95 /  -3.03
   KP360 yhteisreaktiot ULS A / UPLIFT [kN]:
-    x =  125 mm               26.31 /  -7.33
-    x = 7075 mm               15.81 /  -5.74
-  LP225 x125 pilarireaktio ULS DRIFT / UPLIFT [kN]: 13.58 / -3.93
+    x =  125 mm               31.97 /  -8.67
+    x = 7075 mm               16.25 /  -5.84
+  LP225 x125 pilarireaktio ULS DRIFT / UPLIFT [kN]: 8.78 / -2.63
   LP225 x7075 perusreaktio ULS DRIFT / UPLIFT [kN]: 4.72 / -1.89
   Sisatukien kokonaiskuormat ULS DRIFT / UPLIFT [kN]:
-    x =  125 mm               39.26 / -11.27
-    x = 7075 mm               44.82 / -11.36
-  Suurin ulkopilaripuristus         25.48 kN
-  Suurin ulkopilarin nostotarve     5.05 kN
-  Suurin sisatukipuristus           44.82 kN
-  Suurin sisatuen nostotarve        11.36 kN
+    x =  125 mm               39.58 / -11.30
+    x = 7075 mm               44.53 / -11.48
+  Suurin ulkopilaripuristus         26.37 kN
+  Suurin ulkopilarin nostotarve     5.26 kN
+  Suurin sisatukipuristus           44.53 kN
+  Suurin sisatuen nostotarve        11.48 kN
 
 ── KOKONAISPILARIKUORMAT TERASSIN JALKEEN ───────────────────────
   Olemassa oleva baseline        geometry/katos.json + puu2-variantin lisakuormat
@@ -224,13 +221,13 @@
 
   Pilari                 Ryhma          N_sls     N_uls     N_min  Tila
   ---------------------- ---------- --------- --------- ---------  ------------------
-  col.x125               sisäpilari     34.43     53.37     -3.08  NOSTO 3.08 kN
-  col.x7075              sisäpilari     50.81     75.00      3.21  Puristus 3.21 kN  OK ✓
-  col.x125.outer.bottom  ulkopilari     47.43     68.55     22.23  Puristus 22.23 kN  OK ✓
-  col.x3600.outer.bottom ulkopilari     87.01    125.51     39.77  Puristus 39.77 kN  OK ✓
-  col.x7075.outer.bottom ulkopilari     48.11     68.31     22.16  Puristus 22.16 kN  OK ✓
-  Suurin kokonaispuristus        125.51 kN
-  Suurin kokonaisnostotarve      3.08 kN
+  col.x125               sisäpilari     34.65     53.54     -3.12  NOSTO 3.12 kN
+  col.x7075              sisäpilari     50.62     74.71      3.09  Puristus 3.09 kN  OK ✓
+  col.x125.outer.bottom  ulkopilari     45.63     65.51     22.93  Puristus 22.93 kN  OK ✓
+  col.x3600.outer.bottom ulkopilari     87.60    126.40     39.56  Puristus 39.56 kN  OK ✓
+  col.x7075.outer.bottom ulkopilari     46.09     65.32     22.85  Puristus 22.85 kN  OK ✓
+  Suurin kokonaispuristus        126.40 kN
+  Suurin kokonaisnostotarve      3.12 kN
 
 ── PERUSTUKSET ─────────────────────────────────────────
   Anturat                       5 kpl, 800x800x300 mm
@@ -240,12 +237,12 @@
 
   Perustus                Pilari                  peite yläp.   alap. syv.      Gk   q_sls   q_uls    N_up    R_up  jäännös
   ----------------------- ---------------------- ------------ ------------ ------- ------- ------- ------- ------- --------
-  fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      68     103    3.08    8.32     0.00
-  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      94     137    0.00    8.32     0.00
-  fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      91     129    0.00    9.52     0.00
-  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     152     218    0.00    9.52     0.00
-  fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      92     129    0.00    9.52     0.00
-  Suurin pohjapaine ULS         218 kPa (fdn.col.x3600.outer)
+  fdn.col.x125            col.x125               438...454 mm 738...754 mm    9.25      69     103    3.12    8.32     0.00
+  fdn.col.x7075           col.x7075              438...454 mm 738...754 mm    9.25      94     136    0.00    8.32     0.00
+  fdn.col.x125.outer      col.x125.outer.bottom  566...582 mm 866...882 mm   10.58      88     125    0.00    9.52     0.00
+  fdn.col.x3600.outer     col.x3600.outer.bottom 566...582 mm 866...882 mm   10.58     153     220    0.00    9.52     0.00
+  fdn.col.x7075.outer     col.x7075.outer.bottom 566...582 mm 866...882 mm   10.58      89     124    0.00    9.52     0.00
+  Suurin pohjapaine ULS         220 kPa (fdn.col.x3600.outer)
   Suurin jäljelle jäävä nosto   0.00 kN (fdn.col.x125)
   Huom.                         vaakakuormat, liukuminen ja kaatuminen tarkistettava erikseen
 
