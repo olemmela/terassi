@@ -313,6 +313,7 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld" style="background:#dd8800"></div>Orsi</div>
       <div class="li"><div class="ld" style="background:rgba(0,160,160,.6)"></div>Lasipinta</div>
       <div class="li"><div class="ld" style="background:rgba(60,140,60,.6)"></div>Kattopinta</div>
+      <div class="li"><div class="ld" style="background:#e8f2ff"></div>Aurinkopaneelien rajat</div>
       <div class="li"><div class="ld" style="background:rgba(150,130,100,.3)"></div>Viitepinta</div>
       <div class="li"><div class="ld" style="background:#ff4444;border-radius:50%"></div>Tuki (supported_on)</div>
       <div class="li"><div class="ld" style="background:#66aaff;border-radius:50%"></div>Siirtolinkki (transfer_link)</div>
@@ -326,7 +327,7 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld ld-dot" style="color:#ffb347"></div>Analyysipiste: puolijäykkä</div>
       <div class="li"><div class="ld ld-dot" style="color:#66ddff"></div>Analyysipiste: jäykkä</div>
       <div class="li"><div class="ld ld-shift" style="color:#99ff33"></div>Tukilinjan siirtymä (viiva + levy)</div>
-      <div class="li"><div class="ld" style="background:#ffee66"></div>Hover kattopintaan → member_refs-korostus</div>
+      <div class="li"><div class="ld" style="background:#ffee66"></div>Hover pintaan → member_refs/supported_by-korostus</div>
       <div class="li"><div class="ld" style="background:#666"></div>Klikkaa 3D-näkymää → nuolilla liike, Ctrl+nuoli kääntö</div>
     </div>
   </div>
@@ -523,6 +524,7 @@ const SUPPORT_LINE_SHIFT_COLOR = 0x99ff33;
 const CONNECTION_DETAIL_PLATE_COLOR = 0xb0b7c3;
 const CONNECTION_DETAIL_POINT_COLOR = 0xffe066;
 const CONNECTION_DETAIL_BOLT_COLOR = 0xf7c948;
+const SOLAR_PANEL_GRID_COLOR = 0xe8f2ff;
 
 // ── Scene groups (yksi per ladattu geometria) ─────────────────────────────────
 const geoGroups = new Map(); // name → THREE.Group
@@ -710,6 +712,9 @@ function loadTransferRuleSummary(rule) {
 
 function surfaceTooltipLines(surfaceObj) {
   const lines = [`${surfaceObj.id}  —  ${surfaceObj.type ?? 'surface'}`];
+  if (Array.isArray(surfaceObj.supported_by) && surfaceObj.supported_by.length) {
+    lines.push(`supported_by: ${summarizeMemberRefs(surfaceObj.supported_by)}`);
+  }
   const rules = surfaceObj.load_transfer?.to_members;
   if (Array.isArray(rules) && rules.length) {
     for (const rule of rules) lines.push(`load_transfer: ${loadTransferRuleSummary(rule)}`);
@@ -1652,7 +1657,104 @@ function buildSurfaceGeometry(poly, thicknessMm = 0) {
   return geom;
 }
 
-function addSurfaces(g, pk, list, opacity) {
+function surfaceLocalBounds(poly, frame) {
+  const coords = poly.map(p => {
+    const rel = pt(p).sub(frame.origin);
+    return {
+      u: rel.dot(frame.xAxis),
+      v: rel.dot(frame.yAxis),
+    };
+  });
+  return {
+    uMin: Math.min(...coords.map(p => p.u)),
+    uMax: Math.max(...coords.map(p => p.u)),
+    vMin: Math.min(...coords.map(p => p.v)),
+    vMax: Math.max(...coords.map(p => p.v)),
+  };
+}
+
+function surfacePoint(frame, u, v, normalOffsetMm = 0) {
+  return frame.origin.clone()
+    .add(frame.xAxis.clone().multiplyScalar(u))
+    .add(frame.yAxis.clone().multiplyScalar(v))
+    .add(frame.normal.clone().multiplyScalar(normalOffsetMm));
+}
+
+function addSolarPanelGrid(g, surfaceObj, poly, thicknessMm, opacity) {
+  if (surfaceObj.type !== 'solar_panel_array') return;
+  const count = surfaceObj.count;
+  const nx = Number(count?.nx ?? 0);
+  const ny = Number(count?.ny ?? 0);
+  if (nx < 2 && ny < 2) return;
+
+  const frame = surfaceFrame(poly);
+  if (!frame) return;
+  const bounds = surfaceLocalBounds(poly, frame);
+  const points = [];
+  const normalOffsetMm = thicknessMm / 2 + 4;
+
+  for (let i = 1; i < nx; i++) {
+    const u = bounds.uMin + (bounds.uMax - bounds.uMin) * i / nx;
+    points.push(
+      surfacePoint(frame, u, bounds.vMin, normalOffsetMm),
+      surfacePoint(frame, u, bounds.vMax, normalOffsetMm),
+    );
+  }
+  for (let j = 1; j < ny; j++) {
+    const v = bounds.vMin + (bounds.vMax - bounds.vMin) * j / ny;
+    points.push(
+      surfacePoint(frame, bounds.uMin, v, normalOffsetMm),
+      surfacePoint(frame, bounds.uMax, v, normalOffsetMm),
+    );
+  }
+  if (!points.length) return;
+
+  const grid = new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(points),
+    new THREE.LineBasicMaterial({
+      color: SOLAR_PANEL_GRID_COLOR,
+      transparent: true,
+      opacity: Math.min(opacity * 3, 0.95),
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+  grid.userData = {
+    id: `${surfaceObj.id}.panel_grid`,
+    kind: 'solar_panel_grid',
+    _geoName: g.userData.geoName,
+  };
+  g.add(grid);
+}
+
+function expandViewerMemberRefs(memberRefs, memberIndex) {
+  const expanded = [];
+  for (const memberRef of memberRefs ?? []) {
+    if (memberIndex?.has(memberRef)) {
+      expanded.push(memberRef);
+      continue;
+    }
+    const prefix = `${memberRef}.`;
+    const matches = [...(memberIndex?.keys() ?? [])]
+      .filter(memberId => {
+        const suffix = memberId.slice(prefix.length);
+        return memberId.startsWith(prefix) && suffix !== '' && Number.isInteger(Number(suffix));
+      })
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    expanded.push(...matches.length ? matches : [memberRef]);
+  }
+  return [...new Set(expanded)];
+}
+
+function surfaceHighlightMemberRefs(surfaceObj, memberIndex) {
+  const refs = [
+    ...(surfaceObj.supported_by ?? []),
+    ...(surfaceObj.load_transfer?.to_members ?? []).flatMap(rule => rule.member_refs ?? []),
+  ];
+  return expandViewerMemberRefs(refs, memberIndex);
+}
+
+function addSurfaces(g, pk, list, opacity, memberIndex) {
   const geoName = g.userData.geoName;
   for (const s of list ?? []) {
     const poly = s.polygon;
@@ -1664,7 +1766,7 @@ function addSurfaces(g, pk, list, opacity) {
     const mesh = new THREE.Mesh(mg, new THREE.MeshBasicMaterial(
       { color: col, transparent: true, opacity, side: THREE.DoubleSide }
     ));
-    const memberRefs = [...new Set((s.load_transfer?.to_members ?? []).flatMap(rule => rule.member_refs ?? []))];
+    const memberRefs = surfaceHighlightMemberRefs(s, memberIndex);
     mesh.userData = {
       id: s.id,
       kind: s.type ?? 'surface',
@@ -1690,6 +1792,7 @@ function addSurfaces(g, pk, list, opacity) {
       line.userData = { id: s.id, kind: s.type ?? 'surface', _geoName: geoName };
       g.add(line);
     }
+    addSolarPanelGrid(g, s, poly, thicknessMm, opacity);
   }
 }
 
@@ -2102,8 +2205,8 @@ async function renderGeoFor(name, resolved, options = {}) {
   geoGroups.set(name, g);
   const memberIndex = buildMemberIndex(resolved);
   addMembers(g, pickable, resolved);
-  addSurfaces(g, pickable, resolved.surfaces, 0.30);
-  addSurfaces(g, pickable, resolved.reference_surfaces, 0.12);
+  addSurfaces(g, pickable, resolved.surfaces, 0.30, memberIndex);
+  addSurfaces(g, pickable, resolved.reference_surfaces, 0.12, memberIndex);
   addFoundations(g, pickable, resolved.foundations, memberIndex);
   const notchCutsMap = addConnections(g, pickable, resolved.connections, memberIndex);
   await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
