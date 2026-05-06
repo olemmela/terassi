@@ -45,7 +45,33 @@
           [7200, 4400],
           [0, 2700]
         ]
-      }
+      },
+      "openings": [
+       {
+         "id": "opening.house_wall.door",
+         "type": "door",
+         "u0_mm": 2350,
+         "v0_mm": 0,
+         "width_mm": 1000,
+         "height_mm": 2300
+       },
+       {
+         "id": "opening.house_wall.window",
+         "type": "window",
+         "u0_mm": 550,
+         "v0_mm": 500,
+         "width_mm": 1800,
+         "height_mm": 1800
+       },
+       {
+         "id": "opening.kitchen.window",
+         "type": "window",
+         "u0_mm": 4400,
+         "v0_mm": 900,
+         "width_mm": 1400,
+         "height_mm": 1400
+       }
+      ]
     },
     { 
       "id": "ref.house_wall_corner",

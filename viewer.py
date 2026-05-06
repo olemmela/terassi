@@ -314,6 +314,7 @@ _HTML = """<!DOCTYPE html>
       <div class="li"><div class="ld" style="background:rgba(0,160,160,.6)"></div>Lasipinta</div>
       <div class="li"><div class="ld" style="background:rgba(60,140,60,.6)"></div>Kattopinta</div>
       <div class="li"><div class="ld" style="background:#e8f2ff"></div>Aurinkopaneelien rajat</div>
+      <div class="li"><div class="ld" style="background:#ffdd33"></div>Ovi-/ikkuna-aukko</div>
       <div class="li"><div class="ld" style="background:rgba(150,130,100,.3)"></div>Viitepinta</div>
       <div class="li"><div class="ld" style="background:#ff4444;border-radius:50%"></div>Tuki (supported_on)</div>
       <div class="li"><div class="ld" style="background:#66aaff;border-radius:50%"></div>Siirtolinkki (transfer_link)</div>
@@ -525,6 +526,7 @@ const CONNECTION_DETAIL_PLATE_COLOR = 0xb0b7c3;
 const CONNECTION_DETAIL_POINT_COLOR = 0xffe066;
 const CONNECTION_DETAIL_BOLT_COLOR = 0xf7c948;
 const SOLAR_PANEL_GRID_COLOR = 0xe8f2ff;
+const OPENING_EDGE_COLOR = 0xffdd33;
 
 // ── Scene groups (yksi per ladattu geometria) ─────────────────────────────────
 const geoGroups = new Map(); // name → THREE.Group
@@ -712,6 +714,13 @@ function loadTransferRuleSummary(rule) {
 
 function surfaceTooltipLines(surfaceObj) {
   const lines = [`${surfaceObj.id}  —  ${surfaceObj.type ?? 'surface'}`];
+  if (Array.isArray(surfaceObj.openings) && surfaceObj.openings.length) {
+    const summary = surfaceObj.openings
+      .slice(0, 4)
+      .map(opening => `${opening.id} (${opening.type ?? 'opening'})`)
+      .join(', ');
+    lines.push(`openings: ${summary}${surfaceObj.openings.length > 4 ? `, +${surfaceObj.openings.length - 4} muuta` : ''}`);
+  }
   if (Array.isArray(surfaceObj.supported_by) && surfaceObj.supported_by.length) {
     lines.push(`supported_by: ${summarizeMemberRefs(surfaceObj.supported_by)}`);
   }
@@ -720,6 +729,16 @@ function surfaceTooltipLines(surfaceObj) {
     for (const rule of rules) lines.push(`load_transfer: ${loadTransferRuleSummary(rule)}`);
   }
   return lines;
+}
+
+function openingTooltipLines(opening, surfaceObj) {
+  const type = opening.type ?? 'opening';
+  return [
+    `${opening.id}  —  ${type}`,
+    `parent: ${surfaceObj.id}`,
+    `u/v: ${opening.u0_mm} / ${opening.v0_mm} mm`,
+    `size: ${opening.width_mm} × ${opening.height_mm} mm`,
+  ];
 }
 
 function foundationTooltipLines(foundation) {
@@ -1633,17 +1652,28 @@ function surfaceFrame(poly) {
   return { origin, xAxis, yAxis, normal };
 }
 
-function buildSurfaceGeometry(poly, thicknessMm = 0) {
-  const frame = surfaceFrame(poly);
-  if (!frame) return null;
-
-  let points2 = poly.map(p => {
+function polygonToSurfacePoints2(poly, frame) {
+  return poly.map(p => {
     const rel = pt(p).sub(frame.origin);
     return new THREE.Vector2(rel.dot(frame.xAxis), rel.dot(frame.yAxis));
   });
+}
+
+function buildSurfaceGeometry(poly, thicknessMm = 0, openingPolygons = []) {
+  const frame = surfaceFrame(poly);
+  if (!frame) return null;
+
+  let points2 = polygonToSurfacePoints2(poly, frame);
   if (signedArea2D(points2) < 0) points2 = points2.reverse();
 
   const shape = new THREE.Shape(points2);
+  for (const openingPoly of openingPolygons ?? []) {
+    if (!Array.isArray(openingPoly) || openingPoly.length < 3) continue;
+    let holePoints = polygonToSurfacePoints2(openingPoly, frame);
+    if (signedArea2D(holePoints) > 0) holePoints = holePoints.reverse();
+    shape.holes.push(new THREE.Path(holePoints));
+  }
+
   const geom = thicknessMm > 0
     ? new THREE.ExtrudeGeometry(shape, { depth: thicknessMm, bevelEnabled: false })
     : new THREE.ShapeGeometry(shape);
@@ -1655,6 +1685,12 @@ function buildSurfaceGeometry(poly, thicknessMm = 0) {
   geom.applyMatrix4(basis);
   geom.computeVertexNormals();
   return geom;
+}
+
+function openingPolygons(surfaceObj) {
+  return (surfaceObj.openings ?? [])
+    .map(opening => opening.polygon)
+    .filter(poly => Array.isArray(poly) && poly.length >= 3);
 }
 
 function surfaceLocalBounds(poly, frame) {
@@ -1727,6 +1763,41 @@ function addSolarPanelGrid(g, surfaceObj, poly, thicknessMm, opacity) {
   g.add(grid);
 }
 
+function addOpeningOutlines(g, pk, surfaceObj, poly, thicknessMm, opacity) {
+  if (!Array.isArray(surfaceObj.openings) || surfaceObj.openings.length === 0) return;
+  const frame = surfaceFrame(poly);
+  if (!frame) return;
+  const normalOffsetMm = thicknessMm / 2 + 5;
+
+  for (const opening of surfaceObj.openings) {
+    const openingPoly = opening.polygon;
+    if (!Array.isArray(openingPoly) || openingPoly.length < 3) continue;
+    const points = openingPoly
+      .map(p => pt(p).add(frame.normal.clone().multiplyScalar(normalOffsetMm)));
+    points.push(points[0].clone());
+
+    const line = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(points),
+      new THREE.LineBasicMaterial({
+        color: OPENING_EDGE_COLOR,
+        transparent: true,
+        opacity: Math.min(opacity * 4, 1),
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    line.renderOrder = 24;
+    line.userData = {
+      id: opening.id,
+      kind: opening.type ?? 'opening',
+      _geoName: g.userData.geoName,
+      tooltipLines: openingTooltipLines(opening, surfaceObj),
+    };
+    g.add(line);
+    pk.push(line);
+  }
+}
+
 function expandViewerMemberRefs(memberRefs, memberIndex) {
   const expanded = [];
   for (const memberRef of memberRefs ?? []) {
@@ -1761,7 +1832,7 @@ function addSurfaces(g, pk, list, opacity, memberIndex) {
     if (!poly || poly.length < 3) continue;
     const col = SCOL[s.type] ?? 0xaaaaaa;
     const thicknessMm = Math.max(0, s.thickness_mm ?? 0);
-    const mg = buildSurfaceGeometry(poly, thicknessMm);
+    const mg = buildSurfaceGeometry(poly, thicknessMm, openingPolygons(s));
     if (!mg) continue;
     const mesh = new THREE.Mesh(mg, new THREE.MeshBasicMaterial(
       { color: col, transparent: true, opacity, side: THREE.DoubleSide }
@@ -1793,6 +1864,7 @@ function addSurfaces(g, pk, list, opacity, memberIndex) {
       g.add(line);
     }
     addSolarPanelGrid(g, s, poly, thicknessMm, opacity);
+    addOpeningOutlines(g, pk, s, poly, thicknessMm, opacity);
   }
 }
 

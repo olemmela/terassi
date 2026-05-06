@@ -254,6 +254,10 @@ mitat (`size_mm`), maanpintaviite (`ground_ref`), routaeristys,
 maanpeitteen ominaispaino ja ankkurointitapa. Perustustarkistus laskee
 peitesyvyydet `ref.ground`-pinnasta, joten syvyyttä ei tarvitse ylläpitää
 erillisenä rinnakkaisena arvona.
+`reference_surfaces[*].openings` kuvaa talon seinien ovi- ja ikkuna-aukot
+seinän paikallisilla `u/v`-koordinaateilla (`u0_mm`, `v0_mm`, `width_mm`,
+`height_mm`). `geometry_loader.py` resolvoi aukot 3D-polygoneiksi ja
+`viewer.py` näyttää ne oikeina aukkoina viitepinnassa.
 `connections` voi lisäksi sisältää loveus-/leikkausmetatietoa:
 vanha yksittäinen `notch` toimii yhä, mutta `notched_over`-liitokselle voi
 nyt antaa myös `cuts`-listan. Listan itemit voivat olla

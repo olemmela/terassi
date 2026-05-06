@@ -132,7 +132,26 @@
         "ref":         { "type": "string" },
         "placement":   { "$ref": "#/$defs/placement" },
         "local_shape": { "$ref": "#/$defs/local_shape" },
-        "polygon":     { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } }
+        "polygon":     { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/reference_surface_opening" }
+        }
+      }
+    },
+
+    "reference_surface_opening": {
+      "type": "object",
+      "required": ["id", "type", "u0_mm", "v0_mm", "width_mm", "height_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "id":        { "type": "string" },
+        "type":      { "type": "string", "enum": ["door", "window", "opening"] },
+        "u0_mm":     { "type": "number" },
+        "v0_mm":     { "type": "number" },
+        "width_mm":  { "type": "number", "exclusiveMinimum": 0 },
+        "height_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "polygon":   { "type": "array", "minItems": 4, "items": { "$ref": "#/$defs/point" } }
       }
     },
 

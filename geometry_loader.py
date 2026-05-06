@@ -289,12 +289,33 @@ def _compute_polygon(placement, local_shape):
     return polygon
 
 
+def _compute_opening_polygon(placement, opening):
+    u0 = float(opening["u0_mm"])
+    v0 = float(opening["v0_mm"])
+    width = float(opening["width_mm"])
+    height = float(opening["height_mm"])
+    return _compute_polygon(
+        placement,
+        {
+            "type": "polygon",
+            "vertices_uv": [
+                [u0, v0],
+                [u0 + width, v0],
+                [u0 + width, v0 + height],
+                [u0, v0 + height],
+            ],
+        },
+    )
+
+
 def _resolve_polygons(geo):
     """Laskee jokaiselle pinnalle 3D-polygonin placement+local_shape -kuvauksesta
     ja asettaa sen 'polygon'-kenttään. Python-laskelmat lukevat 'polygon'-kenttää."""
     for ref in geo.get("reference_surfaces", []):
         if "placement" in ref:
             ref["polygon"] = _compute_polygon(ref["placement"], ref["local_shape"])
+            for opening in ref.get("openings", []):
+                opening["polygon"] = _compute_opening_polygon(ref["placement"], opening)
     for s in geo.get("surfaces", []):
         if "placement" in s:
             s["polygon"] = _compute_polygon(s["placement"], s["local_shape"])
