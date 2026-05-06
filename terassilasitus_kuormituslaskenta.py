@@ -3626,8 +3626,16 @@ print("  * Reunapaneelin ulkopuolikas siirtyy geometry/terassi_puu.json:n")
 print("    load_transfer.member_refs- ja tributary_width_mm-metadatan mukaisesti orsien kautta;")
 print("    reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa.")
 print("  * Orsien oma paino mallinnetaan viivakuormana.")
-print("  * Seinän täytekaistan ulkoreuna tukeutuu erilliselle tukiorrelle; sen")
-print("    reaktiot siirretään kattotuoleille, ei aurinkopaneelikentälle.")
+if infill_glass_summary is not None:
+    print("  * Seinän täytekaistan ulkoreuna tukeutuu erilliselle tukiorrelle; sen")
+    print("    reaktiot siirretään kattotuoleille, ei aurinkopaneelikentälle.")
+else:
+    panel_edge_gap_mm = roof_y0_mm - drift_obstacle_y_mm
+    if panel_edge_gap_mm > 0.5:
+        print(f"  * Paneelikenttä alkaa {panel_edge_gap_mm:.0f} mm seinälinjasta; jäljelle jäävä kapea")
+        print("    täytekaista oletetaan pelliksi/laudaksi eikä sitä mitoiteta lasina.")
+    else:
+        print("  * Paneelikenttä alkaa seinälinjasta; erillistä täytekaistaa ei ole.")
 print("  * Pystylasitusten omapaino ja tuuli summataan geometriasta; seinänpuolen")
 print("    LP225×90-yläreunapalkit tarkistetaan vaakatuulen yläreunareaktiolle.")
 print("  * Pystylasitukset tarkistetaan alustavasti 8 mm lasilevynä yksisuuntaisella")

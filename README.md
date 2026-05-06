@@ -70,9 +70,9 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
   eli `reference = axis_end`, `offset_mm = -15`)
 - Aurinkopaneelien kinostumatarkistuksen valmistajan etupuolen 5.40 kN/m²
   mekaanista rajaa vasten, nykygeometrian mitoittavalla paneelisarakkeella
-- Seinän viereisen 8 mm lasisen täytekaistan omapaino-, lumi-/kinostuma-,
-  noste-, taivutus- ja taipumatarkistuksen sekä ulkoreunan tukiorren kuormareitin
-  kattotuoleille
+- AIKO Neostar 2S+60 AIKO-A500-MAH60Db -paneelikentän geometrian ja kuormat; paneelit alkavat
+  140 mm seinälinjasta ja jäljelle jäävä kapea täytekaista oletetaan
+  pelliksi/laudaksi, ei rakenteelliseksi lasiksi
 - Pystylasitusten omapaino- ja tuulikuormayhteenvedon geometriasta sekä
   alustavan lasipaneelien oman tuulitaivutus-/jännitystarkistuksen
   yksisuuntaisella ylä-/alakiskojen välisellä kaistamallilla
@@ -125,9 +125,9 @@ kaistalevyliitoksilla.
 - `transfer_link`-liitospisteistä luettujen kaistalevyjen jousijäykkyyden
 - Kaistalevyjen M12-pulttien ja puun reunapuristuksen kapasiteettitarkistukset
 - Kaistalevyjen teräslevyn in-plane shear -tarkistuksen
-- Seinän viereisen 8 mm lasisen täytekaistan, sen ulkoreunan tukiorren sekä
-  pystylasitusten, seinänpuolen aukkolasien LP225×90-yläreunapalkkien,
-  sivulasien reunakattotuolien ja päätykolmiolasin omapaino- ja tuulikuormien
+- AIKO Neostar 2S+60 AIKO-A500-MAH60Db -paneelien geometrian ja kuormat sekä pystylasitusten,
+  seinänpuolen aukkolasien LP225×90-yläreunapalkkien, sivulasien
+  reunakattotuolien ja päätykolmiolasin omapaino- ja tuulikuormien
   tarkistukset kuten pääpuuratkaisussa
 - Siirtovyöhykkeen perusteella johdetun ekvivalentin vasemman tukipisteen ja
   sisäpalkin efektiivisen jännevälin
@@ -270,7 +270,11 @@ Lisäksi `connections.analysis` voi kuvata analyysikäyttäytymisen
 (`support_model`, `support_line_ref`, `reaction_distribution`, `rotation_spring`) ja
 `surfaces[*].load_transfer` voi kuvata, siirtyykö pinta-kuorma jäsenille
 pistekuormana, viivakuormana vai osaviivakuormana; säännöt osoittavat
-kohdejäseniin eksplisiittisesti `member_refs`-listalla. Tämä on toistaiseksi
+kohdejäseniin `member_refs`-listalla. `member_refs` ja `supported_by` voivat
+viitata myös pattern-juureen (esim. `orsi.vasen`) tai `id_template`-aliakseen
+(esim. `kattotuoli` template-muodosta `kattotuoli.{i}`), jolloin
+`geometry_loader.py` laajentaa sen laskennassa yksittäisiksi jäseniksi
+(`orsi.vasen.0`, `orsi.vasen.1`, ...). Tämä on toistaiseksi
 otettu käyttöön lopullisen puurakenteen laskurissa
 `terassilasitus_kuormituslaskenta.py` tiedostolle `geometry/terassi_puu.json`.
 `reaction_distribution` kuvaa jäsenliitoksen tukireaktion paikallisen

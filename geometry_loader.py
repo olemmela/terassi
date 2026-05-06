@@ -32,6 +32,7 @@ def load(name):
     _resolve_named_points(geo)
     _resolve_member_refs(geo)
     _resolve_surface_refs(geo)
+    _resolve_surface_member_patterns(geo)
     _resolve_polygons(geo)
     return geo
 
@@ -145,6 +146,88 @@ def _resolve_surface_refs(geo):
             anchor = s.get("placement", {}).get("anchor")
             if anchor is not None:
                 _apply_ref_offset(anchor, (p["x"], p["y"], p["z"]))
+
+
+def _pattern_ref_alias(id_template):
+    """Palauttaa lyhyen alias-juuren id_template-muodosta kuten 'kattotuoli.{i}'."""
+    if "{i}" not in id_template:
+        return None
+    before, after = id_template.split("{i}", 1)
+    if after:
+        return None
+    alias = before.rstrip(".-_")
+    return alias or None
+
+
+def _pattern_member_specs(geo):
+    specs = {}
+    member_ids = {
+        member_obj["id"]
+        for group in ("beams", "rafters", "purlins")
+        for member_obj in geo.get("members", {}).get(group, [])
+    }
+    alias_candidates = {}
+    for group in ("beams", "rafters", "purlins"):
+        for member_obj in geo.get("members", {}).get(group, []):
+            pattern = member_obj.get("pattern")
+            if not pattern:
+                continue
+            id_template = pattern.get("id_template", member_obj["id"] + ".{i}")
+            spec = {
+                "count": int(pattern["count"]),
+                "offset": dict(pattern["offset"]),
+                "id_template": id_template,
+                "first_instance_id": id_template.replace("{i}", "0"),
+            }
+            specs[member_obj["id"]] = spec
+
+            alias = _pattern_ref_alias(id_template)
+            if alias is not None and alias not in member_ids:
+                alias_candidates.setdefault(alias, []).append(spec)
+
+    for alias, candidates in alias_candidates.items():
+        if len(candidates) == 1:
+            specs[alias] = candidates[0]
+    return specs
+
+
+def _expand_member_ref_list(member_refs, pattern_specs):
+    expanded = []
+    for member_id in member_refs:
+        spec = pattern_specs.get(member_id)
+        # Avoid ambiguous roots like "kattotuoli.0", which may intentionally
+        # refer only to the first instance rather than the whole pattern.
+        if spec is not None and member_id != spec["first_instance_id"]:
+            expanded.extend(spec["id_template"].replace("{i}", str(i)) for i in range(spec["count"]))
+        else:
+            expanded.append(member_id)
+
+    deduped = []
+    seen = set()
+    for member_id in expanded:
+        if member_id in seen:
+            continue
+        deduped.append(member_id)
+        seen.add(member_id)
+    return deduped
+
+
+def _resolve_surface_member_patterns(geo):
+    """Laajentaa pintojen jäsenviittauksissa pattern-juuret yksittäisiksi ID:iksi."""
+    pattern_specs = _pattern_member_specs(geo)
+    if not pattern_specs:
+        return
+
+    for surface_obj in geo.get("surfaces", []):
+        if isinstance(surface_obj.get("supported_by"), list):
+            surface_obj["supported_by"] = _expand_member_ref_list(surface_obj["supported_by"], pattern_specs)
+
+        load_transfer = surface_obj.get("load_transfer")
+        if not isinstance(load_transfer, dict):
+            continue
+        for rule in load_transfer.get("to_members", []):
+            if isinstance(rule.get("member_refs"), list):
+                rule["member_refs"] = _expand_member_ref_list(rule["member_refs"], pattern_specs)
 
 
 def _axis_vec(axis):
@@ -266,20 +349,7 @@ def expanded_members(geo, group):
 
 
 def _connection_pattern_specs(geo):
-    specs = {}
-    for group in ("beams", "rafters", "purlins"):
-        for member_obj in geo.get("members", {}).get(group, []):
-            pattern = member_obj.get("pattern")
-            if not pattern:
-                continue
-            id_template = pattern.get("id_template", member_obj["id"] + ".{i}")
-            specs[member_obj["id"]] = {
-                "count": int(pattern["count"]),
-                "offset": dict(pattern["offset"]),
-                "id_template": id_template,
-                "first_instance_id": id_template.replace("{i}", "0"),
-            }
-    return specs
+    return _pattern_member_specs(geo)
 
 
 def _should_expand_connection_member(connection_obj, pattern_member, spec):
