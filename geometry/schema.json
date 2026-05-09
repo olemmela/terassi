@@ -63,7 +63,18 @@
             "origin_description": { "type": "string" },
             "x_axis":             { "type": "string" },
             "y_axis":             { "type": "string" },
-            "z_axis":             { "type": "string" }
+            "z_axis":             { "type": "string" },
+            "true_north": {
+              "type": "object",
+              "required": ["x", "y"],
+              "additionalProperties": false,
+              "properties": {
+                "x":          { "type": "number" },
+                "y":          { "type": "number" },
+                "source":     { "type": "string" },
+                "confidence": { "type": "string" }
+              }
+            }
           }
         }
       }
@@ -116,6 +127,7 @@
         "id":       { "type": "string" },
         "name":     { "type": "string" },
         "material": { "type": "string" },
+        "render_color": { "type": "string" },
         "b_mm":     { "type": "number" },
         "h_mm":     { "type": "number" },
         "count":    { "type": "integer", "minimum": 1 }
@@ -227,6 +239,7 @@
         "base":                 { "$ref": "#/$defs/point" },
         "top":                  { "$ref": "#/$defs/point" },
         "section_rotation_deg": { "type": "number", "default": 0 },
+        "render_color":         { "type": "string" },
         "existing":             { "type": "boolean", "default": false }
       }
     },
@@ -243,6 +256,7 @@
         "axis_end":             { "$ref": "#/$defs/point" },
         "mass_kg":              { "type": "number" },
         "section_rotation_deg": { "type": "number", "default": 0 },
+        "render_color":         { "type": "string" },
         "existing":             { "type": "boolean", "default": false },
         "pattern": {
           "type": "object",
@@ -656,6 +670,7 @@
         "thickness_mm": { "type": "number" },
         "density_kg_m3": { "type": "number", "exclusiveMinimum": 0 },
         "mass_kg":      { "type": "number" },
+        "existing":     { "type": "boolean", "default": false },
         "count": {
           "type": "object",
           "additionalProperties": false,

@@ -5,7 +5,7 @@ Käyttö:   python3 viewer.py
 Avaa:     http://localhost:5001
 """
 import copy, json, os
-from flask import Flask, jsonify, request, Response
+from flask import Flask, jsonify, request, Response, send_from_directory
 import geometry_loader
 import jsonschema
 
@@ -142,6 +142,42 @@ def index():
     return Response(_HTML, mimetype="text/html")
 
 
+@app.route("/assets/<path:filename>")
+def get_asset(filename):
+    root = os.path.abspath(_SCRIPT_DIR)
+    path = os.path.abspath(os.path.join(root, filename))
+    if not path.startswith(root + os.sep) or not os.path.isfile(path):
+        return jsonify({"error": "Tiedostoa ei löydy"}), 404
+    return send_from_directory(os.path.dirname(path), os.path.basename(path))
+
+
+@app.route("/api/calibration-camera", methods=["PUT"])
+def put_calibration_camera():
+    root = os.path.abspath(_SCRIPT_DIR)
+    try:
+        data = request.get_json(force=True)
+        rel_path = str(data.get("path", "")).strip().replace("\\", "/")
+        if not rel_path or os.path.isabs(rel_path) or rel_path.endswith("/"):
+            return jsonify({"error": "Virheellinen tiedostopolku"}), 400
+        if not rel_path.lower().endswith(".json"):
+            return jsonify({"error": "Kamera tallennetaan .json-tiedostoon"}), 400
+        path = os.path.abspath(os.path.join(root, rel_path))
+        if not path.startswith(root + os.sep):
+            return jsonify({"error": "Tiedostopolku menee repojuuren ulkopuolelle"}), 400
+        calibration = data.get("calibration")
+        if not isinstance(calibration, dict) or not isinstance(calibration.get("camera"), dict):
+            return jsonify({"error": "Kamera-JSON:sta puuttuu camera-objekti"}), 400
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(calibration, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        return jsonify({"ok": True, "path": rel_path})
+    except json.JSONDecodeError as e:
+        return jsonify({"error": f"JSON-virhe: {e}"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/geometry/<name>")
 def get_geometry(name):
     try:
@@ -258,28 +294,68 @@ _HTML = """<!DOCTYPE html>
 
   #main { display: flex; flex: 1; overflow: hidden; }
 
-  #editor-panel { width: 420px; min-width: 180px; display: flex;
+  #editor-panel { width: 420px; min-width: 260px; display: flex;
     flex-direction: column; flex-shrink: 0; }
   #editor { flex: 1; resize: none; background: #1e1e1e; color: #d4d4d4;
     border: none; border-right: 1px solid #444; outline: none; padding: 10px;
     font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;
     line-height: 1.5; tab-size: 2; overflow: auto; }
+  #editor[hidden] { display: none; }
 
   #resizer { width: 4px; background: #444; cursor: col-resize; flex-shrink: 0; }
   #resizer:hover, #resizer.dragging { background: #0066cc; }
 
-  #viewport { flex: 1; position: relative; overflow: hidden; outline: none; }
+  #viewport { flex: 1; position: relative; overflow: hidden; outline: none; background: #1a1a2e; }
   #viewport:focus { box-shadow: inset 0 0 0 2px rgba(0,136,255,.55); }
   canvas { display: block; }
+  #viewport canvas { position: absolute; left: 0; top: 0; z-index: 1; }
+  #calibration-bg {
+    position: absolute; left: 0; top: 0; display: none; object-fit: contain;
+    pointer-events: none; z-index: 0; background: #111; opacity: .72;
+  }
 
   #tooltip { position: absolute; pointer-events: none;
     background: rgba(0,0,0,.8); color: #fff; padding: 6px 9px;
     border-radius: 4px; font-size: 12px; display: none; white-space: pre-line;
-    line-height: 1.35; max-width: 420px; }
+    line-height: 1.35; max-width: 420px; z-index: 4; }
 
   #legend { position: absolute; bottom: 10px; right: 10px;
     background: rgba(0,0,0,.65); padding: 8px 12px; border-radius: 6px;
-    font-size: 11px; line-height: 1.8; }
+    font-size: 11px; line-height: 1.8; z-index: 2; }
+  #calibration-panel {
+    flex: 1; min-height: 0; overflow: auto;
+    background: #12161c; border: none; border-right: 1px solid #444;
+    padding: 10px; font-size: 12px;
+  }
+  #calibration-panel[hidden] { display: none; }
+  .calib-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .calib-row label { display: flex; align-items: center; gap: 6px; color: #d7dde5; }
+  .calib-row input[type="text"] {
+    width: 250px; max-width: 100%; background: #14181e; color: #e8edf2;
+    border: 1px solid #52616d; border-radius: 4px; padding: 4px 6px;
+  }
+  .calib-row input[type="range"] { width: 140px; }
+  .calib-value { min-width: 40px; color: #e8edf2; font-variant-numeric: tabular-nums; }
+  .calib-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 8px 0; }
+  .calib-grid label { display: flex; flex-direction: column; gap: 3px; color: #bfc7d1; }
+  .calib-grid input {
+    min-width: 0; background: #14181e; color: #e8edf2; border: 1px solid #52616d;
+    border-radius: 4px; padding: 4px 5px; font: inherit;
+  }
+  .calib-btn {
+    padding: 4px 9px; border: 1px solid #596774; background: #2f3943; color: #e2e8ef;
+    cursor: pointer; border-radius: 4px; font-size: 12px;
+  }
+  .calib-btn:hover { background: #3c4854; }
+  .calib-btn.active { background: #2b5d8a; border-color: #6ab0ff; color: #fff; }
+  #viewport.calibration-pan canvas { cursor: grab; }
+  #viewport.calibration-panning canvas { cursor: grabbing; }
+  #calib-camera-json {
+    width: 100%; height: 130px; resize: vertical; background: #101419; color: #d9e4ee;
+    border: 1px solid #52616d; border-radius: 4px; padding: 7px;
+    font-family: 'Consolas', 'Monaco', monospace; font-size: 11px; line-height: 1.35;
+  }
+  .calib-help { color: #aeb8c3; line-height: 1.35; margin-top: 6px; }
   .li { display: flex; align-items: center; gap: 7px; }
   .ld { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
   .ld-dot { border-radius: 50%; background: currentColor; }
@@ -297,6 +373,7 @@ _HTML = """<!DOCTYPE html>
   <span id="status">Ladataan...</span>
   <button class="btn-toggle" id="btn-connections" aria-pressed="false">&#9675; Liitospisteet</button>
   <button class="btn-toggle" id="btn-analysis" aria-pressed="false">&#9675; Analyysi-overlayt</button>
+  <button class="btn-toggle" id="btn-calibration" aria-pressed="false">&#9675; Kuvakalibrointi</button>
   <button class="btn-save" id="btn-save">&#128190; Tallenna</button>
 </div>
 <div id="main">
@@ -305,7 +382,67 @@ _HTML = """<!DOCTYPE html>
   </div>
   <div id="resizer"></div>
   <div id="viewport">
+    <img id="calibration-bg" alt="">
     <div id="tooltip"></div>
+    <div id="calibration-panel" hidden>
+      <div class="calib-row">
+        <label>Taustakuva
+          <input id="calib-image-path" type="text" value="kuvat/IMG_2837.jpeg">
+        </label>
+        <button class="calib-btn" id="calib-load-image">Lataa</button>
+        <button class="calib-btn" id="calib-hide-image">Piilota kuva</button>
+        <button class="calib-btn" id="calib-fit-model">Sovita malli</button>
+      </div>
+      <div class="calib-row">
+        <label>kuvan läpinäkyvyys
+          <input id="calib-image-opacity" type="range" min="0.15" max="1" step="0.05" value="0.72">
+        </label>
+        <label>taustakuvan zoom
+          <input id="calib-image-zoom" type="range" min="1" max="3" step="0.25" value="1">
+        </label>
+        <span id="calib-image-zoom-value" class="calib-value">1×</span>
+        <button class="calib-btn" id="calib-image-pan-mode" type="button">Siirrä zoom-kohtaa</button>
+        <button class="calib-btn" id="calib-image-pan-reset" type="button">Keskitä</button>
+        <span id="calib-image-pan-value" class="calib-value">x 0 px, y 0 px</span>
+        <label>3D-rakenteiden näkyvyys
+          <input id="calib-model-opacity" type="range" min="0.05" max="1" step="0.05" value="1">
+        </label>
+        <span id="calib-model-opacity-value">100 %</span>
+        <span id="calib-render-size">ei kuvaa</span>
+      </div>
+      <div class="calib-grid">
+        <label>kamera X<input id="calib-pos-x" type="number" step="10"></label>
+        <label>kamera Y<input id="calib-pos-y" type="number" step="10"></label>
+        <label>kamera Z<input id="calib-pos-z" type="number" step="10"></label>
+        <label>FOV °<input id="calib-fov" type="number" step="0.1" min="1" max="120"></label>
+        <label>target X<input id="calib-target-x" type="number" step="10"></label>
+        <label>target Y<input id="calib-target-y" type="number" step="10"></label>
+        <label>target Z<input id="calib-target-z" type="number" step="10"></label>
+        <label>zoom<input id="calib-zoom" type="number" step="0.01" min="0.01"></label>
+        <label>roll °<input id="calib-roll" type="number" step="0.1"></label>
+      </div>
+      <div class="calib-row">
+        <button class="calib-btn" id="calib-copy-camera">Kopioi kameran JSON</button>
+        <button class="calib-btn" id="calib-save-local">Tallenna selaimeen</button>
+        <button class="calib-btn" id="calib-restore-local">Palauta selaimesta</button>
+      </div>
+      <div class="calib-row">
+        <label>Kamera JSON
+          <input id="calib-camera-json-path" type="text" value="kuvat/IMG_2837_viewer_camera.json">
+        </label>
+        <button class="calib-btn" id="calib-load-camera-json">Palauta polusta</button>
+        <button class="calib-btn" id="calib-save-camera-json">Tallenna kamera JSON</button>
+        <input id="calib-import-camera-json" type="file" accept="application/json,.json">
+      </div>
+      <textarea id="calib-camera-json" spellcheck="false"></textarea>
+      <div class="calib-help">
+        Säädä näkymää hiirellä, rullalla ja nuolinäppäimillä. Nuoli siirtää kameraa, Ctrl+nuoli kääntää,
+        Alt+vasen/oikea kallistaa kameraa (roll) ja Shift kasvattaa askelta. 3D-rakenteiden näkyvyys helpottaa
+        mallin sovittamista valokuvaa vasten. Taustakuvan zoom suurentaa kuvan ja 3D-overlayn yhdessä
+        tarkempaa kohdistusta varten; **Siirrä zoom-kohtaa** -tilassa zoomattua näkymää voi raahata.
+        Kameran voi palauttaa repojuuren JSON-polusta tai paikallisesta tiedostosta.
+      </div>
+    </div>
     <div id="legend">
       <div class="li"><div class="ld" style="background:#888"></div>Pilari</div>
       <div class="li"><div class="ld" style="background:#2266cc"></div>Palkki</div>
@@ -365,10 +502,11 @@ async function getCSG() {
 
 // ── Renderer & scene ──────────────────────────────────────────────────────────
 const vp = document.getElementById('viewport');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const calibrationBg = document.getElementById('calibration-bg');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
 renderer.setPixelRatio(window.devicePixelRatio);
-renderer.setClearColor(0x1a1a2e);
-vp.appendChild(renderer.domElement);
+renderer.setClearColor(0x1a1a2e, 0);
+vp.insertBefore(renderer.domElement, calibrationBg.nextSibling);
 vp.tabIndex = 0;
 vp.setAttribute('aria-label', '3D-näkymä');
 
@@ -377,11 +515,49 @@ const camera = new THREE.PerspectiveCamera(50, 1, 1, 200000);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
+controls.rotateSpeed = 0.25;
+controls.panSpeed = 0.25;
+controls.zoomSpeed = 0.55;
 vp.addEventListener('pointerdown', () => vp.focus({ preventScroll: true }));
 
-const KEY_MOVE_STEP_MM = 120;
-const KEY_ROTATE_STEP_RAD = THREE.MathUtils.degToRad(3);
+const KEY_MOVE_STEP_MM = 20;
+const KEY_ROTATE_STEP_RAD = THREE.MathUtils.degToRad(0.5);
 const WORLD_UP = new THREE.Vector3(0, 1, 0);
+let cameraRollRad = 0;
+
+function rolledCameraUp() {
+  const viewDir = controls.target.clone().sub(camera.position);
+  if (viewDir.lengthSq() < 1e-12) return WORLD_UP.clone();
+  viewDir.normalize();
+
+  let up = WORLD_UP.clone().projectOnPlane(viewDir);
+  if (up.lengthSq() < 1e-10) {
+    up = new THREE.Vector3(1, 0, 0).projectOnPlane(viewDir);
+  }
+  if (up.lengthSq() < 1e-10) return WORLD_UP.clone();
+  up.normalize();
+  if (Math.abs(cameraRollRad) > 1e-12) {
+    up.applyAxisAngle(viewDir, cameraRollRad).normalize();
+  }
+  return up;
+}
+
+function applyCameraRoll() {
+  camera.up.copy(rolledCameraUp());
+  camera.lookAt(controls.target);
+  camera.updateMatrixWorld(true);
+}
+
+function updateControlsWithRoll() {
+  controls.update();
+  applyCameraRoll();
+}
+
+function adjustCameraRoll(deltaRad) {
+  cameraRollRad += deltaRad;
+  updateControlsWithRoll();
+  updateCalibrationPanelFromCamera();
+}
 
 function translateViewLocal(forwardMm, strafeMm = 0) {
   const forward = new THREE.Vector3();
@@ -393,7 +569,7 @@ function translateViewLocal(forwardMm, strafeMm = 0) {
   const delta = forward.multiplyScalar(forwardMm).add(right.multiplyScalar(strafeMm));
   camera.position.add(delta);
   controls.target.add(delta);
-  controls.update();
+  updateControlsWithRoll();
 }
 
 function rotateViewInPlace(yawRad = 0, pitchRad = 0) {
@@ -409,14 +585,25 @@ function rotateViewInPlace(yawRad = 0, pitchRad = 0) {
   }
 
   controls.target.copy(camera.position.clone().add(offset));
-  controls.update();
+  updateControlsWithRoll();
 }
 
 vp.addEventListener('keydown', e => {
   const moveStep = e.shiftKey ? KEY_MOVE_STEP_MM * 5 : KEY_MOVE_STEP_MM;
   const rotateStep = e.shiftKey ? KEY_ROTATE_STEP_RAD * 3 : KEY_ROTATE_STEP_RAD;
 
-  if (e.ctrlKey || e.metaKey) {
+  if (e.altKey) {
+    switch (e.key) {
+      case 'ArrowLeft':
+        adjustCameraRoll(+rotateStep);
+        break;
+      case 'ArrowRight':
+        adjustCameraRoll(-rotateStep);
+        break;
+      default:
+        return;
+    }
+  } else if (e.ctrlKey || e.metaKey) {
     switch (e.key) {
       case 'ArrowLeft':
         rotateViewInPlace(+rotateStep, 0);
@@ -463,16 +650,106 @@ const grid = new THREE.GridHelper(16000, 32, 0x333333, 0x282828);
 scene.add(grid);
 scene.add(new THREE.AxesHelper(600));
 
+const calibrationImage = {
+  enabled: false,
+  path: 'kuvat/IMG_2837.jpeg',
+  naturalWidth: 0,
+  naturalHeight: 0,
+  displayZoom: 1,
+  displayPan: { x: 0, y: 0 },
+  pendingDisplayPan: null,
+  baseRenderRect: { left: 0, top: 0, width: 1, height: 1 },
+  renderRect: { left: 0, top: 0, width: 1, height: 1 },
+};
+
+function containedImageRect(containerW, containerH, imageW, imageH) {
+  if (!imageW || !imageH || !containerW || !containerH) {
+    return { left: 0, top: 0, width: containerW, height: containerH };
+  }
+  const scale = Math.min(containerW / imageW, containerH / imageH);
+  const width = imageW * scale;
+  const height = imageH * scale;
+  return {
+    left: (containerW - width) / 2,
+    top: (containerH - height) / 2,
+    width,
+    height,
+  };
+}
+
+function clampImagePan(pan, baseRect = calibrationImage.baseRenderRect, zoom = calibrationImage.displayZoom) {
+  const safeZoom = Math.max(1, Number(zoom) || 1);
+  const maxX = Math.max(0, baseRect.width * (safeZoom - 1) / 2);
+  const maxY = Math.max(0, baseRect.height * (safeZoom - 1) / 2);
+  return {
+    x: THREE.MathUtils.clamp(Number(pan?.x) || 0, -maxX, maxX),
+    y: THREE.MathUtils.clamp(Number(pan?.y) || 0, -maxY, maxY),
+  };
+}
+
+function zoomedImageRect(baseRect, zoom, pan) {
+  const safeZoom = Math.max(1, Number(zoom) || 1);
+  const safePan = clampImagePan(pan, baseRect, safeZoom);
+  if (safeZoom === 1) return { ...baseRect };
+  const centerX = baseRect.left + baseRect.width / 2;
+  const centerY = baseRect.top + baseRect.height / 2;
+  const width = baseRect.width * safeZoom;
+  const height = baseRect.height * safeZoom;
+  return {
+    left: centerX - width / 2 + safePan.x,
+    top: centerY - height / 2 + safePan.y,
+    width,
+    height,
+  };
+}
+
+function currentRenderRect() {
+  const w = Math.max(1, vp.clientWidth);
+  const h = Math.max(1, vp.clientHeight);
+  if (!calibrationImage.enabled) {
+    calibrationImage.baseRenderRect = { left: 0, top: 0, width: w, height: h };
+    return { left: 0, top: 0, width: w, height: h };
+  }
+  const baseRect = containedImageRect(w, h, calibrationImage.naturalWidth, calibrationImage.naturalHeight);
+  calibrationImage.baseRenderRect = baseRect;
+  calibrationImage.displayPan = clampImagePan(calibrationImage.displayPan, baseRect, calibrationImage.displayZoom);
+  return zoomedImageRect(baseRect, calibrationImage.displayZoom, calibrationImage.displayPan);
+}
+
+function updateCalibrationReadout() {
+  const el = document.getElementById('calib-render-size');
+  if (!el) return;
+  if (!calibrationImage.enabled) {
+    el.textContent = 'ei kuvaa';
+    return;
+  }
+  const baseRect = calibrationImage.baseRenderRect;
+  el.textContent = `${Math.round(baseRect.width)}×${Math.round(baseRect.height)} px ` +
+    `@ ${formatZoom(calibrationImage.displayZoom)} ` +
+    `(kuva ${calibrationImage.naturalWidth}×${calibrationImage.naturalHeight})`;
+  updateCalibrationPanReadout();
+}
+
 function resize() {
-  const w = vp.clientWidth, h = vp.clientHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w / h;
+  const rect = currentRenderRect();
+  calibrationImage.renderRect = rect;
+  renderer.setSize(rect.width, rect.height, false);
+  renderer.domElement.style.left = rect.left + 'px';
+  renderer.domElement.style.top = rect.top + 'px';
+  renderer.domElement.style.width = rect.width + 'px';
+  renderer.domElement.style.height = rect.height + 'px';
+  calibrationBg.style.left = rect.left + 'px';
+  calibrationBg.style.top = rect.top + 'px';
+  calibrationBg.style.width = rect.width + 'px';
+  calibrationBg.style.height = rect.height + 'px';
+  camera.aspect = rect.width / rect.height;
   camera.updateProjectionMatrix();
+  updateCalibrationReadout();
 }
 resize();
 new ResizeObserver(resize).observe(vp);
 
-(function loop() { requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); })();
+(function loop() { requestAnimationFrame(loop); updateControlsWithRoll(); renderer.render(scene, camera); })();
 
 // ── Coord conversion: geometry (X right, Y out, Z up) → Three.js (Y up)
 // pt = (x, z, y): X oikealle, Z (korkeus) → Y ylös, Y (ulospäin) → Z syvyys.
@@ -535,6 +812,50 @@ let pickable = [];
 let showConnectionMarkers = false;
 let showAnalysisOverlays = false;
 let highlightedMemberKeys = new Set();
+let calibrationModelOpacity = 1.0;
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(1, value));
+}
+
+function objectMaterials(object) {
+  if (!object?.material) return [];
+  return Array.isArray(object.material) ? object.material.filter(Boolean) : [object.material];
+}
+
+function ensureOpacityBase(mat) {
+  if (!mat.userData) mat.userData = {};
+  if (mat.userData._calibrationBaseOpacity == null) {
+    mat.userData._calibrationBaseOpacity = mat.opacity ?? 1;
+  }
+  if (mat.userData._calibrationBaseDepthWrite == null) {
+    mat.userData._calibrationBaseDepthWrite = mat.depthWrite;
+  }
+}
+
+function applyCalibrationOpacityToMaterial(mat, baseOpacity = null) {
+  if (!mat || mat.opacity == null) return;
+  ensureOpacityBase(mat);
+  const base = baseOpacity ?? mat.userData._calibrationBaseOpacity ?? 1;
+  const opacity = Math.max(0.02, Math.min(1, base * calibrationModelOpacity));
+  mat.opacity = opacity;
+  mat.transparent = opacity < 1 || mat.transparent;
+  if (mat.depthWrite != null) {
+    mat.depthWrite = opacity >= 0.82 && mat.userData._calibrationBaseDepthWrite !== false;
+  }
+  mat.needsUpdate = true;
+}
+
+function applyCalibrationOpacityToObject(object, baseOpacity = null) {
+  for (const mat of objectMaterials(object)) applyCalibrationOpacityToMaterial(mat, baseOpacity);
+}
+
+function applyCalibrationModelOpacity() {
+  for (const g of geoGroups.values()) {
+    g.traverse(object => applyCalibrationOpacityToObject(object));
+  }
+}
 
 function memberVisualKey(geoName, memberId) {
   return `${geoName}::${memberId}`;
@@ -562,12 +883,16 @@ function updateObjectHighlight(object, active) {
   if (active) {
     if (mat.color) mat.color.setHex(HIGHLIGHT_MEMBER_COLOR);
     if (mat.emissive) mat.emissive.setHex(0x665500);
-    if (mat.opacity != null) mat.opacity = Math.max(object.userData._baseOpacity ?? 1, 0.95);
+    if (mat.opacity != null) {
+      applyCalibrationOpacityToObject(object, Math.max(object.userData._baseOpacity ?? 1, 0.95));
+    }
     return;
   }
   if (mat.color && object.userData._baseColor != null) mat.color.setHex(object.userData._baseColor);
   if (mat.emissive && object.userData._baseEmissive != null) mat.emissive.setHex(object.userData._baseEmissive);
-  if (mat.opacity != null && object.userData._baseOpacity != null) mat.opacity = object.userData._baseOpacity;
+  if (mat.opacity != null && object.userData._baseOpacity != null) {
+    applyCalibrationOpacityToObject(object, object.userData._baseOpacity);
+  }
 }
 
 function setHighlightedMemberKeys(nextKeys) {
@@ -2020,14 +2345,16 @@ function fitCamera() {
   camera.position.set(c.x + d * 0.3, c.y + d * 0.5, c.z + d);
   camera.lookAt(c);
   controls.target.copy(c);
-  controls.update();
+  updateControlsWithRoll();
 }
 
 function captureViewState() {
   return {
     position: camera.position.clone(),
     target: controls.target.clone(),
+    fov: camera.fov,
     zoom: camera.zoom,
+    rollRad: cameraRollRad,
   };
 }
 
@@ -2035,9 +2362,11 @@ function restoreViewState(state) {
   if (!state) return false;
   camera.position.copy(state.position);
   controls.target.copy(state.target);
+  if (state.fov != null) camera.fov = state.fov;
   camera.zoom = state.zoom;
+  if (state.rollRad != null) cameraRollRad = state.rollRad;
   camera.updateProjectionMatrix();
-  controls.update();
+  updateControlsWithRoll();
   return true;
 }
 
@@ -2284,6 +2613,7 @@ async function renderGeoFor(name, resolved, options = {}) {
   await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
   setConnectionMarkerVisibility(showConnectionMarkers);
   setAnalysisOverlayVisibility(showAnalysisOverlays);
+  applyCalibrationModelOpacity();
   if (!restoreViewState(viewState)) fitCamera();
 }
 
@@ -2324,10 +2654,504 @@ renderer.domElement.addEventListener('mouseleave', () => {
 const activeNames = new Set();  // geometriat jotka näytetään sceneissä
 let editingName = null;         // mikä on editorissa auki
 const editor   = document.getElementById('editor');
+const editorPanel = document.getElementById('editor-panel');
 const statusEl = document.getElementById('status');
 let debounce = null;
 
 function setStatus(msg, cls) { statusEl.textContent = msg; statusEl.className = cls ?? ''; }
+
+const CALIBRATION_LOCAL_KEY = 'terassi.viewer.cameraCalibration';
+const calibPanel = document.getElementById('calibration-panel');
+const calibBtn = document.getElementById('btn-calibration');
+const calibImagePath = document.getElementById('calib-image-path');
+const calibImageOpacity = document.getElementById('calib-image-opacity');
+const calibImageZoom = document.getElementById('calib-image-zoom');
+const calibImageZoomValue = document.getElementById('calib-image-zoom-value');
+const calibImagePanMode = document.getElementById('calib-image-pan-mode');
+const calibImagePanReset = document.getElementById('calib-image-pan-reset');
+const calibImagePanValue = document.getElementById('calib-image-pan-value');
+const calibModelOpacity = document.getElementById('calib-model-opacity');
+const calibModelOpacityValue = document.getElementById('calib-model-opacity-value');
+const calibCameraJsonPath = document.getElementById('calib-camera-json-path');
+const calibImportCameraJson = document.getElementById('calib-import-camera-json');
+const calibCameraJson = document.getElementById('calib-camera-json');
+editorPanel.appendChild(calibPanel);
+const calibFields = {
+  posX: document.getElementById('calib-pos-x'),
+  posY: document.getElementById('calib-pos-y'),
+  posZ: document.getElementById('calib-pos-z'),
+  targetX: document.getElementById('calib-target-x'),
+  targetY: document.getElementById('calib-target-y'),
+  targetZ: document.getElementById('calib-target-z'),
+  fov: document.getElementById('calib-fov'),
+  zoom: document.getElementById('calib-zoom'),
+  roll: document.getElementById('calib-roll'),
+};
+let syncingCalibrationInputs = false;
+let calibrationPanMode = false;
+let calibrationPanDrag = null;
+
+function normalizeRepoAssetPath(path) {
+  let normalized = path.trim();
+  if (normalized.startsWith('./')) normalized = normalized.slice(2);
+  while (normalized.startsWith('/')) normalized = normalized.slice(1);
+  return normalized;
+}
+
+function assetUrlForImagePath(value) {
+  const path = value.trim();
+  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  const normalized = normalizeRepoAssetPath(path);
+  return '/assets/' + normalized.split('/').map(encodeURIComponent).join('/');
+}
+
+function cameraJsonPathForImagePath(value) {
+  const path = value.trim();
+  if (!path || /^(https?:|data:|blob:)/i.test(path)) return 'viewer_camera.json';
+  const normalized = normalizeRepoAssetPath(path);
+  const slash = normalized.lastIndexOf('/');
+  const dir = slash >= 0 ? normalized.slice(0, slash + 1) : '';
+  const file = slash >= 0 ? normalized.slice(slash + 1) : normalized;
+  const dot = file.lastIndexOf('.');
+  const stem = dot > 0 ? file.slice(0, dot) : file;
+  return dir + stem + '_viewer_camera.json';
+}
+
+function updateCameraJsonPathDefault(force = false) {
+  const nextPath = cameraJsonPathForImagePath(calibImagePath.value);
+  if (force || !calibCameraJsonPath.value.trim()) {
+    calibCameraJsonPath.value = nextPath;
+  }
+}
+
+function threeToGeometry(v) {
+  return { x: v.x, y: v.z, z: v.y };
+}
+
+function geometryToThree(x, y, z) {
+  return new THREE.Vector3(x, z, y);
+}
+
+function vectorPayload(v) {
+  return {
+    x: Number(v.x.toFixed(6)),
+    y: Number(v.y.toFixed(6)),
+    z: Number(v.z.toFixed(6)),
+  };
+}
+
+function numericFieldValue(field) {
+  const value = Number(field.value);
+  return Number.isFinite(value) ? value : null;
+}
+
+function formatZoom(value) {
+  return (Math.round(Number(value) * 100) / 100) + '×';
+}
+
+function updateCalibrationPanReadout() {
+  const el = document.getElementById('calib-image-pan-value');
+  if (!el) return;
+  const pan = calibrationImage.displayPan;
+  el.textContent = `x ${Math.round(pan.x)} px, y ${Math.round(pan.y)} px`;
+}
+
+function setCalibrationImageZoom(value, refreshJson = true) {
+  const zoom = THREE.MathUtils.clamp(Number(value) || 1, 1, 3);
+  calibrationImage.displayZoom = zoom;
+  calibImageZoom.value = String(zoom);
+  calibImageZoomValue.textContent = formatZoom(zoom);
+  resize();
+  if (refreshJson) updateCalibrationPanelFromCamera();
+}
+
+function setCalibrationImagePan(x, y, refreshJson = true) {
+  calibrationImage.displayPan = clampImagePan({ x, y });
+  resize();
+  updateCalibrationPanReadout();
+  if (refreshJson) updateCalibrationPanelFromCamera();
+}
+
+function setCalibrationPanMode(enabled) {
+  calibrationPanMode = Boolean(enabled);
+  if (!calibrationPanMode && calibrationPanDrag) {
+    calibrationPanDrag = null;
+    controls.enabled = true;
+    vp.classList.remove('calibration-panning');
+  }
+  calibImagePanMode.classList.toggle('active', calibrationPanMode);
+  calibImagePanMode.textContent = calibrationPanMode ? 'Zoom-kohdan siirto päällä' : 'Siirrä zoom-kohtaa';
+  vp.classList.toggle('calibration-pan', calibrationPanMode);
+}
+
+function setCalibrationPanelOpen(open) {
+  calibPanel.hidden = !open;
+  editor.hidden = open;
+  if (!open) setCalibrationPanMode(false);
+  calibBtn.classList.toggle('active', open);
+  calibBtn.setAttribute('aria-pressed', String(open));
+  calibBtn.textContent = open ? '● Kuvakalibrointi' : '○ Kuvakalibrointi';
+  updateCameraJsonPathDefault(false);
+  if (open && !calibrationImage.enabled && calibImagePath.value.trim()) {
+    loadCalibrationImage(calibImagePath.value);
+  }
+  updateCalibrationPanelFromCamera();
+}
+
+function cameraCalibrationPayload() {
+  applyCameraRoll();
+  camera.updateMatrixWorld(true);
+  const rect = calibrationImage.baseRenderRect;
+  return {
+    version: 1,
+    coordinate_mapping: 'geometry {x,y,z} -> three.js {x,z,y}',
+    image: {
+      path: calibrationImage.path,
+      natural_size_px: {
+        width: calibrationImage.naturalWidth,
+        height: calibrationImage.naturalHeight,
+      },
+      render_size_px: {
+        width: Number(rect.width.toFixed(3)),
+        height: Number(rect.height.toFixed(3)),
+      },
+      render_offset_px: {
+        left: Number(rect.left.toFixed(3)),
+        top: Number(rect.top.toFixed(3)),
+      },
+      display_mode: 'contain',
+      display_zoom: Number(calibrationImage.displayZoom.toFixed(3)),
+      display_pan_px: {
+        x: Number(calibrationImage.displayPan.x.toFixed(3)),
+        y: Number(calibrationImage.displayPan.y.toFixed(3)),
+      },
+    },
+    camera: {
+      type: 'PerspectiveCamera',
+      fov_deg: Number(camera.fov.toFixed(6)),
+      roll_deg: Number(THREE.MathUtils.radToDeg(cameraRollRad).toFixed(6)),
+      roll_rad: Number(cameraRollRad.toFixed(12)),
+      aspect: Number(camera.aspect.toFixed(9)),
+      zoom: Number(camera.zoom.toFixed(9)),
+      near: camera.near,
+      far: camera.far,
+      position_three: vectorPayload(camera.position),
+      target_three: vectorPayload(controls.target),
+      up_three: vectorPayload(camera.up),
+      position_geometry: vectorPayload(threeToGeometry(camera.position)),
+      target_geometry: vectorPayload(threeToGeometry(controls.target)),
+      projection_matrix: camera.projectionMatrix.elements.map(v => Number(v.toFixed(12))),
+      matrix_world: camera.matrixWorld.elements.map(v => Number(v.toFixed(12))),
+      matrix_world_inverse: camera.matrixWorldInverse.elements.map(v => Number(v.toFixed(12))),
+    },
+  };
+}
+
+function updateCalibrationPanelFromCamera() {
+  if (syncingCalibrationInputs) return;
+  syncingCalibrationInputs = true;
+  const pos = threeToGeometry(camera.position);
+  const target = threeToGeometry(controls.target);
+  calibFields.posX.value = pos.x.toFixed(1);
+  calibFields.posY.value = pos.y.toFixed(1);
+  calibFields.posZ.value = pos.z.toFixed(1);
+  calibFields.targetX.value = target.x.toFixed(1);
+  calibFields.targetY.value = target.y.toFixed(1);
+  calibFields.targetZ.value = target.z.toFixed(1);
+  calibFields.fov.value = camera.fov.toFixed(2);
+  calibFields.zoom.value = camera.zoom.toFixed(3);
+  calibFields.roll.value = THREE.MathUtils.radToDeg(cameraRollRad).toFixed(2);
+  calibCameraJson.value = JSON.stringify(cameraCalibrationPayload(), null, 2);
+  syncingCalibrationInputs = false;
+}
+
+function applyCalibrationInputsToCamera() {
+  if (syncingCalibrationInputs) return;
+  const values = Object.fromEntries(
+    Object.entries(calibFields).map(([key, field]) => [key, numericFieldValue(field)])
+  );
+  if (Object.values(values).some(value => value == null)) return;
+  camera.position.copy(geometryToThree(values.posX, values.posY, values.posZ));
+  controls.target.copy(geometryToThree(values.targetX, values.targetY, values.targetZ));
+  camera.fov = THREE.MathUtils.clamp(values.fov, 1, 120);
+  camera.zoom = Math.max(values.zoom, 0.01);
+  cameraRollRad = THREE.MathUtils.degToRad(values.roll);
+  camera.updateProjectionMatrix();
+  updateControlsWithRoll();
+  updateCalibrationPanelFromCamera();
+}
+
+function loadCalibrationImage(pathValue) {
+  const path = pathValue.trim();
+  if (!path) {
+    setStatus('Anna taustakuvan polku', 'err');
+    return;
+  }
+  updateCameraJsonPathDefault(true);
+  calibrationBg.onload = () => {
+    calibrationImage.enabled = true;
+    calibrationImage.path = path;
+    calibrationImage.naturalWidth = calibrationBg.naturalWidth;
+    calibrationImage.naturalHeight = calibrationBg.naturalHeight;
+    if (calibrationImage.pendingDisplayPan) {
+      calibrationImage.displayPan = { ...calibrationImage.pendingDisplayPan };
+      calibrationImage.pendingDisplayPan = null;
+    }
+    calibrationBg.style.display = 'block';
+    resize();
+    updateCalibrationPanelFromCamera();
+    setStatus('Taustakuva ladattu', 'ok');
+  };
+  calibrationBg.onerror = () => {
+    calibrationImage.enabled = false;
+    calibrationBg.style.display = 'none';
+    resize();
+    setStatus('Taustakuvan lataus epäonnistui: ' + path, 'err');
+  };
+  calibrationBg.src = assetUrlForImagePath(path);
+}
+
+function hideCalibrationImage() {
+  calibrationImage.enabled = false;
+  calibrationBg.style.display = 'none';
+  resize();
+  updateCalibrationPanelFromCamera();
+}
+
+async function copyCalibrationCameraJson() {
+  updateCalibrationPanelFromCamera();
+  try {
+    await navigator.clipboard.writeText(calibCameraJson.value);
+    setStatus('Kameran JSON kopioitu', 'ok');
+  } catch (_) {
+    calibCameraJson.focus();
+    calibCameraJson.select();
+    setStatus('Kopioi JSON valitusta tekstistä', '');
+  }
+}
+
+function saveCalibrationToLocalStorage() {
+  updateCalibrationPanelFromCamera();
+  localStorage.setItem(CALIBRATION_LOCAL_KEY, calibCameraJson.value);
+  setStatus('Kalibrointi tallennettu selaimeen', 'ok');
+}
+
+async function saveCalibrationToPath() {
+  updateCalibrationPanelFromCamera();
+  const path = calibCameraJsonPath.value.trim();
+  if (!path) {
+    setStatus('Anna kamera-JSON-polku', 'err');
+    return;
+  }
+  let calibration;
+  try {
+    calibration = JSON.parse(calibCameraJson.value);
+  } catch (e) {
+    setStatus('Kamera-JSON virhe: ' + e.message, 'err');
+    return;
+  }
+  const btn = document.getElementById('calib-save-camera-json');
+  const originalText = btn.textContent;
+  btn.textContent = 'Tallennetaan…';
+  try {
+    const res = await fetch('/api/calibration-camera', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, calibration }),
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    setStatus('Kamera-JSON tallennettu: ' + data.path, 'ok');
+    btn.textContent = 'Tallennettu';
+    setTimeout(() => { btn.textContent = originalText; }, 1600);
+  } catch (e) {
+    setStatus('Kamera-JSON tallennus epäonnistui: ' + e.message, 'err');
+    btn.textContent = originalText;
+  }
+}
+
+function applyCalibrationPayload(data) {
+  const cam = data.camera ?? {};
+  const pos = cam.position_geometry;
+  const target = cam.target_geometry;
+  if (!pos || !target) throw new Error('kamera-arvot puuttuvat');
+  camera.position.copy(geometryToThree(pos.x, pos.y, pos.z));
+  controls.target.copy(geometryToThree(target.x, target.y, target.z));
+  if (cam.fov_deg != null) camera.fov = cam.fov_deg;
+  if (cam.zoom != null) camera.zoom = cam.zoom;
+  if (cam.roll_rad != null) {
+    cameraRollRad = Number(cam.roll_rad);
+  } else if (cam.roll_deg != null) {
+    cameraRollRad = THREE.MathUtils.degToRad(Number(cam.roll_deg));
+  } else {
+    cameraRollRad = 0;
+  }
+  camera.updateProjectionMatrix();
+  updateControlsWithRoll();
+  setCalibrationImageZoom(data.image?.display_zoom ?? 1, false);
+  if (data.image?.display_pan_px) {
+    const pan = data.image.display_pan_px;
+    calibrationImage.pendingDisplayPan = { x: Number(pan.x) || 0, y: Number(pan.y) || 0 };
+    calibrationImage.displayPan = { ...calibrationImage.pendingDisplayPan };
+  } else {
+    calibrationImage.pendingDisplayPan = null;
+    calibrationImage.displayPan = { x: 0, y: 0 };
+  }
+  if (data.image?.path) {
+    calibImagePath.value = data.image.path;
+    loadCalibrationImage(data.image.path);
+  } else if (calibrationImage.pendingDisplayPan) {
+    calibrationImage.pendingDisplayPan = null;
+    setCalibrationImagePan(calibrationImage.displayPan.x, calibrationImage.displayPan.y, false);
+  }
+  updateCalibrationPanelFromCamera();
+}
+
+function restoreCalibrationFromRaw(raw, sourceLabel) {
+  try {
+    applyCalibrationPayload(JSON.parse(raw));
+    setStatus('Kalibrointi palautettu: ' + sourceLabel, 'ok');
+  } catch (e) {
+    setStatus('Kalibroinnin palautus epäonnistui: ' + e.message, 'err');
+  }
+}
+
+function restoreCalibrationFromLocalStorage() {
+  const raw = localStorage.getItem(CALIBRATION_LOCAL_KEY);
+  if (!raw) {
+    setStatus('Selaimessa ei ole tallennettua kalibrointia', 'err');
+    return;
+  }
+  restoreCalibrationFromRaw(raw, 'selain');
+}
+
+async function restoreCalibrationFromPath() {
+  const path = calibCameraJsonPath.value.trim();
+  if (!path) {
+    setStatus('Anna kamera-JSON-polku', 'err');
+    return;
+  }
+  try {
+    const res = await fetch(assetUrlForImagePath(path), { cache: 'no-cache' });
+    if (!res.ok) throw new Error(path + ' (' + res.status + ')');
+    restoreCalibrationFromRaw(await res.text(), path);
+  } catch (e) {
+    setStatus('Kamera-JSON:n lataus epäonnistui: ' + e.message, 'err');
+  }
+}
+
+async function restoreCalibrationFromFile(file) {
+  if (!file) return;
+  try {
+    restoreCalibrationFromRaw(await file.text(), file.name);
+  } catch (e) {
+    setStatus('Kamera-JSON-tiedoston luku epäonnistui: ' + e.message, 'err');
+  } finally {
+    calibImportCameraJson.value = '';
+  }
+}
+
+function canDragCalibrationZoom() {
+  return (
+    calibrationPanMode
+    && !calibPanel.hidden
+    && calibrationImage.enabled
+    && calibrationImage.displayZoom > 1
+  );
+}
+
+function startCalibrationZoomDrag(e) {
+  if (!canDragCalibrationZoom() || e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation?.();
+  vp.focus({ preventScroll: true });
+  calibrationPanDrag = {
+    pointerId: e.pointerId,
+    startX: e.clientX,
+    startY: e.clientY,
+    startPan: { ...calibrationImage.displayPan },
+  };
+  controls.enabled = false;
+  vp.classList.add('calibration-panning');
+  try { vp.setPointerCapture(e.pointerId); } catch (_) {}
+}
+
+function moveCalibrationZoomDrag(e) {
+  if (!calibrationPanDrag || e.pointerId !== calibrationPanDrag.pointerId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation?.();
+  const dx = e.clientX - calibrationPanDrag.startX;
+  const dy = e.clientY - calibrationPanDrag.startY;
+  setCalibrationImagePan(
+    calibrationPanDrag.startPan.x + dx,
+    calibrationPanDrag.startPan.y + dy,
+    false,
+  );
+}
+
+function stopCalibrationZoomDrag(e) {
+  if (!calibrationPanDrag || e.pointerId !== calibrationPanDrag.pointerId) return;
+  e.preventDefault();
+  e.stopPropagation();
+  e.stopImmediatePropagation?.();
+  calibrationPanDrag = null;
+  controls.enabled = true;
+  vp.classList.remove('calibration-panning');
+  try { vp.releasePointerCapture(e.pointerId); } catch (_) {}
+  updateCalibrationPanelFromCamera();
+}
+
+function wireCalibrationControls() {
+  calibBtn.addEventListener('click', () => setCalibrationPanelOpen(calibPanel.hidden));
+  document.getElementById('calib-load-image').addEventListener('click', () => loadCalibrationImage(calibImagePath.value));
+  document.getElementById('calib-hide-image').addEventListener('click', hideCalibrationImage);
+  document.getElementById('calib-fit-model').addEventListener('click', () => {
+    fitCamera();
+    updateCalibrationPanelFromCamera();
+  });
+  document.getElementById('calib-copy-camera').addEventListener('click', copyCalibrationCameraJson);
+  document.getElementById('calib-save-local').addEventListener('click', saveCalibrationToLocalStorage);
+  document.getElementById('calib-restore-local').addEventListener('click', restoreCalibrationFromLocalStorage);
+  document.getElementById('calib-load-camera-json').addEventListener('click', restoreCalibrationFromPath);
+  document.getElementById('calib-save-camera-json').addEventListener('click', saveCalibrationToPath);
+  calibCameraJsonPath.addEventListener('keydown', e => {
+    if (e.key === 'Enter') restoreCalibrationFromPath();
+  });
+  calibImportCameraJson.addEventListener('change', e => {
+    restoreCalibrationFromFile(e.target.files?.[0]);
+  });
+  calibImageOpacity.addEventListener('input', () => {
+    calibrationBg.style.opacity = calibImageOpacity.value;
+  });
+  calibImageZoom.addEventListener('input', () => {
+    setCalibrationImageZoom(calibImageZoom.value);
+  });
+  calibImagePanMode.addEventListener('click', () => setCalibrationPanMode(!calibrationPanMode));
+  calibImagePanReset.addEventListener('click', () => setCalibrationImagePan(0, 0));
+  vp.addEventListener('pointerdown', startCalibrationZoomDrag, true);
+  vp.addEventListener('pointermove', moveCalibrationZoomDrag, true);
+  vp.addEventListener('pointerup', stopCalibrationZoomDrag, true);
+  vp.addEventListener('pointercancel', stopCalibrationZoomDrag, true);
+  calibModelOpacity.addEventListener('input', () => {
+    calibrationModelOpacity = clamp01(Number(calibModelOpacity.value));
+    calibModelOpacityValue.textContent = Math.round(calibrationModelOpacity * 100) + ' %';
+    applyCalibrationModelOpacity();
+  });
+  calibImagePath.addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadCalibrationImage(calibImagePath.value);
+  });
+  calibImagePath.addEventListener('input', () => updateCameraJsonPathDefault(true));
+  Object.values(calibFields).forEach(field => {
+    field.addEventListener('change', applyCalibrationInputsToCamera);
+  });
+  controls.addEventListener('change', () => {
+    applyCameraRoll();
+    updateCalibrationPanelFromCamera();
+  });
+  updateCalibrationPanelFromCamera();
+}
 
 function updateTabStyles() {
   for (const el of document.querySelectorAll('.btn-tab[data-geo]')) {
@@ -2441,7 +3265,6 @@ async function saveGeometry() {
 
 // ── Resizer ───────────────────────────────────────────────────────────────────
 const resizerEl  = document.getElementById('resizer');
-const editorPanel = document.getElementById('editor-panel');
 const mainEl     = document.getElementById('main');
 let dragging = false;
 resizerEl.addEventListener('mousedown', e => { dragging = true; resizerEl.classList.add('dragging'); e.preventDefault(); });
@@ -2481,7 +3304,20 @@ window.addEventListener('mouseup', () => { dragging = false; resizerEl.classList
   analysisBtn.addEventListener('click', toggleAnalysisOverlays);
   setConnectionMarkerVisibility(showConnectionMarkers);
   setAnalysisOverlayVisibility(showAnalysisOverlays);
+  wireCalibrationControls();
   saveBtn.addEventListener('click', saveGeometry);
+  const params = new URLSearchParams(window.location.search);
+  const photoParam = params.get('photo');
+  if (photoParam) {
+    calibImagePath.value = photoParam;
+    setCalibrationPanelOpen(true);
+  }
+  const cameraParam = params.get('camera');
+  if (cameraParam) {
+    calibCameraJsonPath.value = cameraParam;
+    setCalibrationPanelOpen(true);
+    await restoreCalibrationFromPath();
+  }
   if (first) loadGeometry(first);
 })();
 </script>

@@ -321,6 +321,89 @@ mallintaa oikealla paksuudella.
 `viewer.py` näyttää myös `foundations`-anturalaatikot läpikuultavina 3D-kappaleina
 pilarien alla.
 
+`viewer.py`:ssä on lisäksi kuvakalibrointitila fotomontaasien sovitusta varten.
+Käynnistä viewer (`python3 viewer.py`), avaa **Kuvakalibrointi** ja anna
+taustakuvan polku repojuuresta, esimerkiksi `kuvat/IMG_2837.jpeg`
+(`?photo=kuvat/IMG_2837.jpeg` avaa saman kuvan suoraan URL:sta). Viewer sovittaa
+taustakuvan `contain`-periaatteella ja renderöi 3D-geometrian samaan kuva-alueeseen.
+Taustakuvan zoom-säädin suurentaa kuvan ja 3D-overlayn yhdessä 1×–3×
+tarkkuustarkastelua varten. Zoomattua näkymää voi siirtää **Siirrä zoom-kohtaa**
+-tilassa hiirellä raahaamalla ja palauttaa keskelle **Keskitä**-napilla, mutta
+tallennettava kamera pysyy yhteensopivana Blender-renderöinnin kanssa.
+Kun kamera on käsin kohdistettu, **Kopioi kameran JSON** tallettaa kuvan koon,
+renderöintialueen, kameran sijainnin/targetin geometriakoordinaateissa, roll-
+kallistuksen sekä Three.js:n projektiomatriisit myöhempää renderöintiä varten.
+Roll-kallistusta voi säätää kentästä tai pikanäppäimellä Alt+vasen/oikea.
+Kalibroidun kameran voi syöttää `blender_photomontage.py`-skriptille, joka
+rakentaa `geometry/terassi_puu.json`:sta Blender-scenen, leikkaa geometrian
+loveukset boolean-operaatioina, asettaa materiaalit ja valaistuksen sekä
+renderöi kuvan alkuperäisen valokuvan päälle:
+
+```bash
+blender --background --python blender_photomontage.py -- \
+  --geometry terassi_puu \
+  --calibration kuvat/IMG_2837_viewer_camera.json \
+  --output kuvat/IMG_2837_blender_preview.png \
+  --scale 0.35 \
+  --samples 64
+```
+
+Blender-putki palauttaa oletuksena alkuperäisen valokuvan pikselit olemassa
+olevien etureunan terassirakenteiden kohdalle (`katos.json`:n etubetonipalkki,
+alapilarit ja etureunan maskikaista) sekä `portaikko.json`:n foreground-jäsenten
+ja pintojen kohdalle. Maskipassi on syvyystietoinen: uudet terassirakenteet
+renderöidään maskissa mustina depth-blokkereina, jolloin alkuperäistä valokuvaa
+palautetaan vain niissä kohdissa, joissa foreground-rakenne on kameran ja uuden
+rakenteen välissä. Portaikko-jäsenet maskataan oletuksena ilman
+geometriamarginaalia, jotta palkit ja pilarit eivät turpoa; tarvittaessa
+kattotuoleille voi antaa erillisen lisämarginaalin
+`--foreground-extra-rafter-margin-mm`-valitsimella. Tämä estää uusia sivulaseja tai terassirakenteita
+näkymästä olemassa olevien foreground-rakenteiden läpi. Sen voi kytkeä pois
+valitsimella `--no-foreground-occlusion`; lisägeometrioita voi säätää
+valitsimella `--foreground-extra-occlusion-geometries`.
+
+Geometrioiden `project.coordinate_system.true_north` kertoo todellisen pohjoisen
+suunnan mallin xy-tasossa. Nykyinen arvio on `x=-0.926, y=-0.378`, joka on
+johdettu `IMG_2839.jpeg`:ssä näkyvästä auringosta, kuvaushetken noin 291°
+aurinkoazimutista ja kalibroidusta kamerasta; `IMG_2837` toimii vertailuna.
+Blender-skripti käyttää tätä pohjoisvektoria ensisijaisesti, jolloin aurinko
+saadaan EXIFin GPS-sijainnista ja kuvausajasta samaan mallikoordinaatistoon
+riippumatta kameran kompassi-EXIFistä. Jos EXIFistä puuttuu timezone, skripti
+tulkitsee ajan paikallisella aikavyöhykkeellä; tämän voi ohittaa valitsimella
+`--sun-timezone-offset-hours`. Aurinkolaskennan voi pakottaa tai ohittaa
+valitsimella `--sun-source exif|manual|auto`, ja arvoja voi edelleen hienosäätää
+manuaalisesti `--sun-azimuth-deg`/`--sun-elevation-deg`-valitsimilla. Jos
+geometriassa ei ole pohjoissuuntaa, fallbackina käytetään
+kalibrointikuvan EXIF `GPSImgDirection` -arvoa tai valitsimella annettua
+`--camera-heading-deg`-arvoa. Jos aurinko näkyy kuvassa suoraan kameran suunnassa,
+valitsin `--sun-facing-camera` käyttää kalibroidun kameran katselusuuntaa
+auringon suuntana todellisen azimutin sijaan.
+Auringon väri on oletuksena automaattinen: matala aurinko pysyy lämpimänä,
+mutta päiväkuvien korkea aurinko käyttää lähes neutraalia päivänvaloa. Värin voi
+pakottaa esimerkiksi valkoiseksi valitsimella `--sun-color '#ffffff'`.
+
+Katosalusen varjoja pehmennetään kameraan näkymättömillä bounce-valopinnoilla:
+`reference_surfaces`-seinät sekä automaattinen terassilattian taso emittoivat
+heikkoa seinän/lattian sävyistä hajavaloa, mutta eivät piirry valokuvan päälle.
+Ne voi poistaa valitsimella `--no-bounce-surfaces`; sävyä voi säätää
+`--bounce-wall-reflectance` / `--bounce-floor-reflectance` -arvoilla ja voimakkuutta
+`--bounce-wall-energy` / `--bounce-floor-energy` -arvoilla.
+Aurinkopaneelien yläpinnan lasi käyttää lisäksi kameraan näkymätöntä sinertävää
+sky reflection -korttia, joka näkyy vain glossy-heijastuksille. Se estää paneeleja
+muuttumasta pikinmustiksi yläviistosta kuvatuissa dronekuvissa ilman, että
+taustavalokuvaa peitetään. Kortin voi poistaa valitsimella
+`--no-solar-sky-reflection`; voimakkuutta säädetään
+`--solar-sky-reflection-energy`-arvolla.
+Uusien betonipilarien väri matchataan oletuksena valokuvasta: skripti renderöi
+`katos.json`:n olemassa oleville betonipilareille sample-maskin ja poimii
+valokuvasta mediaanivärin pilarimateriaalin pohjaväriksi. Tämän voi ohittaa
+valitsimella `--no-column-color-match` tai antaa käsin esimerkiksi
+`--column-color '#d0c2a8'`; samplettavia pilareita säädetään
+`--column-color-sample-ids`-listalla.
+Yksittäisen uuden jäsenen tai koko profiilin renderivärin voi ohittaa geometriassa
+`render_color`-kentällä, esimerkiksi `"render_color": "#ffffff"`. Tätä käytetään
+vain fotomontaasin materiaalivärinä eikä se muuta rakenne- tai materiaalilaskentaa.
+
 **JSON on totuuden lähde geometrialle:** Python-laskelmat lukevat
 primitiiviset geometria-arvot (leveydet, jännevälit, profiilimitat ym.)
 suoraan JSON-tiedostoista `geometry_loader.py`:n kautta. Johdettu laskenta

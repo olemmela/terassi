@@ -21,7 +21,13 @@
       "origin_description": "Talon ulkoseinän nurkka, terassin lattiataso z=0",
       "x_axis": "seinän suuntaisesti",
       "y_axis": "seinästä ulospäin",
-      "z_axis": "pystysuoraan ylöspäin"
+      "z_axis": "pystysuoraan ylöspäin",
+      "true_north": {
+        "x": -0.926,
+        "y": -0.378,
+        "source": "Arvioitu IMG_2839.jpeg:n näkyvästä auringosta ja kuvaushetken aurinkoazimutista; IMG_2837 vertailuna",
+        "confidence": "estimated"
+      }
     }
   },
   "reference_surfaces": [

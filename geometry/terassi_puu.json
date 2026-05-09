@@ -21,7 +21,13 @@
       "origin_description": "Talon ulkoseinän nurkka, terassin lattiataso z=0",
       "x_axis": "seinän suuntaisesti",
       "y_axis": "seinästä ulospäin",
-      "z_axis": "pystysuoraan ylöspäin"
+      "z_axis": "pystysuoraan ylöspäin",
+      "true_north": {
+        "x": -0.926,
+        "y": -0.378,
+        "source": "Arvioitu IMG_2839.jpeg:n näkyvästä auringosta ja kuvaushetken aurinkoazimutista; IMG_2837 vertailuna",
+        "confidence": "estimated"
+      }
     }
   },
   "reference_surfaces": [
@@ -246,6 +252,7 @@
       {
         "id": "beam.inner.new",
         "profile": "LP360x140",
+        "render_color": "#ffffff",
         "ref": "pt.beam.inner.new.axis_start",
         "axis_start": {"x": 0, "y": 70, "z": -190},
         "axis_end": {"x": 7200, "y": 70, "z": -190},
@@ -709,6 +716,7 @@
       "id": "surf.boarding.gable",
       "type": "boarding",
       "material": "lauta",
+      "existing": true,
       "thickness_mm": 22,
       "placement": {
         "anchor": {"x": 0, "y": 1750, "z": 2900},

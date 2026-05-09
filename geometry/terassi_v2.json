@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "project": {
     "id": "terassi-lasitus",
-    "name": "Lasitettu terassi puu v3",
+    "name": "Lasitettu terassi 220cm",
     "site": "04330 Lahela, Tuusula",
     "standards": [
       "EN 1990",
@@ -126,10 +126,24 @@
       "count": 2
     },
     {
-      "id": "LP315x115",
-      "name": "LP315x115",
+      "id": "LP225x90",
+      "name": "LP225x90",
       "material": "Liimapuu GL30c",
-      "b_mm": 115,
+      "b_mm": 90,
+      "h_mm": 225
+    },
+    {
+      "id": "LP360x140",
+      "name": "LP360x140",
+      "material": "Liimapuu GL30c",
+      "b_mm": 140,
+      "h_mm": 360
+    },
+    {
+      "id": "LP315x140",
+      "name": "LP315x140",
+      "material": "Liimapuu GL30c",
+      "b_mm": 140,
       "h_mm": 315
     },
     {
@@ -147,11 +161,18 @@
       "h_mm": 225
     },
     {
-      "id": "LP225x90",
-      "name": "LP225x90",
+      "id": "LP140x140",
+      "name": "LP140x140",
       "material": "Liimapuu GL30c",
-      "b_mm": 90,
-      "h_mm": 225
+      "b_mm": 140,
+      "h_mm": 140
+    },
+    {
+      "id": "LP180x180",
+      "name": "LP180x180",
+      "material": "Liimapuu GL30c",
+      "b_mm": 180,
+      "h_mm": 180
     },
     {
       "id": "223x48",
@@ -166,6 +187,13 @@
       "material": "Mitallistettu sahatavara",
       "b_mm": 48,
       "h_mm": 198
+    },
+    {
+      "id": "123x48",
+      "name": "C24 123x48",
+      "material": "Mitallistettu sahatavara",
+      "b_mm": 48,
+      "h_mm": 123
     },
     {
       "id": "98x48",
@@ -195,25 +223,32 @@
         "id": "col.outer.x0",
         "profile": "250x250",
         "base": {"x": 125, "y": 5275, "z": 0},
-        "top": {"x": 125, "y": 5275, "z": 2000},
+        "top": {"x": 125, "y": 5275, "z": 2200},
         "existing": false
       },
       {
         "id": "col.outer.x3600",
         "profile": "250x250",
         "base": {"x": 3600, "y": 5275, "z": 0},
-        "top": {"x": 3600, "y": 5275, "z": 2000},
+        "top": {"x": 3600, "y": 5275, "z": 2200},
         "existing": false
       },
       {
         "id": "col.outer.x7200",
         "profile": "250x250",
         "base": {"x": 7075, "y": 5275, "z": 0},
-        "top": {"x": 7075, "y": 5275, "z": 2000},
+        "top": {"x": 7075, "y": 5275, "z": 2200},
         "existing": false
       }
     ],
     "beams": [
+      {
+        "id": "beam.existing.kp360x2",
+        "profile": "2xKP360x51",
+        "axis_start": {"x": 0, "y": 1675, "z": 2750},
+        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "existing": true
+      },
       {
         "id": "beam.lp225.x125",
         "profile": "LP225x90",
@@ -229,34 +264,28 @@
         "existing": true
       },
       {
-        "id": "beam.existing.kp360x2",
-        "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
-        "existing": true
-      },
-      {
         "id": "beam.inner.new",
-        "profile": "LP315x115",
+        "profile": "LP360x140",
+        "render_color": "#ffffff",
         "ref": "pt.beam.inner.new.axis_start",
-        "axis_start": {"x": 170, "y": -125, "z": -180},
-        "axis_end": {"x": 6950, "y": -125, "z": -180},
+        "axis_start": {"x": 0, "y": 70, "z": -150},
+        "axis_end": {"x": 7200, "y": 70, "z": -150},
         "existing": false
       },
       {
         "id": "beam.outer",
-        "profile": "LP225x115",
-        "axis_start": {"x": 0, "y": 5275, "z": 2120},
-        "axis_end": {"x": 7200, "y": 5275, "z": 2120},
+        "profile": "LP180x180",
+        "axis_start": {"x": 0, "y": 5275, "z": 2290},
+        "axis_end": {"x": 7200, "y": 5275, "z": 2290},
         "existing": false
       }
     ],
     "rafters": [
       {
         "id": "kattotuoli.0",
-        "profile": "198x48",
-        "axis_start": {"x": 754, "y": 1750, "z": 2660},
-        "axis_end": {"x": 754, "y": 5670, "z": 2190},
+        "profile": "223x48",
+        "axis_start": {"x": 754, "y": 1930, "z": 2645},
+        "axis_end": {"x": 754, "y": 5800, "z": 2330},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -266,16 +295,16 @@
       },
       {
         "id": "kattotuoli.vasen",
-        "profile": "LP225x115",
-        "axis_start": {"x": 125, "y": 1750, "z": 2550},
-        "axis_end": {"x": 125, "y": 5200, "z": 2130},
+        "profile": "LP180x180",
+        "axis_start": {"x": 125, "y": 1900, "z": 2550},
+        "axis_end": {"x": 125, "y": 5200, "z": 2290},
         "existing": false
       },
       {
         "id": "kattotuoli.oikea",
-        "profile": "LP225x115",
-        "axis_start": {"x": 7075, "y": 1800, "z": 2545},
-        "axis_end": {"x": 7075, "y": 5200, "z": 2130},
+        "profile": "LP180x180",
+        "axis_start": {"x": 7075, "y": 1900, "z": 2560},
+        "axis_end": {"x": 7075, "y": 5200, "z": 2290},
         "existing": false
       }
     ],
@@ -283,43 +312,43 @@
       {
         "id": "orsi.vasen",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 2330, "z": 2649},
-        "axis_end": {"x": -369, "y": 2330, "z": 2649},
-        "section_rotation_deg": -6.7,
+        "axis_start": {"x": 750, "y": 2130, "z": 2690},
+        "axis_end": {"x": -369, "y": 2130, "z": 2690},
+        "section_rotation_deg": -5.0,
         "existing": false,
         "pattern": {
-          "count": 5,
-          "offset": {"x": 0, "y": 700, "z": -87},
+          "count": 6,
+          "offset": {"x": 0, "y": 580, "z": -47},
           "id_template": "orsi.vasen.{i}"
         }
       },
       {
         "id": "orsi.oikea",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 2330, "z": 2649},
-        "axis_end": {"x": 7569, "y": 2330, "z": 2649},
-        "section_rotation_deg": 6.7,
+        "axis_start": {"x": 6450, "y": 2130, "z": 2690},
+        "axis_end": {"x": 7569, "y": 2130, "z": 2690},
+        "section_rotation_deg": 5.0,
         "existing": false,
         "pattern": {
-          "count": 5,
-          "offset": {"x": 0, "y": 700, "z": -87},
+          "count": 6,
+          "offset": {"x": 0, "y": 580, "z": -47},
           "id_template": "orsi.oikea.{i}"
         }
       },
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 5190, "z": 2299},
-        "axis_end": {"x": -50, "y": 5650, "z": 2239},
-        "section_rotation_deg": -5.1,
+        "axis_start": {"x": 750, "y": 5090, "z": 2450},
+        "axis_end": {"x": 0, "y": 5800, "z": 2395},
+        "section_rotation_deg": -3,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 5190, "z": 2299},
-        "axis_end": {"x": 7250, "y": 5650, "z": 2239},
-        "section_rotation_deg": 5.1,
+        "axis_start": {"x": 6450, "y": 5090, "z": 2450},
+        "axis_end": {"x": 7200, "y": 5800, "z": 2395},
+        "section_rotation_deg": 3,
         "existing": false
       }
      ]
@@ -364,74 +393,28 @@
           "kind": "birdsmouth_notch",
           "reference": "support_inner_edge",
           "offset_mm": 0,
-          "heel_depth_mm": 85,
-          "seat_length_mm": 570
+          "heel_depth_mm": 110,
+          "seat_length_mm": 620
         }
       ]
     },
     {
-      "id": "con.lp225.x125.to.wall",
-      "type": "wall_bolted",
-      "members": [
-        "beam.lp225.x125",
-        "ref.house_wall"
-      ],
-      "at": {"x": 125, "y": 0, "z": 2480}
-    },
-    {
-      "id": "con.lp225.x125.on.col",
-      "type": "supported_on",
-      "members": [
-        "beam.lp225.x125",
-        "col.existing.inner.x125"
-      ],
-      "at": {"x": 125, "y": 1675, "z": 2350},
-      "detail": {
-        "kind": "plate_bracket",
-        "host_member": "support_member",
-        "plate_width_mm": 100,
-        "plate_thickness_mm": 10,
-        "visible_length_mm": 150,
-        "embedded_length_mm": 600,
-        "plates": [
-          {"id": "plate.0", "offset_across_center_mm": -55},
-          {"id": "plate.1", "offset_across_center_mm": 55}
-        ],
-        "points": [
-          {
-            "id": "hole.0",
-            "kind": "hole_center",
-            "plate_id": "plate.0",
-            "diameter_mm": 20,
-            "distance_from_visible_end_mm": 50
-          },
-          {
-            "id": "hole.1",
-            "kind": "hole_center",
-            "plate_id": "plate.1",
-            "diameter_mm": 20,
-            "distance_from_visible_end_mm": 50
-          }
-        ]
-      }
-    },
-    {
-      "id": "con.kattotuoli.vasen.on.lp225.x125",
+      "id": "con.kattotuoli.vasen.on.inner_beam",
       "type": "supported_on",
       "members": [
         "kattotuoli.vasen",
-        "beam.lp225.x125"
+        "beam.inner.new"
       ],
-      "at": {"x": 125, "y": 1750, "z": 2550}
+      "at": {"x": 125, "y": 1900, "z": 2600}
     },
     {
-      "id": "con.kattotuoli.oikea.on.col.x7200",
-      "type": "wall_bolted",
+      "id": "con.kattotuoli.oikea.on.inner_beam",
+      "type": "supported_on",
       "members": [
         "kattotuoli.oikea",
-        "col.existing.inner.x7075"
+        "beam.inner.new"
       ],
-      "at": {"x": 7075, "y": 1800, "z": 2550}
+      "at": {"x": 7075, "y": 1900, "z": 2600}
     },
     {
       "id": "con.kattotuoli.vasen.on.outer_beam",
@@ -458,7 +441,7 @@
         "orsi.vasen",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 2330, "z": 2639},
+      "at": {"x": 776, "y": 2130, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -471,7 +454,7 @@
         "orsi.vasen",
         "kattotuoli.vasen"
       ],
-      "at": {"x": 125, "y": 2330, "z": 2639},
+      "at": {"x": 125, "y": 2130, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -493,7 +476,7 @@
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 2330, "z": 2639},
+      "at": {"x": 6424, "y": 2130, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -506,7 +489,7 @@
         "orsi.oikea",
         "kattotuoli.oikea"
       ],
-      "at": {"x": 7075, "y": 2330, "z": 2639},
+      "at": {"x": 7075, "y": 2130, "z": 2639},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -528,7 +511,7 @@
         "orsi.vasen.45",
         "kattotuoli.0"
       ],
-      "at": {"x": 754, "y": 5200, "z": 2299},
+      "at": {"x": 776, "y": 5100, "z": 2300},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -541,10 +524,10 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 527, "y": 5275, "z": 2287},
+      "at": {"x": 530, "y": 5275, "z": 2250},
       "analysis": {
         "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
+        "support_line_ref": "support_centerline"
       },
       "cuts": [
         {
@@ -563,7 +546,7 @@
         "orsi.oikea.45",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 5200, "z": 2300},
+      "at": {"x": 6424, "y": 5100, "z": 2300},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -576,10 +559,10 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 6673, "y": 5275, "z": 2287},
+      "at": {"x": 6670, "y": 5275, "z": 2250},
       "analysis": {
         "support_model": "pinned",
-        "support_line_ref": "support_outer_edge"
+        "support_line_ref": "support_centerline"
       },
       "cuts": [
         {
@@ -611,7 +594,7 @@
     },
     {
       "id": "con.outer_beam.on.col.x7200",
-      "type": "wall_bolted",
+      "type": "supported_on",
       "members": [
         "beam.outer",
         "col.outer.x7200"
@@ -619,127 +602,12 @@
       "at": {"x": 7075, "y": 5275, "z": 2000}
     },
     {
-      "id": "con.inner_beam.to.col.x7075",
-      "type": "wall_bolted",
-      "members": [
-        "beam.inner.new",
-        "col.existing.inner.x7075"
-      ],
-      "at": {"x": 6950, "y": 1675, "z": 2620}
-    },
-    {
-      "id": "con.inner_beam.fit.on.kp360x2",
-      "type": "notched_over",
+      "id": "con.inner_beam.to.existing_kp360x2",
+      "type": "pinned",
       "members": [
         "beam.inner.new",
         "beam.existing.kp360x2"
-      ],
-      "at": {"x": 170, "y": 1675, "z": 2620},
-      "cuts": [
-        {
-          "kind": "bevel_notch",
-          "side": "top",
-          "reference": "axis_start",
-          "depth_mm": 180,
-          "length_mm": 800
-        }
       ]
-    },
-    {
-      "id": "con.inner_beam.transfer.0",
-      "type": "transfer_link",
-      "members": [
-        "beam.inner.new",
-        "beam.existing.kp360x2"
-      ],
-      "at": {"x": 290, "y": 1675, "z": 2717},
-      "transfer": {
-        "model": "strip_plate_bolts",
-        "description": "Kaistalevy 1 / 4",
-        "strip_width_mm": 80,
-        "plate_height_mm": 280,
-        "outer_plate_thickness_mm": 10,
-        "inner_plate_thickness_mm": 5,
-        "fastener_d_mm": 12,
-        "fastener_grade": "8.8",
-        "fastener_count_per_member": 1,
-        "fasteners": [
-          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
-          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
-        ]
-      }
-    },
-    {
-      "id": "con.inner_beam.transfer.1",
-      "type": "transfer_link",
-      "members": [
-        "beam.inner.new",
-        "beam.existing.kp360x2"
-      ],
-      "at": {"x": 490, "y": 1675, "z": 2739},
-      "transfer": {
-        "model": "strip_plate_bolts",
-        "description": "Kaistalevy 2 / 4",
-        "strip_width_mm": 80,
-        "plate_height_mm": 280,
-        "outer_plate_thickness_mm": 10,
-        "inner_plate_thickness_mm": 5,
-        "fastener_d_mm": 12,
-        "fastener_grade": "8.8",
-        "fastener_count_per_member": 1,
-        "fasteners": [
-          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
-          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
-        ]
-      }
-    },
-    {
-      "id": "con.inner_beam.transfer.2",
-      "type": "transfer_link",
-      "members": [
-        "beam.inner.new",
-        "beam.existing.kp360x2"
-      ],
-      "at": {"x": 690, "y": 1675, "z": 2762},
-      "transfer": {
-        "model": "strip_plate_bolts",
-        "description": "Kaistalevy 3 / 4",
-        "strip_width_mm": 80,
-        "plate_height_mm": 280,
-        "outer_plate_thickness_mm": 10,
-        "inner_plate_thickness_mm": 5,
-        "fastener_d_mm": 12,
-        "fastener_grade": "8.8",
-        "fastener_count_per_member": 1,
-        "fasteners": [
-          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
-          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
-        ]
-      }
-    },
-    {
-      "id": "con.inner_beam.transfer.3",
-      "type": "transfer_link",
-      "members": [
-        "beam.inner.new",
-        "beam.existing.kp360x2"
-      ],
-      "at": {"x": 890, "y": 1675, "z": 2784},
-      "transfer": {
-        "model": "strip_plate_bolts",
-        "description": "Kaistalevy 4 / 4",
-        "strip_width_mm": 80,
-        "plate_height_mm": 280,
-        "outer_plate_thickness_mm": 10,
-        "inner_plate_thickness_mm": 5,
-        "fastener_d_mm": 12,
-        "fastener_grade": "8.8",
-        "fastener_count_per_member": 1,
-        "fasteners": [
-          {"id": "a.0", "member_ref": "member_a", "offset_along_strip_mm": 0, "offset_height_mm": -100},
-          {"id": "b.0", "member_ref": "member_b", "offset_along_strip_mm": 0, "offset_height_mm": 100}
-        ]
-      }
     },
     {
       "id": "con.col.outer.x0.base",
@@ -811,14 +679,14 @@
       ],
       "ref": "pt.beam.inner.new.axis_start",
       "placement": {
-        "anchor": {"x": -369, "y": 0, "z": -15},
+        "anchor": {"x": -369, "y": 140, "z": -29},
         "u": {
           "dir": "+x",
           "length_mm": 7938
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 7.1,
+          "slope_deg": 4.6,
           "slope_sense": "-z",
           "slope_length_mm": 3908
         }
@@ -834,22 +702,22 @@
       "thickness_mm": 8,
       "density_kg_m3": 2500,
       "placement": {
-        "anchor": {"x": 1550, "y": 1800, "z": 2770},
+        "anchor": {"x": 1840, "y": 1800, "z": 2800},
         "u": {
           "dir": "+x",
-          "length_mm": 5400
+          "length_mm": 5110
         },
         "v": {
           "dir": "+z",
-          "length_mm": 1180
+          "length_mm": 1150
         }
       },
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
           [0, 0],
-          [5400, 0],
-          [5400, 1180]
+          [5110, 0],
+          [5110, 1150]
         ]
       },
       "supported_by": [
@@ -862,6 +730,7 @@
       "id": "surf.boarding.gable",
       "type": "boarding",
       "material": "lauta",
+      "existing": true,
       "thickness_mm": 22,
       "placement": {
         "anchor": {"x": 0, "y": 1750, "z": 2900},
@@ -899,7 +768,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2200
         }
       },
       "local_shape": {
@@ -926,7 +795,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2200
         }
       },
       "local_shape": {
@@ -953,7 +822,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2150
         }
       },
       "local_shape": {
@@ -980,7 +849,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2150
         }
       },
       "local_shape": {
@@ -1080,14 +949,14 @@
         "col.outer.x0"
       ],
       "placement": {
-        "anchor": {"x": 125, "y": 1800, "z": 2000},
+        "anchor": {"x": 125, "y": 1800, "z": 2150},
         "u": {
           "dir": "+y",
           "length_mm": 3350
         },
         "v": {
           "dir": "+z",
-          "length_mm": 500
+          "length_mm": 290
         }
       },
       "local_shape": {
@@ -1095,8 +964,9 @@
         "vertices_uv": [
           [0, 0],
           [3350, 0],
-          [3350, 143],
-          [0, 500]
+          [3350, 20],
+          [40, 290],
+          [0, 290]
         ]
       }
     },
@@ -1112,14 +982,14 @@
         "col.outer.x7200"
       ],
       "placement": {
-        "anchor": {"x": 7075, "y": 1800, "z": 2000},
+        "anchor": {"x": 7075, "y": 1800, "z": 2150},
         "u": {
           "dir": "+y",
           "length_mm": 3350
         },
         "v": {
           "dir": "+z",
-          "length_mm": 500
+          "length_mm": 290
         }
       },
       "local_shape": {
@@ -1127,8 +997,9 @@
         "vertices_uv": [
           [0, 0],
           [3350, 0],
-          [3350, 143],
-          [0, 500]
+          [3350, 20],
+          [40, 290],
+          [0, 290]
         ]
       }
     }
