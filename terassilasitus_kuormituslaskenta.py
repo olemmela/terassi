@@ -3,9 +3,8 @@ LASITETUN TERASSIN LOPULLINEN PUURATKAISU – KUORMITUSLASKENTA – ETELÄSUOMI
 ============================================================================
 Standardit: EN 1990, EN 1991-1-1, EN 1991-1-3, EN 1991-1-4, EN 1995-1-1
 
-Geometria luetaan tiedostosta geometry/terassi_puu.json:
-  - uusi puuratkaisu: orret 98×48, nurkkaorret 98×48, kattotuolit 198×48,
-    ulkopalkki LP225×140, sisäpalkki LP315×140
+Geometria luetaan tiedostosta geometry/terassi_v2.json:
+  - uusi puuratkaisu: jäsenten profiilit, mitat ja tukilinjat luetaan geometriasta
   - lineaarijäsenten poikkileikkauksen kierto luetaan section_rotation_deg-kentästä
   - aurinkopaneelien reunakaistat siirtyvät reunakattotuoleille vain orsien kautta
   - ulkokulmien nurkkaorret sidotaan uloimpaan orteen ja kantavat ulkopalkin ulkoreunalla
@@ -13,7 +12,7 @@ Geometria luetaan tiedostosta geometry/terassi_puu.json:
   - paneelikuorman piste/viivamalli luetaan surfaces[*].load_transfer-metadatasta
   - kinostuma talon seinää vasten johdetaan geometriasta muuttuvalla h(x)-korkeudella
   - paneelien kinostumakestävyys tarkistetaan 5.40 kN/m² etupuolen rajaa vasten
-  - lovi- ja nettoh-tarkistukset luetaan geometry/terassi_puu.json:n cuts-kentistä
+  - lovi- ja nettoh-tarkistukset luetaan geometry/terassi_v2.json:n cuts-kentistä
 """
 
 import math
@@ -82,6 +81,13 @@ def format_birdsmouth_h3_status(ok):
     return "ylittaa ohjesaannon -> vaatii erillisen detaljimitoituksen"
 
 
+def format_member_profile_label(member_obj):
+    profile = member_obj["profile"]
+    name = str(profile.get("name", member_obj.get("profile", ""))).replace("x", "×")
+    material = profile.get("material", "")
+    return f"{name} {material}".strip()
+
+
 SIDE_MEMBER_LABEL = {"left": "vasen", "right": "oikea"}
 SIDE_ORDER = {"left": 0, "right": 1}
 INTERIOR_RAFTER_PREFIX = "kattotuoli."
@@ -112,7 +118,8 @@ def member_side_from_id(member_id):
 
 # ── geometria ───────────────────────────────────────────────────────────────
 
-GEO = load("terassi_puu.json")
+GEOMETRY_FILE = "terassi_puu.json"
+GEO = load(GEOMETRY_FILE)
 FOUNDATION_GEO = load("katos.json")
 CONNECTIONS = {conn["id"]: conn for conn in GEO["connections"]}
 CONNECTION_INSTANCES = expanded_connections(GEO)
@@ -463,6 +470,14 @@ house_roof_x0_mm = roof_eave_pts[0]["x"]
 house_roof_x1_mm = roof_eave_pts[-1]["x"]
 house_roof_z0_mm = roof_eave_pts[0]["z"]
 house_roof_z1_mm = roof_eave_pts[-1]["z"]
+house_wall = reference(GEO, "ref.house_wall")
+house_wall_xs_mm = [p["x"] for p in house_wall["polygon"]]
+drift_obstacle_x0_mm = max(min(house_wall_xs_mm), house_roof_x0_mm)
+drift_obstacle_x1_mm = min(max(house_wall_xs_mm), house_roof_x1_mm)
+
+
+def drift_obstacle_x_at(x_mm):
+    return clamp(float(x_mm), drift_obstacle_x0_mm, drift_obstacle_x1_mm)
 
 
 def house_roof_z_at_x(x_mm):
@@ -480,7 +495,8 @@ def roof_inner_z_at_x(x_mm):
 
 
 def local_wall_height_m_at_x(x_mm):
-    return max(0.0, (house_roof_z_at_x(x_mm) - roof_inner_z_at_x(x_mm)) / 1000.0)
+    obstacle_x_mm = drift_obstacle_x_at(x_mm)
+    return max(0.0, (house_roof_z_at_x(obstacle_x_mm) - roof_inner_z_at_x(obstacle_x_mm)) / 1000.0)
 
 
 def member_axis_delta(member_obj):
@@ -617,8 +633,119 @@ outer_beam = member(GEO, "beams", "beam.outer")
 inner_beam = member(GEO, "beams", "beam.inner.new")
 existing_beam = member(GEO, "beams", "beam.existing.kp360x2")
 
-outer_supports_x_mm = sorted(float(member(GEO, "columns", cid)["base"]["x"]) for cid in ("col.outer.x0", "col.outer.x3600", "col.outer.x7200"))
-inner_supports_x_mm = sorted(float(member(GEO, "columns", cid)["base"]["x"]) for cid in ("col.existing.inner.x125", "col.existing.inner.x7075"))
+OUTER_SUPPORT_COLUMN_IDS = ("col.outer.x0", "col.outer.x3600", "col.outer.x7200")
+INNER_SUPPORT_COLUMN_IDS = ("col.existing.inner.x125", "col.existing.inner.x7075")
+
+
+def beam_support_rows_from_connections(beam_id, support_member_ids):
+    rows = []
+    for support_member_id in support_member_ids:
+        connection_obj = optional_connection_by_members(beam_id, support_member_id)
+        if connection_obj is not None:
+            point = connection_support_point(connection_obj, beam_id)
+        elif beam_id == inner_beam["id"]:
+            connection_obj = optional_connection_by_members(beam_id, existing_beam["id"])
+            if connection_obj is None:
+                raise KeyError(f"support connection not found for members: {beam_id}, {support_member_id}")
+            point = member(GEO, "columns", support_member_id)["base"]
+        else:
+            raise KeyError(f"support connection not found for members: {beam_id}, {support_member_id}")
+        rows.append({
+            "connection_id": connection_obj["id"],
+            "member_id": support_member_id,
+            "x_mm": float(point["x"]),
+        })
+    return sorted(rows, key=lambda item: item["x_mm"])
+
+
+outer_support_rows = beam_support_rows_from_connections(outer_beam["id"], OUTER_SUPPORT_COLUMN_IDS)
+inner_support_rows = beam_support_rows_from_connections(inner_beam["id"], INNER_SUPPORT_COLUMN_IDS)
+outer_supports_x_mm = [row["x_mm"] for row in outer_support_rows]
+inner_supports_x_mm = [row["x_mm"] for row in inner_support_rows]
+inner_column_center_xs_mm = sorted(float(member(GEO, "columns", cid)["base"]["x"]) for cid in INNER_SUPPORT_COLUMN_IDS)
+
+EDGE_SUPPORT_Y_GROUP_TOLERANCE_MM = 150.0
+
+
+def is_column_member_id(member_id):
+    return member_id.startswith("col.")
+
+
+def is_beam_member_id(member_id):
+    return member_id.startswith("beam.")
+
+
+def edge_support_candidate_priority(candidate):
+    if is_column_member_id(candidate["member_id"]):
+        return 0
+    return 1
+
+
+def edge_rafter_support_candidates(side):
+    rafter_id = edge_rafter_id(side)
+    candidates = []
+    for conn in GEO["connections"]:
+        members = conn.get("members", [])
+        if rafter_id not in members or "at" not in conn:
+            continue
+        support_member_id = connection_other_member_id(conn, rafter_id)
+        if support_member_id is None:
+            continue
+        if not (is_column_member_id(support_member_id) or is_beam_member_id(support_member_id)):
+            continue
+        support_line_ref = "support_centerline" if is_column_member_id(support_member_id) else None
+        point = connection_support_point(conn, rafter_id, support_line_ref)
+        candidates.append({
+            "side": side,
+            "connection_id": conn["id"],
+            "member_id": support_member_id,
+            "x_mm": float(point["x"]),
+            "y_mm": float(point["y"]),
+            "z_mm": float(point["z"]),
+        })
+    return sorted(candidates, key=lambda item: (item["y_mm"], edge_support_candidate_priority(item), item["connection_id"]))
+
+
+def selected_edge_rafter_supports(side):
+    candidates = edge_rafter_support_candidates(side)
+    if len(candidates) < 2:
+        raise ValueError(f"At least two beam/column supports are required for {edge_rafter_id(side)}")
+
+    groups = []
+    for candidate in candidates:
+        if not groups or candidate["y_mm"] - groups[-1][0]["y_mm"] > EDGE_SUPPORT_Y_GROUP_TOLERANCE_MM:
+            groups.append([candidate])
+        else:
+            groups[-1].append(candidate)
+
+    supports = []
+    for group in groups:
+        group_center_y_mm = sum(item["y_mm"] for item in group) / len(group)
+        supports.append(min(
+            group,
+            key=lambda item: (
+                edge_support_candidate_priority(item),
+                abs(item["y_mm"] - group_center_y_mm),
+                item["connection_id"],
+            ),
+        ))
+    if len(supports) < 2:
+        raise ValueError(f"At least two distinct support lines are required for {edge_rafter_id(side)}")
+    return sorted(supports, key=lambda item: item["y_mm"])
+
+
+edge_rafter_supports_by_side = {
+    side: selected_edge_rafter_supports(side)
+    for side in ("left", "right")
+}
+edge_inner_support_y_by_side = {
+    side: supports[0]["y_mm"]
+    for side, supports in edge_rafter_supports_by_side.items()
+}
+edge_outer_support_y_by_side = {
+    side: supports[-1]["y_mm"]
+    for side, supports in edge_rafter_supports_by_side.items()
+}
 
 interior_rafter_xs_mm = [float(m["axis_start"]["x"]) for m in interior_rafters]
 left_strip_geom_width_mm = interior_rafter_xs_mm[0] - roof_x0_mm
@@ -716,8 +843,8 @@ right_purlin_axis_step = 1.0
 
 interior_inner_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.on.inner_beam"], "kattotuoli.0")["y"])
 interior_outer_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.on.outer_beam"], "kattotuoli.0")["y"])
-edge_inner_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.vasen.on.inner_beam"], edge_rafter_id("left"))["y"])
-edge_outer_support_y_mm = float(connection_support_point(CONNECTIONS["con.kattotuoli.vasen.on.outer_beam"], edge_rafter_id("left"))["y"])
+edge_inner_support_y_mm = min(edge_inner_support_y_by_side.values())
+edge_outer_support_y_mm = max(edge_outer_support_y_by_side.values())
 rafter_analysis_start_y_mm = min(interior_inner_support_y_mm, min(float(m["axis_start"]["y"]) for m in rafters_all))
 drift_obstacle_y_mm = float(GEO.get("_points_by_id", {}).get("pt.beam.inner.new.axis_start", {}).get("y", roof_y0_mm))
 drift_depth_m = max(0.0, (roof_y1_mm - drift_obstacle_y_mm) / 1000.0)
@@ -1285,13 +1412,23 @@ inner_hanger_name = inner_hanger_analysis.get("label", "liitos")
 inner_hanger_fastener = inner_hanger_analysis.get("fastener_label", "")
 inner_hanger_rot_k_Nmm_per_rad = connection_rotational_spring_k_Nmm_per_rad("con.kattotuoli.on.inner_beam")
 
-edge_rafter_support_analysis_by_side = {
-    "left": connection_analysis_info("con.kattotuoli.vasen.on.inner_beam"),
-    "right": connection_analysis_info("con.kattotuoli.oikea.on.inner_beam"),
+edge_rafter_support_analysis_rows_by_side = {
+    side: [
+        {
+            "support": support,
+            "analysis": connection_analysis_info(support["connection_id"]),
+            "rot_k_Nmm_per_rad": connection_rotational_spring_k_Nmm_per_rad(support["connection_id"]),
+        }
+        for support in supports
+    ]
+    for side, supports in edge_rafter_supports_by_side.items()
 }
 edge_rafter_support_rot_k_by_side = {
-    side: connection_rotational_spring_k_Nmm_per_rad(f"con.kattotuoli.{SIDE_MEMBER_LABEL[side]}.on.inner_beam")
-    for side in ("left", "right")
+    side: {
+        row["support"]["y_mm"]: row["rot_k_Nmm_per_rad"]
+        for row in rows
+    }
+    for side, rows in edge_rafter_support_analysis_rows_by_side.items()
 }
 
 
@@ -1310,6 +1447,20 @@ def format_connection_behavior(analysis, rot_k_Nmm_per_rad):
     elif rot_k_Nmm_per_rad is not None:
         parts.append(f"kθ ≈ {rot_k_Nmm_per_rad/1.0e6:.1f} kNm/rad")
     return ", ".join(parts) if parts else analysis["support_model"]
+
+
+def format_edge_support_route(side):
+    return " / ".join(
+        f"y={support['y_mm']:.0f} → {support['member_id']}"
+        for support in edge_rafter_supports_by_side[side]
+    )
+
+
+def format_edge_support_behavior(side):
+    return "; ".join(
+        f"{row['support']['member_id']}: {format_connection_behavior(row['analysis'], row['rot_k_Nmm_per_rad'])}"
+        for row in edge_rafter_support_analysis_rows_by_side[side]
+    )
 
 roof_area_uls_A = gammaG * gk_roofing + gammaQ * s_roof + gammaQ * psi0_W * w_down
 roof_area_uls_B = gammaG * gk_roofing + gammaQ * psi0_snow * s_roof
@@ -1381,7 +1532,7 @@ ULS_CASE_KEYS = ("ULS A", "ULS B", "ULS DRIFT")
 SLS_CASE_KEYS = ("SLS", "SLS DRIFT")
 
 DRIFT_SUMMARY = []
-for x_mm in sorted({roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m in rafters_all]}):
+for x_mm in sorted({drift_obstacle_x_at(x_mm) for x_mm in {roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m in rafters_all]}}):
     h_local_m = local_wall_height_m_at_x(x_mm)
     ls_m, mu2, mu2_h, _, s_peak_kNm2 = snow_drift_params(h_local_m, roof_depth_m, sk, mu1_=mu1)
     DRIFT_SUMMARY.append({
@@ -2203,14 +2354,33 @@ def analyse_corner_purlin_case(side, member_obj, trib_width_m, roof_area_kNm2_at
 def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_self, point_loads_kN, edge=False):
     member_x_mm = float(member_obj["axis_start"]["x"])
     y_end_mm = float(member_obj["axis_end"]["y"])
-    inner_support_y_mm = edge_inner_support_y_mm if edge else interior_inner_support_y_mm
-    outer_support_y_mm = edge_outer_support_y_mm if edge else interior_outer_support_y_mm
+    if edge:
+        side = "left" if member_obj["id"] == edge_rafter_id("left") else "right"
+        support_infos = edge_rafter_supports_by_side[side]
+    else:
+        side = None
+        support_infos = [
+            {
+                "connection_id": "con.kattotuoli.on.inner_beam",
+                "member_id": "beam.inner.new",
+                "x_mm": member_x_mm,
+                "y_mm": interior_inner_support_y_mm,
+            },
+            {
+                "connection_id": "con.kattotuoli.on.outer_beam",
+                "member_id": "beam.outer",
+                "x_mm": member_x_mm,
+                "y_mm": interior_outer_support_y_mm,
+            },
+        ]
+    support_ys_mm = [support["y_mm"] for support in support_infos]
+    inner_support_y_mm = support_ys_mm[0]
+    outer_support_y_mm = support_ys_mm[-1]
     section_rotation = member_section_rotation_deg(member_obj)
     member_E_Nmm2 = E_gl30c if edge else E_c24
     member_fm_d_Nmm2 = fm_d_gl30c if edge else fm_d_c24
     member_fv_d_Nmm2 = fv_d_gl30c if edge else fv_d_c24
     if edge:
-        side = "left" if member_obj["id"] == edge_rafter_id("left") else "right"
         edge_section = edge_rafter_section_by_side[side]
         member_b_mm = edge_section["b_mm"]
         member_h_mm = edge_section["h_mm"]
@@ -2238,7 +2408,7 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     section_h_fn = combined_section_h(member_h_mm, section_depth_functions)
     point_positions_mm = [y_mm for y_mm, _ in point_loads_kN]
     nodes_mm = refine_nodes_mm(
-        [rafter_analysis_start_y_mm, y_end_mm, inner_support_y_mm, outer_support_y_mm, *[v for rng in birdsmouth_ranges for v in rng], *point_positions_mm, *[v for rng in top_notch_ranges for v in rng]],
+        [rafter_analysis_start_y_mm, y_end_mm, *support_ys_mm, *[v for rng in birdsmouth_ranges for v in rng], *point_positions_mm, *[v for rng in top_notch_ranges for v in rng]],
         analysis_step_member_mm,
     )
     uniform, q_line_stats = member_uniform_loads(nodes_mm, member_x_mm, roof_area_kNm2_at, direct_width_m, gamma_self, member_self_kNm, axis="y")
@@ -2248,17 +2418,16 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     ]
     if edge:
         rotational_springs = {}
-        edge_rot_k = edge_rafter_support_rot_k_by_side[side]
-        if edge_rot_k is not None:
-            rotational_springs[inner_support_y_mm] = edge_rot_k
-            rotational_springs[outer_support_y_mm] = edge_rot_k
+        for support_y_mm, edge_rot_k in edge_rafter_support_rot_k_by_side[side].items():
+            if edge_rot_k is not None:
+                rotational_springs[support_y_mm] = edge_rot_k
     else:
         rotational_springs = {}
         if inner_hanger_rot_k_Nmm_per_rad is not None:
             rotational_springs[inner_support_y_mm] = inner_hanger_rot_k_Nmm_per_rad
     response, internal, delta = solve_member_response(
         nodes_mm,
-        [inner_support_y_mm, outer_support_y_mm],
+        support_ys_mm,
         point_loads_kN,
         uniform,
         EI_by_segment_Nmm2=EI_by_segment,
@@ -2301,6 +2470,10 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     if top_notch_gov is not None:
         notch_candidates.append({"label": "rect_top", **top_notch_gov})
     governing_notch = max(notch_candidates, key=lambda item: item["eta_gov"]["value_pct"]) if notch_candidates else None
+    support_reactions = [
+        {**support, "reaction_kN": response["reactions_kN"][support["y_mm"]]}
+        for support in support_infos
+    ]
 
     return {
         "id": member_obj["id"],
@@ -2313,10 +2486,13 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
         "M_gov": moment_gov,
         "V_abs": internal["V_abs"],
         "delta": delta,
-        "delta_lim_mm": abs(outer_support_y_mm - inner_support_y_mm) / 300.0,
+        "delta_lim_mm": abs(max(support_ys_mm) - min(support_ys_mm)) / 300.0,
         "section_rotation_deg": section_rotation,
         "R_inner_kN": response["reactions_kN"][inner_support_y_mm],
         "R_outer_kN": response["reactions_kN"][outer_support_y_mm],
+        "support_reactions": support_reactions,
+        "inner_support_member_id": support_infos[0]["member_id"],
+        "outer_support_member_id": support_infos[-1]["member_id"],
         "MRd_kNm": member_MRd_kNm,
         "VRd_kN": member_VRd_kN,
         "g_self_d_kNm": gammaG * member_self_kNm,
@@ -2466,7 +2642,7 @@ def analyse_edge_rafter_glazing_wind(side, load_rows, wind_factor):
     section = edge_rafter_section_by_side[side]
     y0_mm = float(member_obj["axis_start"]["y"])
     y1_mm = float(member_obj["axis_end"]["y"])
-    support_ys_mm = sorted([edge_inner_support_y_mm, edge_outer_support_y_mm])
+    support_ys_mm = [support["y_mm"] for support in edge_rafter_supports_by_side[side]]
     coord_min_mm = min(y0_mm, y1_mm)
     coord_max_mm = max(y0_mm, y1_mm)
     node_points = [y0_mm, y1_mm, *support_ys_mm]
@@ -2638,14 +2814,30 @@ def analyse_case(case_key):
 
     outer_beam_point_loads = []
     inner_beam_point_loads = []
+    direct_column_loads_kN = {}
+
+    def add_direct_column_load(member_id, load_kN):
+        direct_column_loads_kN[member_id] = direct_column_loads_kN.get(member_id, 0.0) + load_kN
+
+    def route_edge_support_reaction(support_reaction):
+        target_member_id = support_reaction["member_id"]
+        load_kN = support_reaction["reaction_kN"]
+        if target_member_id == "beam.outer":
+            outer_beam_point_loads.append((support_reaction["x_mm"], load_kN))
+        elif target_member_id == "beam.inner.new":
+            inner_beam_point_loads.append((support_reaction["x_mm"], load_kN))
+        elif is_column_member_id(target_member_id):
+            add_direct_column_load(target_member_id, load_kN)
+        else:
+            raise ValueError(f"Unsupported edge rafter support target: {target_member_id}")
+
     for rafter_obj, r in zip(interior_rafters, interior_results):
         x_mm = float(rafter_obj["axis_start"]["x"])
         outer_beam_point_loads.append((x_mm, r["R_outer_kN"]))
         inner_beam_point_loads.append((x_mm, r["R_inner_kN"]))
-    for side, edge_obj in edge_rafters.items():
-        x_mm = float(edge_obj["axis_start"]["x"])
-        outer_beam_point_loads.append((x_mm, edge_results[side]["R_outer_kN"]))
-        inner_beam_point_loads.append((x_mm, edge_results[side]["R_inner_kN"]))
+    for side in edge_rafters:
+        for support_reaction in edge_results[side]["support_reactions"]:
+            route_edge_support_reaction(support_reaction)
     for side, rows in corner_purlin_results.items():
         for result in rows:
             if result["outer_support_member_id"] == "beam.outer":
@@ -2697,6 +2889,7 @@ def analyse_case(case_key):
         "edge_rafters": edge_results,
         "outer_beam_point_loads": sorted(outer_beam_point_loads, key=lambda item: item[0]),
         "inner_beam_point_loads": sorted(inner_beam_point_loads, key=lambda item: item[0]),
+        "direct_column_loads_kN": direct_column_loads_kN,
         "outer_beam": outer_beam_result,
         "inner_beam": inner_beam_result,
     }
@@ -2733,7 +2926,7 @@ if gable_glazing_summary is not None:
             ),
             "existing_beam": analyse_beam_horizontal_interval(
                 existing_beam,
-                inner_supports_x_mm,
+                inner_column_center_xs_mm,
                 gable_glazing_summary["x0_mm"],
                 gable_glazing_summary["x1_mm"],
                 factor * gable_glazing_summary["wind_line_existing_char_kNm"],
@@ -2990,24 +3183,64 @@ column_case_groups = {
     case_key: ("UPLIFT" if case_key == "UPLIFT" else "SLS" if case_key in SLS_CASE_KEYS else "ULS")
     for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
 }
-inner_column_id_by_support_x = {
-    inner_supports_x_mm[0]: "col.x125",
-    inner_supports_x_mm[-1]: "col.x7075",
+COLUMN_LOAD_PATH_BY_MEMBER_ID = {
+    "col.existing.inner.x125": ("upper", "col.x125"),
+    "col.existing.inner.x7075": ("upper", "col.x7075"),
+    "col.x125": ("upper", "col.x125"),
+    "col.x7075": ("upper", "col.x7075"),
+    "col.x0": ("upper", "col.x125"),
+    "col.x7200": ("upper", "col.x7075"),
+    "col.outer.x0": ("ground", "col.x125.outer.bottom"),
+    "col.outer.x3600": ("ground", "col.x3600.outer.bottom"),
+    "col.outer.x7200": ("ground", "col.x7075.outer.bottom"),
 }
-outer_ground_column_id_by_support_x = {
-    outer_supports_x_mm[0]: "col.x125.outer.bottom",
-    outer_supports_x_mm[1]: "col.x3600.outer.bottom",
-    outer_supports_x_mm[2]: "col.x7075.outer.bottom",
-}
+
+
+def column_load_path_for_member_id(member_id):
+    if member_id not in COLUMN_LOAD_PATH_BY_MEMBER_ID:
+        raise ValueError(f"Unsupported direct column load target: {member_id}")
+    return COLUMN_LOAD_PATH_BY_MEMBER_ID[member_id]
+
+
+inner_column_id_by_support_x = {}
+for row in inner_support_rows:
+    path_kind, column_id = column_load_path_for_member_id(row["member_id"])
+    if path_kind != "upper":
+        raise ValueError(f"Inner beam support must route to upper column: {row['member_id']}")
+    inner_column_id_by_support_x[row["x_mm"]] = column_id
+
+outer_ground_column_id_by_support_x = {}
+for row in outer_support_rows:
+    path_kind, column_id = column_load_path_for_member_id(row["member_id"])
+    if path_kind != "ground":
+        raise ValueError(f"Outer beam support must route to ground column: {row['member_id']}")
+    outer_ground_column_id_by_support_x[row["x_mm"]] = column_id
+
 outer_column_member_id_by_support_x = {
-    float(member(GEO, "columns", "col.outer.x0")["base"]["x"]): "col.outer.x0",
-    float(member(GEO, "columns", "col.outer.x3600")["base"]["x"]): "col.outer.x3600",
-    float(member(GEO, "columns", "col.outer.x7200")["base"]["x"]): "col.outer.x7200",
+    row["x_mm"]: row["member_id"]
+    for row in outer_support_rows
 }
 outer_column_objs_by_support_x = {
     support_x_mm: member(GEO, "columns", column_id)
     for support_x_mm, column_id in outer_column_member_id_by_support_x.items()
 }
+
+
+def add_load(loads_by_column, column_id, load_kN):
+    loads_by_column[column_id] = loads_by_column.get(column_id, 0.0) + load_kN
+
+
+direct_upper_column_loads_by_case = {case_key: {} for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")}
+direct_ground_column_loads_by_case = {case_key: {} for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")}
+for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT"):
+    for member_id, load_kN in RESULTS[case_key]["direct_column_loads_kN"].items():
+        path_kind, column_id = column_load_path_for_member_id(member_id)
+        if path_kind == "upper":
+            add_load(direct_upper_column_loads_by_case[case_key], column_id, load_kN)
+        elif path_kind == "ground":
+            add_load(direct_ground_column_loads_by_case[case_key], column_id, load_kN)
+        else:
+            raise ValueError(f"Unsupported column load path kind: {path_kind}")
 
 additional_upper_column_loads_by_case = {
     case_key: {
@@ -3016,6 +3249,9 @@ additional_upper_column_loads_by_case = {
     }
     for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
 }
+for case_key, column_loads in direct_upper_column_loads_by_case.items():
+    for column_id, load_kN in column_loads.items():
+        add_load(additional_upper_column_loads_by_case[case_key], column_id, load_kN)
 portaikko_extra_upper_column_loads_by_case = portaikko_existing_column_extra_loads_by_case(
     (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT")
 )
@@ -3043,6 +3279,8 @@ for case_key in (*ULS_CASE_KEYS, *SLS_CASE_KEYS, "UPLIFT"):
             RESULTS[case_key]["outer_beam"]["reactions_kN"].get(support_x_mm, 0.0)
             + column_self_weight_kN(column_obj, GAMMA_CONCRETE_KNM3, factor=permanent_factor)
         )
+    for column_id, load_kN in direct_ground_column_loads_by_case[case_key].items():
+        add_load(additional_ground_column_loads_by_case[case_key], column_id, load_kN)
 
 terrace_total_column_loads = calculate_katos_total_column_loads(
     case_groups=column_case_groups,
@@ -3056,8 +3294,8 @@ terrace_total_column_envelope = envelope_column_totals(
 )
 foundation_checks = foundation_checks_from_envelope(FOUNDATION_GEO, terrace_total_column_envelope)
 
-h_seina_left_m = local_wall_height_m_at_x(inner_supports_x_mm[0])
-h_seina_right_m = local_wall_height_m_at_x(inner_supports_x_mm[-1])
+h_seina_left_m = local_wall_height_m_at_x(inner_column_center_xs_mm[0])
+h_seina_right_m = local_wall_height_m_at_x(inner_column_center_xs_mm[-1])
 
 
 # ── tulostus ─────────────────────────────────────────────────────────────────
@@ -3071,7 +3309,7 @@ print("  EN 1990 / EN 1991-1-1/3/4 / EN 1995-1-1")
 print(DW)
 
 print("\n── GEOMETRIA ─────────────────────────────────────────────────────")
-print(f"  Geometria                     geometry/terassi_puu.json")
+print(f"  Geometria                     geometry/{GEOMETRY_FILE}")
 print(f"  Paneelikenttä                 {roof_width_mm:.0f} × {roof_depth_mm:.0f} mm  ({roof_area_m2:.2f} m²)")
 if infill_glass_summary is not None:
     print(
@@ -3099,13 +3337,31 @@ if infill_support_purlin is not None:
     )
 if corner_purlins:
     print(f"  Nurkkaorret y-suunnassa       {len(corner_purlins)} kpl  @ x = " + ", ".join(f"{float(item['axis_start']['x']):.0f}" for item in corner_purlins) + " mm")
+print(
+    f"  Ulkopalkki                    {format_member_profile_label(outer_beam)}, "
+    f"b×h = {outer_beam_b_mm:.0f}×{outer_beam_h_mm:.0f} mm, "
+    f"L_axis = {abs(float(outer_beam['axis_end']['x']) - float(outer_beam['axis_start']['x'])):.0f} mm, "
+    f"L_tuki,max = {max(b - a for a, b in zip(outer_supports_x_mm, outer_supports_x_mm[1:])):.0f} mm"
+)
+print(
+    f"  Sisäpalkki                    {format_member_profile_label(inner_beam)}, "
+    f"b×h = {inner_beam_b_mm:.0f}×{inner_beam_h_mm:.0f} mm, "
+    f"L_axis = {abs(float(inner_beam['axis_end']['x']) - float(inner_beam['axis_start']['x'])):.0f} mm, "
+    f"L_tuki = {inner_supports_x_mm[-1] - inner_supports_x_mm[0]:.0f} mm"
+)
 print(f"  Kattotuolien tuet sisa/ulko   y = {interior_inner_support_y_mm:.0f} / {interior_outer_support_y_mm:.0f} mm")
-print(f"  Reunakattotuolien sisatuki    y = {edge_inner_support_y_mm:.0f} mm")
+print(
+    "  Reunakattotuolien tukireitti "
+    + " / ".join(
+        f"{SIDE_MEMBER_LABEL[side]}: {format_edge_support_route(side)}"
+        for side in ("left", "right")
+    )
+)
 print(f"  Sisäpään liitos               {format_connection_behavior(inner_hanger_analysis, inner_hanger_rot_k_Nmm_per_rad)}")
 print(
     "  Reunakattotuolien liitokset   "
     + " / ".join(
-        f"{SIDE_MEMBER_LABEL[side]}: {format_connection_behavior(edge_rafter_support_analysis_by_side[side], edge_rafter_support_rot_k_by_side[side])}"
+        f"{SIDE_MEMBER_LABEL[side]}: {format_edge_support_behavior(side)}"
         for side in ("left", "right")
     )
 )
@@ -3135,8 +3391,9 @@ print(f"  ULS B kattokuorma             {roof_area_uls_B:.3f} kN/m²  (1.35G + 1
 print(f"  ULS DRIFT kattokuorma         1.35G + 1.5·S_kin(x,y)")
 print(f"  Uplift-kattokuorma            {roof_area_uplift:.3f} kN/m²  (0.9G + 1.5W↑)")
 print(f"  Seinää vasten h(x)            {h_seina_left_m:.2f} … {h_seina_right_m:.2f} m")
+print(f"  Kinostuman x-raja             este rajattu pääseinälle x = {drift_obstacle_x0_mm:.0f}…{drift_obstacle_x1_mm:.0f} mm")
 print(f"  Kinostuman alku               y = {drift_obstacle_y_mm:.0f} mm, paneelikentän sisäreuna y = {roof_y0_mm:.0f} mm")
-print(f"    hallitseva x                {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
+print(f"    hallitseva este-x           {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
 print(f"    s_kin,max / s@y_in          {critical_drift['s_peak_kNm2']:.2f} / {critical_drift['s_inner_rafter_kNm2']:.2f} kN/m²")
 
 print("\n── PANEELIT ──────────────────────────────────────────────────────")
@@ -3299,7 +3556,7 @@ if VERTICAL_GLAZING_ROWS:
             abs(gable_glazing_h_sls_drift["existing_beam"]["delta"]["value_mm"]),
         )
         inner_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
-        existing_span_limit_mm = (inner_supports_x_mm[-1] - inner_supports_x_mm[0]) / 300.0
+        existing_span_limit_mm = (inner_column_center_xs_mm[-1] - inner_column_center_xs_mm[0]) / 300.0
         print(
             f"  Päätykolmiolasin omapaino     {gable_glazing_summary['total_kN']:.2f} kN -> "
             f"beam.inner.new viivakuormana {gable_glazing_summary['self_line_kNm']:.3f} kN/m"
@@ -3512,6 +3769,13 @@ print(
         for side, data in edge_rafter_section_by_side.items()
     )
 )
+print(
+    "  Pystyreaktioiden reitti       "
+    + " | ".join(
+        f"{SIDE_MEMBER_LABEL[side]}: {format_edge_support_route(side)}"
+        for side in ("left", "right")
+    )
+)
 print()
 print(f"  {'ID':<12} {'P_orret':>8} {'g_self':>7} {'R_in':>8} {'R_out':>8} {'Md':>7} {'η_M':>7} {'η_V':>7} {'η_lovi':>8} {'δ_sls':>9}")
 print(f"  {'-'*12} {'-'*8} {'-'*7} {'-'*8} {'-'*8} {'-'*7} {'-'*7} {'-'*7} {'-'*8} {'-'*9}")
@@ -3530,7 +3794,12 @@ if critical_edge_rafter['birdsmouth'] is not None:
 if critical_edge_rafter['top_notch'] is None and critical_edge_rafter['birdsmouth'] is None:
     print("    Lovitarkistus               ei lovea")
 
-print("\n── ULKOPALKKI LP225×140 GL30c ───────────────────────────────────")
+print(f"\n── ULKOPALKKI {format_member_profile_label(outer_beam)} ───────────────────────────────────")
+print(
+    f"  Geometriasta                  b×h = {outer_beam_b_mm:.0f}×{outer_beam_h_mm:.0f} mm, "
+    f"akseli x = {float(outer_beam['axis_start']['x']):.0f}…{float(outer_beam['axis_end']['x']):.0f} mm, "
+    f"tuet x = {' / '.join(f'{x_mm:.0f}' for x_mm in outer_supports_x_mm)} mm"
+)
 print(f"  MRd,y = {OUTER_BEAM_MRd_y_kNm:.2f} kNm,  MRd,z = {OUTER_BEAM_MRd_z_kNm:.2f} kNm,  VRd = {OUTER_BEAM_VRd_kN:.2f} kN")
 print(
     f"  Pystymomentti A / B / DRIFT   {RESULTS['ULS A']['outer_beam']['M_gov']['value_kNm']:.2f}"
@@ -3558,7 +3827,12 @@ print(
     f"  {format_ok(max(outer_beam_eta.values()) <= 100.0 and max(outer_beam_interaction.values()) <= 100.0)}"
 )
 
-print("\n── SISÄPALKKI LP315×140 GL30c ────────────────────────────────────")
+print(f"\n── SISÄPALKKI {format_member_profile_label(inner_beam)} ────────────────────────────────────")
+print(
+    f"  Geometriasta                  b×h = {inner_beam_b_mm:.0f}×{inner_beam_h_mm:.0f} mm, "
+    f"akseli x = {float(inner_beam['axis_start']['x']):.0f}…{float(inner_beam['axis_end']['x']):.0f} mm, "
+    f"tuet x = {' / '.join(f'{x_mm:.0f}' for x_mm in inner_supports_x_mm)} mm"
+)
 print(f"  MRd = {INNER_BEAM_MRd_kNm:.2f} kNm,  VRd = {INNER_BEAM_VRd_kN:.2f} kN")
 print(f"  Hallitseva tapaus             {inner_beam_governing_case}")
 print(f"  Md,max                        {inner_beam_governing['M_gov']['value_kNm']:.2f} kNm @ x = {inner_beam_governing['M_gov']['x_mm']:.0f} mm")
@@ -3577,6 +3851,18 @@ for x_mm in outer_supports_x_mm:
 print(f"  Sisäpalkin reaktiot {inner_reaction_case} / UPLIFT [kN]:")
 for x_mm in inner_supports_x_mm:
     print(f"    x = {x_mm:>4.0f} mm              {RESULTS[inner_reaction_case]['inner_beam']['reactions_kN'][x_mm]:>6.2f} / {inner_uplift[x_mm]:>6.2f}")
+direct_column_member_ids = sorted({
+    *RESULTS[outer_reaction_case]["direct_column_loads_kN"].keys(),
+    *RESULTS["UPLIFT"]["direct_column_loads_kN"].keys(),
+})
+if direct_column_member_ids:
+    print(f"  Reunakattotuolien suorat pilarireaktiot {outer_reaction_case} / UPLIFT [kN]:")
+    for member_id in direct_column_member_ids:
+        print(
+            f"    {member_id:<28}"
+            f" {RESULTS[outer_reaction_case]['direct_column_loads_kN'].get(member_id, 0.0):>6.2f}"
+            f" / {RESULTS['UPLIFT']['direct_column_loads_kN'].get(member_id, 0.0):>6.2f}"
+        )
 print(f"  Suurin ulkopilaripuristus         {max(RESULTS[outer_reaction_case]['outer_beam']['reactions_kN'].values()):.2f} kN")
 print(f"  Suurin ulkopilarin nostotarve     {abs(min(outer_uplift.values())):.2f} kN")
 print(f"  Suurin sisätuen nostotarve        {abs(min(inner_uplift.values())):.2f} kN")
@@ -3622,7 +3908,7 @@ for line in foundation_report_lines(foundation_checks):
 print("\n── HUOMIOT ───────────────────────────────────────────────────────")
 print("  * Sisäkattotuolit saavat suoran paneelikaistan tributäärialueensa mukaan; reunapaneelin")
 print("    sisäpuolikas sisältyy uloimman sisäkattotuolin b_dir-arvoon.")
-print("  * Reunapaneelin ulkopuolikas siirtyy geometry/terassi_puu.json:n")
+print(f"  * Reunapaneelin ulkopuolikas siirtyy geometry/{GEOMETRY_FILE}:n")
 print("    load_transfer.member_refs- ja tributary_width_mm-metadatan mukaisesti orsien kautta;")
 print("    reunakattotuoleille ei anneta suoraa paneelikaistan hajakuormaa.")
 print("  * Orsien oma paino mallinnetaan viivakuormana.")
@@ -3647,9 +3933,9 @@ print("  * Päätykolmiolasin omapaino lisätään beam.inner.new-pystymalliin; 
 print("    jaetaan konservatiivisesti 50/50 alapalkille ja yläreunan 2×KP360×51-palkille.")
 print("  * Ulkokulmien nurkkaorret mallinnetaan tuettuina toiseksi uloimpaan kattotuoliin ja")
 print("    ulkopalkin ulkoreunalta kantavina ulokkeina; reunatuki voi siksi olla vetava.")
-print("  * Liitosten tuki- ja rotaatiomallit luetaan geometry/terassi_puu.json:n")
+print(f"  * Liitosten tuki- ja rotaatiomallit luetaan geometry/{GEOMETRY_FILE}:n")
 print("    connections.analysis-metadatasta; nykygeometriassa orsien tuet ovat niveliä.")
-print("  * Orsien ja kattotuolien lovi-/nettoh-tarkistukset luetaan suoraan geometry/terassi_puu.json:n")
+print(f"  * Orsien ja kattotuolien lovi-/nettoh-tarkistukset luetaan suoraan geometry/{GEOMETRY_FILE}:n")
 print("    cuts-kentistä; terassivertailuskriptin hardkoodattuja loviarvoja ei käytetä.")
 print("  * Kinostuma mallinnetaan jäsenkohtaisena muuttuvana s(x,y)-kuormana; taulukon q_avg")
 print("    on roof-stripin ekvivalentin viivakuorman pituuspainotettu keskiarvo ennen kehikkosiirtoa.")
@@ -3659,7 +3945,7 @@ print(f"  * Sisäkattotuolien sisäpään liitos luetaan metadataan: {format_con
 print(
     "  * Reunakattotuolien liitosmallit luetaan metadataan: "
     + " / ".join(
-        f"{SIDE_MEMBER_LABEL[side]}: {format_connection_behavior(edge_rafter_support_analysis_by_side[side], edge_rafter_support_rot_k_by_side[side])}"
+        f"{SIDE_MEMBER_LABEL[side]}: {format_edge_support_behavior(side)}"
         for side in ("left", "right")
     )
     + "."

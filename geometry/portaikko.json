@@ -40,15 +40,15 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 4400
+          "length_mm": 4200
         }
       },
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
-          [0, 0],
-          [7200, 0],
-          [7200, 4400],
+          [0, -2990],
+          [7200, -2990],
+          [7200, 4200],
           [0, 2700]
         ]
       },
@@ -72,7 +72,7 @@
        {
          "id": "opening.kitchen.window",
          "type": "window",
-         "u0_mm": 4400,
+         "u0_mm": 4600,
          "v0_mm": 900,
          "width_mm": 1400,
          "height_mm": 1400
@@ -119,11 +119,11 @@
       "id": "ref.house.roof",
       "type": "building_roof",
       "placement": {
-        "anchor": {"x": -400, "y": -11000, "z": 2950},
+        "anchor": {"x": -600, "y": -11000, "z": 2869},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 8000,
-          "rise_mm": 1750
+          "horizontal_mm": 8300,
+          "rise_mm": 1840
         },
         "v": {
           "dir": "+y",

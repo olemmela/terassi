@@ -7,11 +7,11 @@ Suomen kansalliset liitteet (FI NA)
 Geometria:
   - Yksilappinen katos, kallostus 12° seinän suuntaisesti (vasen alas, oikea ylhäällä)
   - Palkit kulkevat seinän suuntaisesti (x-suunta = jännevälin suunta)
-  - LP225x90 (liimapuu) kulkee seinältä pilarille (y-suunta, 1675mm),
+  - LP225x90 (liimapuu) kulkee seinältä pilarille (y-suunta),
     toimii KP450x51-palkin päätykannakkeena molemmissa päissä
   - KP450x51 sijaitsee 0mm seinästä, pultattu seinään 900mm välein M10
   - KP450x51 sijaitsee 900mm seinästä, tuettu LP225x90:n päälle
-  - 2xKP360x51 sijaitsee 1675mm seinästä (tolppien päällä)
+  - 2xKP360x51 sijaitsee geometriatiedoston mukaan tolppien kohdalla
   - Katon reuna 2200mm seinästä
 """
 
@@ -84,7 +84,7 @@ roof_x0_mm      = min(p["x"] for p in _roof_poly)
 roof_x1_mm      = max(p["x"] for p in _roof_poly)
 
 beam1_y         = int(member(_GEO, "beams", "beam.kp450.y900")["axis_start"]["y"])  # 900 mm
-beam2_y         = int(member(_GEO, "beams", "beam.kp360x2")["axis_start"]["y"])     # 1675 mm
+beam2_y         = int(member(_GEO, "beams", "beam.kp360x2")["axis_start"]["y"])
 
 # Olemassa olevat ruoteet 50×100 mm (KP450 → 2×KP360, y-suunta)
 # Antavat sivutuen KP450×51 #2:lle heikossa akselissa.
@@ -566,7 +566,7 @@ delta_lim = L_mm_eff / 300.0   # mm  (L/300)
 # ============================================================
 # LP225x90  –  PÄÄTYKANNAKE (liimapuu, seinältä pilarille)
 # ============================================================
-# LP225x90 kulkee y-suunnassa seinältä (y=0) pilarille (y=1675mm).
+# LP225x90 kulkee y-suunnassa seinältä pilarille.
 # Se toimii yksinkertaisesti tuettuna palkkina, joka kantaa
 # KP450x51:n päätytukireaktion pistekuormana y=900mm kohdalla.
 #
@@ -949,7 +949,7 @@ print("\n── GEOMETRIA ──────────────────
 print(f"  Seinän leveys                  {wall_width} mm")
 print(f"  Pilarin koko                   {pillar_size}×{pillar_size} mm")
 print(f"  Jänneväli (c/c)                {L_mm:.0f} mm  ({L_m:.3f} m)")
-print(f"  Katon kaltevuus (seinän suunt.){slope_deg:.0f}°")
+print(f"  Katon kaltevuus (seinän suunt.){slope_deg:.1f}°")
 print(f"  Katto ulkonee seinästä         {roof_edge_y} mm")
 print(f"  Räystäs (x-suunta)             {eave_left_mm:.0f} + {eave_right_mm:.0f} mm")
 print(f"  Palkin uloke yli tukien         {a_oh_left_mm:.0f} + {a_oh_right_mm:.0f} mm")
@@ -1062,7 +1062,7 @@ print(f"  KP450×51 #2 (y=900mm)   h/b = {h1/b1:.1f}   σ_m,d = {sigma_md1:.2f} 
 print(f"    Ilman sivutukea  L_eff={ltb_L_full:.0f}mm: σ_crit={sc1_ns:.2f}  λ={lam1_ns:.3f}  k_crit={kc1_ns:.3f}  η={eta_ltb1_ns:.1f}%  {'OK ✓' if eta_ltb1_ns<=100 else '*** YLITTYY – SIVUTUKI PAKOLLINEN ***'}")
 print(f"    Ruodesivutuella  L_eff={ltb_L_ruode:.0f}mm:  σ_crit={sc1_r:.2f}  λ={lam1_r:.3f}  k_crit={kc1_r:.3f}  η={eta_ltb1_r:.1f}%  {'OK ✓' if eta_ltb1_r<=100 else '*** YLITTYY ***'}")
 print()
-print(f"  2×KP360×51 (y=1675mm)  h/b = {h2/b2:.1f}   σ_m,d = {sigma_md2:.2f} N/mm²")
+print(f"  2×KP360×51 (y={beam2_y}mm)  h/b = {h2/b2:.1f}   σ_m,d = {sigma_md2:.2f} N/mm²")
 print(f"    Ilman sivutukea  L_eff={ltb_L_full:.0f}mm: σ_crit={sc2_ns:.2f}  λ={lam2_ns:.3f}  k_crit={kc2_ns:.3f}  η={eta_ltb2_ns:.1f}%  {'OK ✓' if eta_ltb2_ns<=100 else '*** YLITTYY – SIVUTUKI PAKOLLINEN ***'}")
 print(f"    Ruodesivutuella  L_eff={ltb_L_ruode:.0f}mm:  σ_crit={sc2_r:.2f}  λ={lam2_r:.3f}  k_crit={kc2_r:.3f}  η={eta_ltb2_r:.1f}%  {'OK ✓' if eta_ltb2_r<=100 else '*** YLITTYY ***'}")
 print(f"  *** Ruoteiden kiinnitys palkkeihin on kriittinen LTB-tuelle! ***")

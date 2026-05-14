@@ -15,8 +15,8 @@ Laskee kuormat ja mitoitustarkistukset nykyiselle yksikalteiselle katokselle (ka
 
 **Rakennejärjestelmä:**
 - `KP450×51` (Kerto-S) – seinään pultattu palkki, 900 mm seinästä
-- `2×KP360×51` (Kerto-S) – kaksoispalkkina tolpilla, 1 675 mm seinästä
-- `LP225×90` (liimapuu GL30c) – päätykannake seinältä pilarille (y-suunta, 1 675 mm)
+- `2×KP360×51` (Kerto-S) – kaksoispalkkina tolpilla, 1 645 mm seinästä
+- `LP225×90` (liimapuu GL30c) – päätykannake seinältä pilarille (y-suunta, palkin pää y=1 725 mm)
 
 **Laskenta sisältää:**
 - Pysyvät kuormat (kate + palkkien omapainot)
@@ -254,6 +254,10 @@ mitat (`size_mm`), maanpintaviite (`ground_ref`), routaeristys,
 maanpeitteen ominaispaino ja ankkurointitapa. Perustustarkistus laskee
 peitesyvyydet `ref.ground`-pinnasta, joten syvyyttä ei tarvitse ylläpitää
 erillisenä rinnakkaisena arvona.
+Jos viitepinta on mitattu epätasaisena, reference surface voi sisältää
+`elevation_points`-pisteet. Perustustarkistus käyttää `ref.ground`-pisteitä
+interpoloituina korkeuksina; `placement` toimii silloin viewerin ja
+tasomallin likimääräisenä näyttötasona.
 `reference_surfaces[*].openings` kuvaa talon seinien ovi- ja ikkuna-aukot
 seinän paikallisilla `u/v`-koordinaateilla (`u0_mm`, `v0_mm`, `width_mm`,
 `height_mm`). `geometry_loader.py` resolvoi aukot 3D-polygoneiksi ja

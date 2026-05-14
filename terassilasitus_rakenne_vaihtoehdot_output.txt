@@ -7,8 +7,9 @@
   Terassin leveys            7200 mm  (x-suunta)
   Syvyys pilareista          3600 mm  (y-suunta, ulospäin)
   Kaltevuus (y, ulospäin)    7.2°  (2800mm → 2345mm, Δ=455mm / 3600mm)
-  Kaltevuus (x, rakennus)   12.5°  (4641mm → 3039mm / 7200mm)
-  h_seinä (kinostuma)       1.84m (korkea) / 0.24m (matala)
+  Kaltevuus (x, rakennus)   12.5°  (4598mm → 3002mm / 7200mm)
+  h_seinä (kinostuma)       1.80m (korkea) / 0.20m (matala)
+  Kinostuman x-raja         este rajattu pääseinälle x = 0…7200 mm
   Sisäpilari seinästä        1675 mm  (olemassa oleva 250×250)
   Ulkopilari seinästä        5275 mm  (uusi)
   Kattotuolijako             1134 mm  (paneelin leveys, tuplat kattotuolit liitoskohdissa)
@@ -163,22 +164,22 @@
 
   Parametri                        Korkea pää   Matala pää
   ------------------------------ ------------ ------------
-  h_seinä [m]                            1.84         0.24
+  h_seinä [m]                            1.80         0.20
   b_panel [m]                            3.95         3.95
-  ls_drift [m]                           3.95         1.19
-  μ2 (lask. 1.84/0.24)               1.84         0.80
-  s_drift [kN/m²]                        3.68         1.60
-  Δs (lisäkuorma) [kN/m²]                2.08         0.00
+  ls_drift [m]                           3.95         1.01
+  μ2 (lask. 1.80/0.20)               1.80         0.80
+  s_drift [kN/m²]                        3.60         1.60
+  Δs (lisäkuorma) [kN/m²]                2.00         0.00
 
   Konservatiivinen (h_max koko matkalla):
-  s_drift = 3.68 kN/m²  vs tasainen 1.60 kN/m²
+  s_drift = 3.60 kN/m²  vs tasainen 1.60 kN/m²
 
   TARKENNETTU ANALYYSI (EC0 §2.1): h(x) vaihtelee lineaarisesti palkin matkalla
   Seinän korkeus muuttuu 12° kaltevuuden myötä → paikallinen kinostuma pienenee
   kohti matalaa päätä. Kattotuolien pistekuormat lasketaan yksitellen paikallisella h(x)-arvolla.
-  Md,max sijaitsee x = 4525mm palkin alusta (h ≈ 1.30m)
-  q_eq (tarkennettu) = 5.17 kN/m  vs q_eq (konservat.) = 6.14 kN/m
-  Md (konservat.) = 37.1 kNm  →  Md (tarkennettu) = 30.0 kNm  (19% pienempi)
+  Md,max sijaitsee x = 4525mm palkin alusta (h ≈ 1.26m)
+  q_eq (tarkennettu) = 5.09 kN/m  vs q_eq (konservat.) = 6.02 kN/m
+  Md (konservat.) = 36.3 kNm  →  Md (tarkennettu) = 29.9 kNm  (18% pienempi)
   *** Kinostuma sijoittuu talon seinän viereen. ***
 
 ── UUSI SEINÄ y=1800mm  (kolmiolasi + laudoitus) ──────────────────
@@ -186,7 +187,8 @@
   Rakennuksen katto viettää 12.5° → kolmio häviää matalassa päässä.
   Laudoitus:   7200mm × 500mm (täysi leveys, 500mm räystäältä alaspäin)
   Kolmiolasi:  6055mm × 1403mm  → A=4.248m²
-    korkea pää (x=7200mm): h = 4641-500-2800 = 1403mm
+    korkea pää (x=7200mm): aukko katon/palkin mukaan 4598-500-2800 = 1298mm
+    lasipinnan korkeus geometriasta: 1403mm
     matala pää (x=x₀):  h = 0  @  x₀=6055mm
   Tuulipaine seinälle: cp,e = 0.8, qp = 0.515 kN/m²
   Tuulivoima lasille: F = 1.75 kN  (→ uusi palkki)
@@ -198,7 +200,7 @@
 
   Kuormat:
     Kattotuolireaktiot (normaali lumi):  q_eq = 5.43 kN/m
-    Kattotuolireaktiot (kinostuma):      q_eq = 6.14 kN/m  (drift 2.12 kN/m² @ 1.68m seinästä)
+    Kattotuolireaktiot (kinostuma):      q_eq = 6.02 kN/m  (drift 2.07 kN/m² @ 1.68m seinästä)
     Lasi omapaino (ULS, triangul.):      Md = 1.64 kNm → uusi palkki
     Laudoitus omapaino (ULS, triangul.): Md = 0.29 kNm → 2×KP350 (ei tähän)
     Tuuli lasi (vaaka, triangul.):       Md = 2.50 kNm vaaka → uusi palkki
@@ -206,76 +208,76 @@
 
   Mitoitusmomentit:
     Pysty Md (normaali):              32.9 kNm
-    Pysty Md (kinostuma konservat.):   37.1 kNm  (h_max koko matkalla)
-    Pysty Md (kinostuma tarkennettu):  30.0 kNm  (h(x) vaihteleva, EC0 §2.1)
+    Pysty Md (kinostuma konservat.):   36.3 kNm  (h_max koko matkalla)
+    Pysty Md (kinostuma tarkennettu):  29.9 kNm  (h(x) vaihteleva, EC0 §2.1)
     Vaaka Md (tuuli):                  2.5 kNm
   → Hallitseva: normaali lumi+tuuli,  Md_gov = 32.9 kNm
-  (h_seinä_korkea=1.84m, h_seinä_matala=0.24m)
+  (h_seinä_korkea=1.80m, h_seinä_matala=0.20m)
 
   Pystysuuntainen taivutus (Md=32.9 kNm) + vaakataivutus (Md=2.5 kNm)
   Vuorovaikutusehto: My/MRd_y + Mz/MRd_z ≤ 1.0  (EN 1993-1-1 §6.2.9.1)
 
-  ── 6700mm (ei tukia)  Md_v=36.1 kNm, Md_h=2.50 kNm ─
+  ── 6700mm (ei tukia)  Md_v=35.4 kNm, Md_h=2.50 kNm ─
   Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
   Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
   ---------------- ------ -------- --------- ------ -------  ------  ------- ----
-  IPE220             S235    252.0      59.2    61%     89%   26.2  16.3/22mm ✓
-  IPE240             S235    324.3      76.2    47%     70%   30.7  11.6/22mm ✓
-  HEA160             S235    220.1      50.9    71%     85%   30.4  27.0/22mm ✗
-  HEA180             S235    294.1      68.3    53%     63%   35.5  18.0/22mm ✓
-  HEA200             S235    388.6      90.9    40%     48%   42.3  12.3/22mm ✓
-  L200×150×15      S355J2    148.5      52.7    69%     76%   39.4  22.2/22mm ✓
-  LP360x115         GL30c     2484      47.7    76%     87%   20.7  16.3/22mm ✓
-  LP405x115         GL30c     3144      60.4    60%     70%   23.3  11.5/22mm ✓
-  LP315x140         GL30c     2315      44.5    81%     90%   22.1  20.0/22mm ✓
-  LP360x140         GL30c     3024      58.1    62%     70%   25.2  13.4/22mm ✓
-  LP405x140         GL30c     3827      73.5    49%     56%   28.4  9.4/22mm ✓
+  IPE220             S235    252.0      59.2    60%     88%   26.2  16.3/22mm ✓
+  IPE240             S235    324.3      76.2    46%     69%   30.7  11.6/22mm ✓
+  HEA160             S235    220.1      50.9    70%     83%   30.4  27.0/22mm ✗
+  HEA180             S235    294.1      68.3    52%     62%   35.5  18.0/22mm ✓
+  HEA200             S235    388.6      90.9    39%     47%   42.3  12.3/22mm ✓
+  L200×150×15      S355J2    148.5      52.7    67%     75%   39.4  22.2/22mm ✓
+  LP360x115         GL30c     2484      47.7    74%     86%   20.7  16.3/22mm ✓
+  LP405x115         GL30c     3144      60.4    59%     69%   23.3  11.5/22mm ✓
+  LP315x140         GL30c     2315      44.5    80%     88%   22.1  20.0/22mm ✓
+  LP360x140         GL30c     3024      58.1    61%     69%   25.2  13.4/22mm ✓
+  LP405x140         GL30c     3827      73.5    48%     55%   28.4  9.4/22mm ✓
 
-  ── 3350mm (1 välituki katolta)  Md_v=9.0 kNm, Md_h=0.62 kNm ─
+  ── 3350mm (1 välituki katolta)  Md_v=8.8 kNm, Md_h=0.62 kNm ─
   Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
   Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
   ---------------- ------ -------- --------- ------ -------  ------  ------- ----
-  IPE140             S235     77.3      17.2    53%     74%   12.9  5.2/11mm ✓
-  IPE160             S235    123.0      25.3    36%     52%   15.8  3.3/11mm ✓
+  IPE140             S235     77.3      17.2    52%     73%   12.9  5.2/11mm ✓
+  IPE160             S235    123.0      25.3    35%     51%   15.8  3.3/11mm ✓
   IPE180             S235    146.3      34.4    26%     37%   18.8  2.1/11mm ✓
-  IPE200             S235    194.3      45.7    20%     29%   22.4  1.5/11mm ✓
+  IPE200             S235    194.3      45.7    19%     29%   22.4  1.5/11mm ✓
   IPE220             S235    252.0      59.2    15%     22%   26.2  1.0/11mm ✓
   IPE240             S235    324.3      76.2    12%     17%   30.7  0.7/11mm ✓
-  HEA120             S235    101.0      23.7    38%     45%   19.9  4.7/11mm ✓
+  HEA120             S235    101.0      23.7    37%     44%   19.9  4.7/11mm ✓
   HEA140             S235    155.4      35.6    25%     30%   24.7  2.7/11mm ✓
-  HEA160             S235    220.1      50.9    18%     21%   30.4  1.7/11mm ✓
+  HEA160             S235    220.1      50.9    17%     21%   30.4  1.7/11mm ✓
   HEA180             S235    294.1      68.3    13%     16%   35.5  1.1/11mm ✓
   HEA200             S235    388.6      90.9    10%     12%   42.3  0.8/11mm ✓
-  L150×100×10      S355J2     55.1      19.6    46%     53%   18.8  5.1/11mm ✓
-  L150×100×12      S355J2     65.2      23.2    39%     45%   22.4  4.3/11mm ✓
-  L180×110×12      S355J2     93.8      33.3    27%     32%   26.2  2.5/11mm ✓
-  L200×100×12      S355J2    112.6      40.0    23%     28%   27.1  2.0/11mm ✓
+  L150×100×10      S355J2     55.1      19.6    45%     52%   18.8  5.1/11mm ✓
+  L150×100×12      S355J2     65.2      23.2    38%     44%   22.4  4.3/11mm ✓
+  L180×110×12      S355J2     93.8      33.3    27%     31%   26.2  2.5/11mm ✓
+  L200×100×12      S355J2    112.6      40.0    22%     28%   27.1  2.0/11mm ✓
   L200×150×15      S355J2    148.5      52.7    17%     19%   39.4  1.4/11mm ✓
-  LP225×90          GL30c      759      14.6    62%     69%   10.1  5.3/11mm ✓
-  LP315x90          GL30c     1488      28.6    32%     37%   14.2  1.9/11mm ✓
-  LP225x115         GL30c      970      18.6    48%     53%   12.9  4.2/11mm ✓
-  LP270x115         GL30c     1397      26.8    34%     37%   15.5  2.4/11mm ✓
-  LP315x115         GL30c     1902      36.5    25%     28%   18.1  1.5/11mm ✓
-  LP360x115         GL30c     2484      47.7    19%     22%   20.7  1.0/11mm ✓
-  LP405x115         GL30c     3144      60.4    15%     18%   23.3  0.7/11mm ✓
-  LP225x140         GL30c     1181      22.7    40%     43%   15.8  3.4/11mm ✓
-  LP270x140         GL30c     1701      32.7    28%     30%   18.9  2.0/11mm ✓
-  LP315x140         GL30c     2315      44.5    20%     23%   22.1  1.3/11mm ✓
-  LP360x140         GL30c     3024      58.1    16%     17%   25.2  0.8/11mm ✓
+  LP225×90          GL30c      759      14.6    61%     68%   10.1  5.3/11mm ✓
+  LP315x90          GL30c     1488      28.6    31%     36%   14.2  1.9/11mm ✓
+  LP225x115         GL30c      970      18.6    47%     52%   12.9  4.2/11mm ✓
+  LP270x115         GL30c     1397      26.8    33%     37%   15.5  2.4/11mm ✓
+  LP315x115         GL30c     1902      36.5    24%     28%   18.1  1.5/11mm ✓
+  LP360x115         GL30c     2484      47.7    19%     21%   20.7  1.0/11mm ✓
+  LP405x115         GL30c     3144      60.4    15%     17%   23.3  0.7/11mm ✓
+  LP225x140         GL30c     1181      22.7    39%     42%   15.8  3.4/11mm ✓
+  LP270x140         GL30c     1701      32.7    27%     30%   18.9  2.0/11mm ✓
+  LP315x140         GL30c     2315      44.5    20%     22%   22.1  1.3/11mm ✓
+  LP360x140         GL30c     3024      58.1    15%     17%   25.2  0.8/11mm ✓
   LP405x140         GL30c     3827      73.5    12%     14%   28.4  0.6/11mm ✓
-  3×173×48         C24/SC2      718      10.6    85%     90%   10.5  8.7/11mm ✓
-  3×198×48         C24/SC2      941      13.9    65%     69%   12.0  5.8/11mm ✓
-  3×223×48         C24/SC2     1193      17.6    51%     55%   13.5  4.1/11mm ✓
+  3×173×48         C24/SC2      718      10.6    83%     88%   10.5  8.7/11mm ✓
+  3×198×48         C24/SC2      941      13.9    64%     68%   12.0  5.8/11mm ✓
+  3×223×48         C24/SC2     1193      17.6    50%     54%   13.5  4.1/11mm ✓
 
-  ── 2233mm (2 välitukea katolta)  Md_v=4.0 kNm, Md_h=0.28 kNm ─
+  ── 2233mm (2 välitukea katolta)  Md_v=3.9 kNm, Md_h=0.28 kNm ─
   Kiepahdus: L_cr = 1134mm (sivutuki kattotuoleilta, kiinnitys osoitettava)
   Profiili          Teräs   W_crit       MRd    η_v   η_int    kg/m  δ/lim  OK?
   ---------------- ------ -------- --------- ------ -------  ------  ------- ----
-  IPE100             S235     34.2       7.1    57%     77%    8.1  3.3/7mm ✓
-  IPE120             S235     53.0      11.2    36%     49%   10.4  1.8/7mm ✓
+  IPE100             S235     34.2       7.1    55%     76%    8.1  3.3/7mm ✓
+  IPE120             S235     53.0      11.2    35%     49%   10.4  1.8/7mm ✓
   IPE140             S235     77.3      17.2    23%     33%   12.9  1.0/7mm ✓
   IPE160             S235    123.0      25.3    16%     23%   15.8  0.6/7mm ✓
-  IPE180             S235    146.3      34.4    12%     17%   18.8  0.4/7mm ✓
+  IPE180             S235    146.3      34.4    11%     16%   18.8  0.4/7mm ✓
   IPE200             S235    194.3      45.7     9%     13%   22.4  0.3/7mm ✓
   IPE220             S235    252.0      59.2     7%     10%   26.2  0.2/7mm ✓
   IPE240             S235    324.3      76.2     5%      8%   30.7  0.1/7mm ✓
@@ -284,28 +286,28 @@
   HEA160             S235    220.1      50.9     8%      9%   30.4  0.3/7mm ✓
   HEA180             S235    294.1      68.3     6%      7%   35.5  0.2/7mm ✓
   HEA200             S235    388.6      90.9     4%      5%   42.3  0.2/7mm ✓
-  L150×100×10      S355J2     55.1      19.6    21%     23%   18.8  1.0/7mm ✓
-  L150×100×12      S355J2     65.2      23.2    17%     20%   22.4  0.9/7mm ✓
+  L150×100×10      S355J2     55.1      19.6    20%     23%   18.8  1.0/7mm ✓
+  L150×100×12      S355J2     65.2      23.2    17%     19%   22.4  0.9/7mm ✓
   L180×110×12      S355J2     93.8      33.3    12%     14%   26.2  0.5/7mm ✓
   L200×100×12      S355J2    112.6      40.0    10%     12%   27.1  0.4/7mm ✓
-  L200×150×15      S355J2    148.5      52.7     8%      8%   39.4  0.3/7mm ✓
-  LP180×90          GL30c      486       9.3    43%     47%    8.1  2.1/7mm ✓
-  LP225×90          GL30c      759      14.6    28%     31%   10.1  1.1/7mm ✓
+  L200×150×15      S355J2    148.5      52.7     7%      8%   39.4  0.3/7mm ✓
+  LP180×90          GL30c      486       9.3    42%     46%    8.1  2.1/7mm ✓
+  LP225×90          GL30c      759      14.6    27%     30%   10.1  1.1/7mm ✓
   LP315x90          GL30c     1488      28.6    14%     16%   14.2  0.4/7mm ✓
-  LP225x115         GL30c      970      18.6    22%     24%   12.9  0.8/7mm ✓
-  LP270x115         GL30c     1397      26.8    15%     17%   15.5  0.5/7mm ✓
+  LP225x115         GL30c      970      18.6    21%     23%   12.9  0.8/7mm ✓
+  LP270x115         GL30c     1397      26.8    15%     16%   15.5  0.5/7mm ✓
   LP315x115         GL30c     1902      36.5    11%     12%   18.1  0.3/7mm ✓
   LP360x115         GL30c     2484      47.7     8%     10%   20.7  0.2/7mm ✓
   LP405x115         GL30c     3144      60.4     7%      8%   23.3  0.1/7mm ✓
-  LP225x140         GL30c     1181      22.7    18%     19%   15.8  0.7/7mm ✓
+  LP225x140         GL30c     1181      22.7    17%     19%   15.8  0.7/7mm ✓
   LP270x140         GL30c     1701      32.7    12%     13%   18.9  0.4/7mm ✓
   LP315x140         GL30c     2315      44.5     9%     10%   22.1  0.2/7mm ✓
   LP360x140         GL30c     3024      58.1     7%      8%   25.2  0.2/7mm ✓
   LP405x140         GL30c     3827      73.5     5%      6%   28.4  0.1/7mm ✓
-  3×148×48         C24/SC2      526       7.8    52%     54%    9.0  2.7/7mm ✓
-  3×173×48         C24/SC2      718      10.6    38%     40%   10.5  1.7/7mm ✓
-  3×198×48         C24/SC2      941      13.9    29%     31%   12.0  1.1/7mm ✓
-  3×223×48         C24/SC2     1193      17.6    23%     24%   13.5  0.8/7mm ✓
+  3×148×48         C24/SC2      526       7.8    51%     53%    9.0  2.7/7mm ✓
+  3×173×48         C24/SC2      718      10.6    37%     39%   10.5  1.7/7mm ✓
+  3×198×48         C24/SC2      941      13.9    28%     30%   12.0  1.1/7mm ✓
+  3×223×48         C24/SC2     1193      17.6    22%     24%   13.5  0.8/7mm ✓
 
 
 ── KIEPAHDUS – PÄÄTYPALKKI (EN 1993-1-1 §6.3.2) ─────────────
@@ -377,24 +379,22 @@
   Kinostuma alkaa UUDESTA SEINÄSTÄ y=1800mm ja leviää ulospäin.
   Huippu on paneelien sisäreunassa (y=1800mm), ei talon seinällä.
 
-  h_seinä konservatiivinen (korkea pää, y=0):  1.84m → s_peak=3.68 kN/m²
-  h_seinä tarkka (y=1800mm):                   1.50m → s_peak=2.99 kN/m²
-  Käytetään tarkkaa: s_peak = 2.99 kN/m²,  ls = 3.95m
-  (Konservatiivisella h=1.84m: s_peak=3.68 kN/m², ULS=5.52 kN/m²)
+  h_seinä konservatiivinen (korkea pää, y=0):  1.80m → s_peak=3.60 kN/m²
+  h_seinä tarkka (y=1800mm):                   1.45m → s_peak=2.91 kN/m²
+  Käytetään tarkkaa: s_peak = 2.91 kN/m²,  ls = 3.95m
+  (Konservatiivisella h=1.80m: s_peak=3.60 kN/m², ULS=5.39 kN/m²)
   Paneelin kapasiteetti: 5.40 kN/m²
 
   Etäisyys seinästä               s [kN/m²]   ULS=1.5s      η %  OK?
   ------------------------------------------------------------
-  y=1800mm (paneelin sisäreuna)        2.99       4.49      83%  ✓
-  y=2000mm                             2.84       4.26      79%  ✓
-  y=2795mm (1. paneelin puoliväli)       2.24       3.36      62%  ✓
+  y=1800mm (paneelin sisäreuna)        2.91       4.36      81%  ✓
+  y=2000mm                             2.76       4.14      77%  ✓
+  y=2795mm (1. paneelin puoliväli)       2.17       3.26      60%  ✓
   y=3790mm (1. paneelirivi ulkoreuna)       1.60       2.40      44%  ✓
   y=3800mm (2. paneelirivin alku)       1.60       2.40      44%  ✓
   y=5785mm (2. paneelirivi ulkoreuna)       1.60       2.40      44%  ✓
 
-  ✓ Kaikki pisteet OK. Tarkka arvo sisäreunan ULS=4.49/5.40 kN/m² η=83%
-  *** HUOM: Konservatiivisella h=1.84m: ULS=5.52 kN/m² (102%) ylittyisi,
-      mutta tarkka h=1.50m @ y=1800mm on mitoittava.
+  ✓ Kaikki pisteet OK. Tarkka arvo sisäreunan ULS=4.36/5.40 kN/m² η=81%
   0.9·Gk + 1.5·Wk,ylös (kattotuoli) = -0.261 kN/m
   *** NOSTO: 0.44 kN per tukipiste – kiinnitys tarvitaan!
 
@@ -410,7 +410,7 @@
   SAHATAVARA C24 (SC2):   pienin → 223×48  η=85%  δ=7.3mm
 
   HUOMIOT:
-  * Lumikinostuma: s_drift=3.68 kN/m² vs tasainen 1.60 kN/m²  (h_korkea=1.84m, h_matala=0.24m)
+  * Lumikinostuma: s_drift=3.60 kN/m² vs tasainen 1.60 kN/m²  (h_korkea=1.80m, h_matala=0.20m)
   * Liimapuu GL30c: SC2 (kmod=0.8), kattolasitus ja sivulasitus suojaavat rakenteen.
   * Sahatavara C24 SC2: kmod=0.8. Kaikki puuprofiilit SC2 – kattolasitus suojaa.
   * 48mm leveillä kertopuilla h/b > 5 → sivutuki paneelilevyistä tarkistettava.

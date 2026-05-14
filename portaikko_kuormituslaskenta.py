@@ -186,6 +186,14 @@ def analyse():
 
     entrance_wall = reference(geo, "ref.house_wall_entrance")
     entrance_wall_poly = entrance_wall["polygon"]
+    house_wall = reference(geo, "ref.house_wall")
+    house_wall_xs_mm = [p["x"] for p in house_wall["polygon"]]
+    drift_obstacle_x0_mm = min(house_wall_xs_mm)
+    drift_obstacle_x1_mm = max(house_wall_xs_mm)
+
+    def drift_obstacle_x_at(x_mm):
+        return max(drift_obstacle_x0_mm, min(float(x_mm), drift_obstacle_x1_mm))
+
     house_roof_ref = reference(geo, "ref.house.roof")
     house_roof_poly = house_roof_ref["polygon"]
 
@@ -399,13 +407,14 @@ def analyse():
                     "h_mm": max(0.0, entrance_top_z_mm - roof_z_at_wall_mm),
                 }
             )
-        if bbox_contains_xy(x_mm, rafter_wall_y_mm, house_roof_poly):
-            house_roof_z_mm = plane_z_at_xy(house_roof_poly, x_mm, rafter_wall_y_mm)
+        house_roof_x_mm = drift_obstacle_x_at(x_mm)
+        if abs(house_roof_x_mm - x_mm) <= 1e-9 and bbox_contains_xy(house_roof_x_mm, rafter_wall_y_mm, house_roof_poly):
+            house_roof_z_mm = plane_z_at_xy(house_roof_poly, house_roof_x_mm, rafter_wall_y_mm)
             if house_roof_z_mm is not None:
                 obstacle_candidates.append(
                     {
                         "source": "ref.house.roof",
-                        "reference_x_mm": x_mm,
+                        "reference_x_mm": house_roof_x_mm,
                         "reference_y_mm": rafter_wall_y_mm,
                         "roof_z_mm": roof_z_at_wall_mm,
                         "obstacle_z_mm": house_roof_z_mm,
@@ -736,6 +745,8 @@ def analyse():
             "rafter_h_mm": rafter_h_mm,
             "beam_b_mm": beam_b_mm,
             "beam_h_mm": beam_h_mm,
+            "drift_obstacle_x0_mm": drift_obstacle_x0_mm,
+            "drift_obstacle_x1_mm": drift_obstacle_x1_mm,
         },
         "loads": {
             "gk_roofing": gk_roofing,
@@ -853,6 +864,7 @@ def main():
     print(f"  qp({loads['z_ref']:.1f} m)                     {loads['qp_z']:.3f} kN/m²")
     print(f"  cp,net alas / ylös              {loads['cp_net_down']:.2f} / {loads['cp_net_up']:.2f}")
     print(f"  Tuuli alas / ylös               {loads['w_wind_down']:.3f} / {loads['w_wind_up']:.3f} kN/m²")
+    print(f"  Kinostuman x-raja               este rajattu pääseinälle x = {geo['drift_obstacle_x0_mm']:.0f}…{geo['drift_obstacle_x1_mm']:.0f} mm")
     print(
         f"  Kinostuma max                   {drift['critical_source']} @ x={drift['reference_x_mm']:.0f}, y={drift['reference_y_mm']:.0f}"
         f" → h = {drift['h_mm']/1000.0:.2f} m, ls = {drift['ls_m']:.2f} m, μ2 = {drift['mu2']:.2f}"

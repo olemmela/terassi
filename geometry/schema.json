@@ -145,6 +145,11 @@
         "placement":   { "$ref": "#/$defs/placement" },
         "local_shape": { "$ref": "#/$defs/local_shape" },
         "polygon":     { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/point" } },
+        "elevation_points": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/point" }
+        },
         "openings": {
           "type": "array",
           "items": { "$ref": "#/$defs/reference_surface_opening" }

@@ -46,6 +46,7 @@ GK_HOLLOW_SLAB_ALLOW_KNM2 = 2.0
 QK_HOLLOW_SLAB_ALLOW_KNM2 = 2.5
 COLUMN_CASE_FACTORS = {"ULS": GAMMA_G, "SLS": 1.0, "UPLIFT": GAMMA_G_MIN}
 FLOOR_LIVE_CASE_FACTORS = {"ULS": 1.5, "SLS": 1.0, "UPLIFT": 0.0}
+NODE_SNAP_TOL_MM = 1.0
 COLUMN_OUTPUT_ORDER = [
     "col.x125",
     "col.x7075",
@@ -71,6 +72,15 @@ COLUMN_GROUP_LABEL = {
 
 def reaction_distribution(connection_obj):
     return connection_obj.get("analysis", {}).get("reaction_distribution", {"type": "point"})
+
+
+def snap_s_mm(value_mm, reference_values_mm, tolerance_mm=NODE_SNAP_TOL_MM):
+    value_mm = float(value_mm)
+    for reference_mm in reference_values_mm:
+        reference_mm = float(reference_mm)
+        if abs(value_mm - reference_mm) <= tolerance_mm:
+            return reference_mm
+    return value_mm
 
 
 def reaction_distribution_width_mm(distribution, supported_member_obj):
@@ -269,6 +279,7 @@ def calculate_katos_total_column_loads(
             live_line_load_kNm = FLOOR_LIVE_CASE_FACTORS[case_group] * QK_TERRACE_LIVE_KNM2 * cast_trib_width_m
 
             wall_support_s_mm = project_point_to_member_s_mm(beam_obj, connection_by_members(CONNECTION_LIST, beam_id, "ref.house_wall")["at"])
+            wall_support_s_mm = snap_s_mm(wall_support_s_mm, (0.0, beam_length_mm))
             outer_beam_row = None
             outer_support_conn = None
             for candidate in outer_beam_rows:
@@ -281,8 +292,11 @@ def calculate_katos_total_column_loads(
             if outer_beam_row is None or outer_support_conn is None:
                 raise KeyError(f"Outer beam support not found for hollow slab {beam_id}")
             outer_support_s_mm = project_point_to_member_s_mm(beam_obj, outer_support_conn["at"])
+            outer_support_s_mm = snap_s_mm(outer_support_s_mm, (0.0, beam_length_mm))
             load_start_s_mm = member_s_at_axis_value_mm(beam_obj, "y", FLOOR_Y0_MM)
             load_end_s_mm = member_s_at_axis_value_mm(beam_obj, "y", FLOOR_Y1_MM)
+            load_start_s_mm = snap_s_mm(load_start_s_mm, (wall_support_s_mm, outer_support_s_mm))
+            load_end_s_mm = snap_s_mm(load_end_s_mm, (wall_support_s_mm, outer_support_s_mm))
 
             point_loads_kN = []
             support_s_mm = [wall_support_s_mm, outer_support_s_mm]

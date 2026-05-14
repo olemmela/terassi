@@ -48,8 +48,8 @@
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
-          [0, 0],
-          [7200, 0],
+          [0, -2990],
+          [7200, -2990],
           [7200, 4200],
           [0, 2700]
         ]
@@ -74,7 +74,7 @@
         {
           "id": "opening.kitchen.window",
           "type": "window",
-          "u0_mm": 4400,
+          "u0_mm": 4600,
           "v0_mm": 900,
           "width_mm": 1400,
           "height_mm": 1400
@@ -85,11 +85,11 @@
       "id": "ref.house.roof",
       "type": "building_roof",
       "placement": {
-        "anchor": {"x": -400, "y": 0, "z": 2950},
+        "anchor": {"x": -600, "y": 0, "z": 2869},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 8000,
-          "rise_mm": 1750
+          "horizontal_mm": 8300,
+          "rise_mm": 1840
         },
         "v": {
           "dir": "+y",
@@ -180,8 +180,8 @@
       {
         "id": "col.existing.inner.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": -3470},
-        "top": {"x": 125, "y": 1675, "z": 2350},
+        "base": {"x": 125, "y": 1675, "z": -3510},
+        "top": {"x": 125, "y": 1675, "z": 2310},
         "existing": true
       },
       {
@@ -217,22 +217,22 @@
       {
         "id": "beam.lp225.x125",
         "profile": "LP225x90",
-        "axis_start": {"x": 125, "y": 0, "z": 2480},
-        "axis_end": {"x": 125, "y": 1750, "z": 2480},
+        "axis_start": {"x": 125, "y": 0, "z": 2492.5},
+        "axis_end": {"x": 125, "y": 1725, "z": 2492.5},
         "existing": true
       },
       {
         "id": "beam.lp225.x7075",
         "profile": "LP225x90",
-        "axis_start": {"x": 7075, "y": 0, "z": 3990},
-        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
+        "axis_start": {"x": 7075, "y": 0, "z": 4022.5},
+        "axis_end": {"x": 7075, "y": 1725, "z": 4022.5},
         "existing": true
       },
       {
         "id": "beam.existing.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2750},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4330},
         "existing": true
       },
       {
@@ -376,7 +376,7 @@
         "beam.lp225.x125",
         "ref.house_wall"
       ],
-      "at": {"x": 125, "y": 0, "z": 2480}
+      "at": {"x": 125, "y": 0, "z": 2492.5}
     },
     {
       "id": "con.lp225.x125.on.col",
@@ -385,7 +385,7 @@
         "beam.lp225.x125",
         "col.existing.inner.x125"
       ],
-      "at": {"x": 125, "y": 1675, "z": 2350},
+      "at": {"x": 125, "y": 1675, "z": 2310},
       "detail": {
         "kind": "plate_bracket",
         "host_member": "support_member",
@@ -422,7 +422,7 @@
         "kattotuoli.vasen",
         "beam.lp225.x125"
       ],
-      "at": {"x": 125, "y": 1750, "z": 2550}
+      "at": {"x": 125, "y": 1725, "z": 2550}
     },
     {
       "id": "con.kattotuoli.oikea.on.col.x7200",
@@ -634,7 +634,7 @@
         "beam.inner.new",
         "beam.existing.kp360x2"
       ],
-      "at": {"x": 170, "y": 1675, "z": 2620},
+      "at": {"x": 170, "y": 1645, "z": 2620},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -652,7 +652,7 @@
         "beam.inner.new",
         "beam.existing.kp360x2"
       ],
-      "at": {"x": 290, "y": 1675, "z": 2717},
+      "at": {"x": 290, "y": 1645, "z": 2717},
       "transfer": {
         "model": "strip_plate_bolts",
         "description": "Kaistalevy 1 / 4",
@@ -676,7 +676,7 @@
         "beam.inner.new",
         "beam.existing.kp360x2"
       ],
-      "at": {"x": 490, "y": 1675, "z": 2739},
+      "at": {"x": 490, "y": 1645, "z": 2739},
       "transfer": {
         "model": "strip_plate_bolts",
         "description": "Kaistalevy 2 / 4",
@@ -700,7 +700,7 @@
         "beam.inner.new",
         "beam.existing.kp360x2"
       ],
-      "at": {"x": 690, "y": 1675, "z": 2762},
+      "at": {"x": 690, "y": 1645, "z": 2762},
       "transfer": {
         "model": "strip_plate_bolts",
         "description": "Kaistalevy 3 / 4",
@@ -724,7 +724,7 @@
         "beam.inner.new",
         "beam.existing.kp360x2"
       ],
-      "at": {"x": 890, "y": 1675, "z": 2784},
+      "at": {"x": 890, "y": 1645, "z": 2784},
       "transfer": {
         "model": "strip_plate_bolts",
         "description": "Kaistalevy 4 / 4",

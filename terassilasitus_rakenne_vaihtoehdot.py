@@ -14,7 +14,8 @@ Geometria:
 
 Kantavat rakenteet:
   - Kattotuolit (rafters): y-suunta, 1134mm välein, jänneväli 3430mm (c/c sisäpalkki → ulkopilari)
-    Sisätuki: olemassa oleva 2×KP360×51 (y=1675mm pilareilla)
+    Sisätuki: geometriasta luettu sisäpalkki/pilarilinja; olemassa oleva
+    2×KP360×51 on erillisenä siirtopalkkina lähellä pilarilinjaa
     Ulkotuki: uusi ulkoreunanen palkki (y=5275mm)
   - Ulkoreunanen palkki: x-suunta, 3 pilaria → kaksi 3600mm jänneväliä
   - Materiaalit: verrataan liimapuuta (GL30c) ja terästä (HEA/IPE)
@@ -130,6 +131,8 @@ _GEO = load("terassi.json")
 _wall_ref    = reference(_GEO, "ref.house_wall")
 _wall_xs     = [p["x"] for p in _wall_ref["polygon"]]
 terrace_width = int(max(_wall_xs) - min(_wall_xs))   # 7200 mm (x-suunta)
+drift_obstacle_x0_mm = min(_wall_xs)
+drift_obstacle_x1_mm = max(_wall_xs)
 
 _inner_col   = member(_GEO, "columns", "col.existing.inner.x125")
 _outer_col_0 = member(_GEO, "columns", "col.outer.x0")
@@ -166,7 +169,8 @@ _roof_eave_z1    = _roof_eave_pts[-1]["z"]
 
 def h_rakennus_at_x(x_mm):
     """Talon räystään korkeus (mm) annetussa x-koordinaatissa (lineaarinen interpolointi)."""
-    t = (x_mm - _roof_eave_x0) / (_roof_eave_x1 - _roof_eave_x0)
+    x_eff_mm = clamp_mm(x_mm, drift_obstacle_x0_mm, drift_obstacle_x1_mm)
+    t = (x_eff_mm - _roof_eave_x0) / (_roof_eave_x1 - _roof_eave_x0)
     return _roof_eave_z0 + t * (_roof_eave_z1 - _roof_eave_z0)
 
 _wall_z_x0 = h_rakennus_at_x(0)
@@ -229,7 +233,7 @@ _inner_beam_profile = _inner_beam["profile"]
 b_inner_beam_mm = int(_inner_beam_profile.get("b_mm", 90))  # oletus 90 mm jos TBD
 
 # Kattotuolin tarkka jänneväli: sisäpalkin keskilinja → ulkopilarin keskilinja
-# Sisäpalkin keskilinja: 1675 + 125 (pilarin puolikas) + b_inner/2
+# Sisäpalkin keskilinja: pilarilinja + pilarin puolikas + b_inner/2
 rafter_inner_y = inner_y + pilari_leveys / 2.0 + b_inner_beam_mm / 2.0
 rafter_outer_y = inner_y + terrace_depth        # = 5275mm ulkopilarin keskikohta
 rafter_span_mm  = rafter_outer_y - rafter_inner_y
@@ -650,7 +654,7 @@ _boarding = surface(_GEO, "surf.boarding.gable")
 b_kolmio_lasi_mm = float(_triangle["placement"]["u"]["length_mm"])
 h_kolmio_lasi_mm = float(_triangle["placement"]["v"]["length_mm"])
 h_laudoitus_mm   = float(_boarding["placement"]["v"]["length_mm"])
-# h_kolmio_lasi = h_rakennus_korkea − h_laudoitus − h_katto_inner (geometriasta)
+gable_gap_h_mm = h_rakennus_korkea - h_laudoitus_mm - h_katto_inner
 b_kolmio_tot_mm = float(terrace_width)   # mm – laudoituksen koko leveys
 
 # Pinta-alat
@@ -712,7 +716,7 @@ Md_rafter_beam_normal = max(inner_beam_moments_normal.values())
 # --- 2) Lumikinostuma lisäkuorma ---
 # Kinostuma kasvattaa rafter-reaktioita terassin sisäpäässä.
 # Drift on triangulaarinen: huippu rakennuksen seinällä, nolla ls_drift-päässä.
-# Rafter-terassin sisäpää (y=1675mm) on 1675mm seinästä → drift-arvo siinä:
+# Rafter-terassin sisäpään drift-arvo luetaan pilarilinjan y-koordinaatista:
 y_inner_drift = inner_y / 1000.0    # m
 if ls_drift > y_inner_drift:
     s_drift_inner = s_drift * (1.0 - y_inner_drift / ls_drift)  # kN/m² palkin kohdalla
@@ -984,6 +988,7 @@ print(f"  Syvyys pilareista          {terrace_depth} mm  (y-suunta, ulospäin)")
 print(f"  Kaltevuus (y, ulospäin)    {slope_deg:.1f}°  ({h_katto_inner:.0f}mm → {h_katto_outer:.0f}mm, Δ={h_katto_inner-h_katto_outer:.0f}mm / {terrace_depth:.0f}mm)")
 print(f"  Kaltevuus (x, rakennus)   {slope_rakennus_deg:.1f}°  ({h_rakennus_korkea:.0f}mm → {h_rakennus_matala:.0f}mm / {terrace_width:.0f}mm)")
 print(f"  h_seinä (kinostuma)       {h_seinä_korkea:.2f}m (korkea) / {h_seinä_matala:.2f}m (matala)")
+print(f"  Kinostuman x-raja         este rajattu pääseinälle x = {drift_obstacle_x0_mm:.0f}…{drift_obstacle_x1_mm:.0f} mm")
 print(f"  Sisäpilari seinästä        {inner_y} mm  (olemassa oleva 250×250)")
 print(f"  Ulkopilari seinästä        {outer_y} mm  (uusi)")
 print(f"  Kattotuolijako             {rafter_spacing*1000:.0f} mm  (paneelin leveys, tuplat kattotuolit liitoskohdissa)")
@@ -1249,7 +1254,8 @@ print(f"  Uusi vaakapalkki muodostaa sisäseinän kohdalla y={inner_y + pilari_l
 print(f"  Rakennuksen katto viettää {slope_rakennus_deg:.1f}° → kolmio häviää matalassa päässä.")
 print(f"  Laudoitus:   {b_kolmio_tot_mm:.0f}mm × {h_laudoitus_mm:.0f}mm (täysi leveys, 500mm räystäältä alaspäin)")
 print(f"  Kolmiolasi:  {b_kolmio_lasi_mm:.0f}mm × {h_kolmio_lasi_mm:.0f}mm  → A={A_lasi:.3f}m²")
-print(f"    korkea pää (x={terrace_width:.0f}mm): h = {h_rakennus_korkea:.0f}-{h_laudoitus_mm:.0f}-{h_katto_inner:.0f} = {h_kolmio_lasi_mm:.0f}mm")
+print(f"    korkea pää (x={terrace_width:.0f}mm): aukko katon/palkin mukaan {h_rakennus_korkea:.0f}-{h_laudoitus_mm:.0f}-{h_katto_inner:.0f} = {gable_gap_h_mm:.0f}mm")
+print(f"    lasipinnan korkeus geometriasta: {h_kolmio_lasi_mm:.0f}mm")
 print(f"    matala pää (x=x₀):  h = 0  @  x₀={b_kolmio_lasi_mm:.0f}mm")
 print(f"  Tuulipaine seinälle: cp,e = {cp_end_wall:.1f}, qp = {qp_z:.3f} kN/m²")
 print(f"  Tuulivoima lasille: F = {F_wind_triangle:.2f} kN  (→ uusi palkki)")

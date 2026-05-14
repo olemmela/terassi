@@ -72,7 +72,7 @@
        {
          "id": "opening.kitchen.window",
          "type": "window",
-         "u0_mm": 4400,
+         "u0_mm": 4600,
          "v0_mm": 900,
          "width_mm": 1400,
          "height_mm": 1400
@@ -119,39 +119,64 @@
       "id": "ref.terrace_floor",
       "type": "floor",
       "placement": {
-        "anchor": {"x": 0, "y": 0, "z": 0},
+        "anchor": {"x": 0, "y": 0, "z": -26},
         "u": {
           "dir": "+x",
-          "length_mm": 7200
+          "horizontal_mm": 7200,
+          "rise_mm": 35
         },
         "v": {
           "dir": "+y",
           "horizontal_mm": 5400,
-          "rise_mm": -68
+          "rise_mm": -94
         }
       },
       "local_shape": {
         "type": "rectangle"
-      }
+      },
+      "elevation_points": [
+        {"x": 250, "y": 0, "z": -24},
+        {"x": 3600, "y": 0, "z": 0},
+        {"x": 7200, "y": 0, "z": 0},
+        {"x": 250, "y": 1650, "z": -50},
+        {"x": 7075, "y": 1650, "z": -24},
+        {"x": 7100, "y": 5200, "z": -78},
+        {"x": 3600, "y": 5200, "z": -90},
+        {"x": 200, "y": 5200, "z": -128}
+      ]
     },
     {
       "id": "ref.ground",
       "type": "ground",
       "placement": {
-        "anchor": {"x": -1000, "y": 0, "z": -2990},
+        "anchor": {"x": -1000, "y": 0, "z": -2891},
         "u": {
           "dir": "+x",
-          "length_mm": 10000
+          "horizontal_mm": 10000,
+          "rise_mm": -11
         },
         "v": {
           "dir": "+y",
-          "horizontal_mm": 10000,
-          "rise_mm": -200
+          "horizontal_mm": 12000,
+          "rise_mm": -413
         }
       },
       "local_shape": {
         "type": "rectangle"
-      }
+      },
+      "elevation_points": [
+        {"x": 0, "y": 0, "z": -2888},
+        {"x": 3600, "y": 0, "z": -2908},
+        {"x": 7200, "y": 0, "z": -2933},
+        {"x": 250, "y": 1600, "z": -2933},
+        {"x": 6950, "y": 1600, "z": -2958},
+        {"x": 250, "y": 5150, "z": -3088},
+        {"x": 3600, "y": 5150, "z": -3061},
+        {"x": 6950, "y": 5150, "z": -3038},
+        {"x": 3600, "y": 7400, "z": -3113},
+        {"x": 3600, "y": 9400, "z": -3228},
+        {"x": 3600, "y": 11400, "z": -3323}
+      ]
     }
   ],
   "foundations": [
@@ -305,8 +330,8 @@
       {
         "id": "col.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": -3470},
-        "top": {"x": 125, "y": 1675, "z": 2350},
+        "base": {"x": 125, "y": 1675, "z": -3510},
+        "top": {"x": 125, "y": 1675, "z": 2310},
         "existing": true
       },
       {
@@ -319,8 +344,8 @@
       {
         "id": "col.x125.outer.bottom",
         "profile": "250x250",
-        "base": {"x": 125, "y": 5275, "z": -3670},
-        "top": {"x": 125, "y": 5275, "z": -550},
+        "base": {"x": 125, "y": 5275, "z": -3710},
+        "top": {"x": 125, "y": 5275, "z": -590},
         "existing": true
       },
       {
@@ -342,8 +367,8 @@
       {
         "id": "beam.kp450.wall",
         "profile": "KP450x51",
-        "axis_start": {"x": 0, "y": 0, "z": 2800},
-        "axis_end": {"x": 7200, "y": 0, "z": 4370},
+        "axis_start": {"x": 0, "y": 25, "z": 2800},
+        "axis_end": {"x": 7200, "y": 25, "z": 4370},
         "existing": true
       },
       {
@@ -356,28 +381,28 @@
       {
         "id": "beam.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2705},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4300},
         "existing": true
       },
       {
         "id": "beam.lp225.x125",
         "profile": "LP225x90",
-        "axis_start": {"x": 125, "y": 0, "z": 2480},
-        "axis_end": {"x": 125, "y": 1750, "z": 2480},
+        "axis_start": {"x": 125, "y": 0, "z": 2492.5},
+        "axis_end": {"x": 125, "y": 1725, "z": 2492.5},
         "existing": true
       },
       {
         "id": "beam.lp225.x7075",
         "profile": "LP225x90",
-        "axis_start": {"x": 7075, "y": 0, "z": 3990},
-        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
+        "axis_start": {"x": 7075, "y": 0, "z": 4022.5},
+        "axis_end": {"x": 7075, "y": 1725, "z": 4022.5},
         "existing": true
       },
       {
         "id": "beam.bottom.conreate.0",
         "profile": "350x300",
-        "axis_start": {"x": 0, "y": 5250, "z": -370},
+        "axis_start": {"x": 0, "y": 5250, "z": -410},
         "axis_end": {"x": 3590, "y": 5250, "z": -370},
         "mass_kg": 785,
         "existing": true
@@ -394,42 +419,42 @@
         "id": "beam.hollow.0",
         "profile": "P15-19",
         "axis_start": {"x": 600, "y": -50, "z": -140},
-        "axis_end": {"x": 600, "y": 5150, "z": -200},
+        "axis_end": {"x": 600, "y": 5150, "z": -263},
         "existing": true
       },
       {
         "id": "beam.hollow.1",
         "profile": "P15-20",
         "axis_start": {"x": 1675, "y": -50, "z": -140},
-        "axis_end": {"x": 1675, "y": 5150, "z": -200},
+        "axis_end": {"x": 1675, "y": 5150, "z": -251},
         "existing": true
       },
       {
         "id": "beam.hollow.2",
         "profile": "P15-20",
         "axis_start": {"x": 2875, "y": -50, "z": -140},
-        "axis_end": {"x": 2875, "y": 5150, "z": -200},
+        "axis_end": {"x": 2875, "y": 5150, "z": -235},
         "existing": true
       },
       {
         "id": "beam.hollow.3",
         "profile": "P15-20",
         "axis_start": {"x": 4075, "y": -50, "z": -140},
-        "axis_end": {"x": 4075, "y": 5150, "z": -200},
+        "axis_end": {"x": 4075, "y": 5150, "z": -228},
         "existing": true
       },
       {
         "id": "beam.hollow.4",
         "profile": "P15-20",
         "axis_start": {"x": 5275, "y": -50, "z": -140},
-        "axis_end": {"x": 5275, "y": 5150, "z": -200},
+        "axis_end": {"x": 5275, "y": 5150, "z": -228},
         "existing": true
       },
       {
         "id": "beam.hollow.5",
         "profile": "P15-21",
         "axis_start": {"x": 6475, "y": -50, "z": -140},
-        "axis_end": {"x": 6475, "y": 5150, "z": -200},
+        "axis_end": {"x": 6475, "y": 5150, "z": -228},
         "existing": true
       }
     ],
@@ -437,8 +462,8 @@
       {
         "id": "purlin.50x100",
         "profile": "50x100",
-        "axis_start": {"x": 1200, "y": 1000, "z": 3230},
-        "axis_end": {"x": 1200, "y": 2200, "z": 3230},
+        "axis_start": {"x": 1000, "y": 1000, "z": 3160},
+        "axis_end": {"x": 1000, "y": 2200, "z": 3160},
         "existing": true,
         "section_rotation_deg": 12,
         "pattern": {
@@ -450,8 +475,8 @@
       {
         "id": "purlin.rayst.left",
         "profile": "50x100",
-        "axis_start": {"x": -400, "y": 75, "z": 2890},
-        "axis_end": {"x": 1600, "y": 75, "z": 3330},
+        "axis_start": {"x": -540, "y": 75, "z": 2820},
+        "axis_end": {"x": 1600, "y": 75, "z": 3300},
         "existing": true,
         "pattern": {
           "count": 2,
@@ -463,7 +488,7 @@
         "id": "purlin.rayst.right",
         "profile": "50x100",
         "axis_start": {"x": 5600, "y": 50, "z": 4200},
-        "axis_end": {"x": 7600, "y": 50, "z": 4640},
+        "axis_end": {"x": 7650, "y": 50, "z": 4640},
         "existing": true,
         "pattern": {
           "count": 2,
@@ -474,32 +499,32 @@
       {
         "id": "diag.45.left",
         "profile": "50x100",
-        "axis_start": {"x": 340, "y": 1000, "z": 3050},
-        "axis_end": {"x": -380, "y": 2200, "z": 2900},
+        "axis_start": {"x": 500, "y": 1000, "z": 3050},
+        "axis_end": {"x": -550, "y": 2150, "z": 2810},
         "section_rotation_deg": 12,
         "existing": true
       },
       {
         "id": "diag.67.left",
         "profile": "50x100",
-        "axis_start": {"x": 500, "y": 1000, "z": 3090},
-        "axis_end": {"x": 300, "y": 2200, "z": 3050},
+        "axis_start": {"x": 590, "y": 1000, "z": 3070},
+        "axis_end": {"x": 300, "y": 2200, "z": 3010},
         "section_rotation_deg": 12,
         "existing": true
       },
       {
         "id": "diag.45.right",
         "profile": "50x100",
-        "axis_start": {"x": 6500, "y": 1000, "z": 4400},
-        "axis_end": {"x": 7600, "y": 2190, "z": 4640},
+        "axis_start": {"x": 6500, "y": 1000, "z": 4380},
+        "axis_end": {"x": 7650, "y": 2190, "z": 4630},
         "section_rotation_deg": 12,
         "existing": true
       },
       {
         "id": "diag.67.right",
         "profile": "50x100",
-        "axis_start": {"x": 6350, "y": 1000, "z": 4370},
-        "axis_end": {"x": 6800, "y": 2200, "z": 4470},
+        "axis_start": {"x": 6350, "y": 1000, "z": 4350},
+        "axis_end": {"x": 6800, "y": 2200, "z": 4450},
         "section_rotation_deg": 12,
         "existing": true
       }
@@ -522,7 +547,7 @@
         "beam.lp225.x125",
         "ref.house_wall"
       ],
-      "at": {"x": 125, "y": 0, "z": 2480}
+      "at": {"x": 125, "y": 0, "z": 2492.5}
     },
     {
       "id": "con.lp225.x7075.to.wall",
@@ -531,7 +556,7 @@
         "beam.lp225.x7075",
         "ref.house_wall"
       ],
-      "at": {"x": 7075, "y": 0, "z": 4020}
+      "at": {"x": 7075, "y": 0, "z": 4022.5}
     },
     {
       "id": "con.lp225.x125.on.col",
@@ -540,7 +565,7 @@
         "beam.lp225.x125",
         "col.x125"
       ],
-      "at": {"x": 125, "y": 1675, "z": 2350},
+      "at": {"x": 125, "y": 1675, "z": 2310},
       "detail": {
         "kind": "plate_bracket",
         "host_member": "support_member",
@@ -614,7 +639,7 @@
         "beam.kp450.y900",
         "beam.lp225.x125"
       ],
-      "at": {"x": 125, "y": 900, "z": 2593}
+      "at": {"x": 125, "y": 900, "z": 2605}
     },
     {
       "id": "con.kp450y900.on.lp.x7075",
@@ -632,7 +657,7 @@
         "beam.kp360x2",
         "beam.lp225.x125"
       ],
-      "at": {"x": 125, "y": 1675, "z": 2593}
+      "at": {"x": 125, "y": 1645, "z": 2605}
     },
     {
       "id": "con.kp360x2.on.lp.x7075",
@@ -641,7 +666,7 @@
         "beam.kp360x2",
         "beam.lp225.x7075"
       ],
-      "at": {"x": 7075, "y": 1675, "z": 4133}
+      "at": {"x": 7075, "y": 1645, "z": 4133}
     },
     {
       "id": "con.purlin.on.kp450.y900",
@@ -663,7 +688,7 @@
         "purlin.50x100",
         "beam.kp360x2"
       ],
-      "at": {"x": 1200, "y": 1675, "z": 3250},
+      "at": {"x": 1200, "y": 1645, "z": 3250},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -730,7 +755,7 @@
         "diag.45.left",
         "beam.kp360x2"
       ],
-      "at": {"x": -65, "y": 1675, "z": 2966},
+      "at": {"x": -65, "y": 1645, "z": 2966},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -765,7 +790,7 @@
         "diag.67.left",
         "beam.kp360x2"
       ],
-      "at": {"x": 388, "y": 1675, "z": 3068},
+      "at": {"x": 388, "y": 1645, "z": 3068},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -800,7 +825,7 @@
         "diag.45.right",
         "beam.kp360x2"
       ],
-      "at": {"x": 7124, "y": 1675, "z": 4566},
+      "at": {"x": 7124, "y": 1645, "z": 4566},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -835,7 +860,7 @@
         "diag.67.right",
         "beam.kp360x2"
       ],
-      "at": {"x": 6603, "y": 1675, "z": 4456},
+      "at": {"x": 6603, "y": 1645, "z": 4456},
       "cuts": [
         {
           "kind": "bevel_notch",
@@ -911,7 +936,7 @@
         "beam.hollow.0",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 600, "y": 5150, "z": -200},
+      "at": {"x": 600, "y": 5150, "z": -263},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -929,7 +954,7 @@
         "beam.hollow.1",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 1675, "y": 5150, "z": -200},
+      "at": {"x": 1675, "y": 5150, "z": -251},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -947,7 +972,7 @@
         "beam.hollow.2",
         "beam.bottom.conreate.0"
       ],
-      "at": {"x": 2875, "y": 5150, "z": -200},
+      "at": {"x": 2875, "y": 5150, "z": -235},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -965,7 +990,7 @@
         "beam.hollow.3",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 4075, "y": 5150, "z": -200},
+      "at": {"x": 4075, "y": 5150, "z": -228},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -983,7 +1008,7 @@
         "beam.hollow.4",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 5275, "y": 5150, "z": -200},
+      "at": {"x": 5275, "y": 5150, "z": -228},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -1001,7 +1026,7 @@
         "beam.hollow.5",
         "beam.bottom.conreate.1"
       ],
-      "at": {"x": 6475, "y": 5150, "z": -200},
+      "at": {"x": 6475, "y": 5150, "z": -228},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline",
@@ -1019,7 +1044,7 @@
         "beam.bottom.conreate.0",
         "col.x125.outer.bottom"
       ],
-      "at": {"x": 125, "y": 5275, "z": -550}
+      "at": {"x": 125, "y": 5275, "z": -590}
     },
     {
       "id": "con.bottom.conreate.0.on.col.x3600.outer",
@@ -1063,6 +1088,7 @@
       "id": "surf.roof",
       "type": "roof_covering",
       "material": "teräspeltikate + alusrakenne",
+      "thickness_mm": 20,
       "supported_by": [
         "beam.kp450.wall",
         "beam.kp450.y900",
@@ -1076,11 +1102,11 @@
         "diag.67.right"
       ],
       "placement": {
-        "anchor": {"x": -400, "y": -11000, "z": 2950},
+        "anchor": {"x": -600, "y": -11000, "z": 2869},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 8000,
-          "rise_mm": 1750
+          "horizontal_mm": 8300,
+          "rise_mm": 1840
         },
         "v": {
           "dir": "+y",
@@ -1105,15 +1131,16 @@
         "beam.hollow.5"
       ],
       "placement": {
-        "anchor": {"x": 250, "y": 0, "z": -30},
+        "anchor": {"x": 250, "y": 0, "z": -55},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 6700
+          "horizontal_mm": 6700,
+          "rise_mm": 32
         },
         "v": {
           "dir": "+y",
           "horizontal_mm": 5100,
-          "rise_mm": -68
+          "rise_mm": -89
         }
       },
       "local_shape": {

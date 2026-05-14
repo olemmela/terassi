@@ -48,8 +48,8 @@
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
-          [0, 0],
-          [7200, 0],
+          [0, -2990],
+          [7200, -2990],
           [7200, 4200],
           [0, 2700]
         ]
@@ -74,7 +74,7 @@
         {
           "id": "opening.kitchen.window",
           "type": "window",
-          "u0_mm": 4400,
+          "u0_mm": 4600,
           "v0_mm": 900,
           "width_mm": 1400,
           "height_mm": 1400
@@ -85,11 +85,11 @@
       "id": "ref.house.roof",
       "type": "building_roof",
       "placement": {
-        "anchor": {"x": -400, "y": 0, "z": 2950},
+        "anchor": {"x": -600, "y": 0, "z": 2869},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 8000,
-          "rise_mm": 1750
+          "horizontal_mm": 8300,
+          "rise_mm": 1840
         },
         "v": {
           "dir": "+y",
@@ -161,6 +161,13 @@
       "h_mm": 225
     },
     {
+      "id": "200x63",
+      "name": "C24 200x63",
+      "material": "Sahatavara",
+      "b_mm": 63,
+      "h_mm": 200
+    },
+    {
       "id": "223x48",
       "name": "C24 223x48",
       "material": "Mitallistettu sahatavara",
@@ -194,8 +201,8 @@
       {
         "id": "col.existing.inner.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": -3470},
-        "top": {"x": 125, "y": 1675, "z": 2350},
+        "base": {"x": 125, "y": 1675, "z": -3510},
+        "top": {"x": 125, "y": 1675, "z": 2310},
         "existing": true
       },
       {
@@ -209,21 +216,21 @@
         "id": "col.outer.x0",
         "profile": "250x250",
         "base": {"x": 125, "y": 5275, "z": 0},
-        "top": {"x": 125, "y": 5275, "z": 2000},
+        "top": {"x": 125, "y": 5275, "z": 2100},
         "existing": false
       },
       {
         "id": "col.outer.x3600",
         "profile": "250x250",
         "base": {"x": 3600, "y": 5275, "z": 0},
-        "top": {"x": 3600, "y": 5275, "z": 2000},
+        "top": {"x": 3600, "y": 5275, "z": 2100},
         "existing": false
       },
       {
         "id": "col.outer.x7200",
         "profile": "250x250",
         "base": {"x": 7075, "y": 5275, "z": 0},
-        "top": {"x": 7075, "y": 5275, "z": 2000},
+        "top": {"x": 7075, "y": 5275, "z": 2100},
         "existing": false
       }
     ],
@@ -231,22 +238,22 @@
       {
         "id": "beam.existing.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2750},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4330},
         "existing": true
       },
       {
         "id": "beam.lp225.x125",
         "profile": "LP225x90",
-        "axis_start": {"x": 125, "y": 0, "z": 2480},
-        "axis_end": {"x": 125, "y": 1750, "z": 2480},
+        "axis_start": {"x": 125, "y": 0, "z": 2492.5},
+        "axis_end": {"x": 125, "y": 1725, "z": 2492.5},
         "existing": true
       },
       {
         "id": "beam.lp225.x7075",
         "profile": "LP225x90",
-        "axis_start": {"x": 7075, "y": 0, "z": 3990},
-        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
+        "axis_start": {"x": 7075, "y": 0, "z": 4022.5},
+        "axis_end": {"x": 7075, "y": 1725, "z": 4022.5},
         "existing": true
       },
       {
@@ -261,8 +268,8 @@
       {
         "id": "beam.outer",
         "profile": "LP225x140",
-        "axis_start": {"x": 0, "y": 5275, "z": 2120},
-        "axis_end": {"x": 7200, "y": 5275, "z": 2120},
+        "axis_start": {"x": 0, "y": 5275, "z": 2220},
+        "axis_end": {"x": 7200, "y": 5275, "z": 2220},
         "existing": false
       }
     ],
@@ -271,7 +278,7 @@
         "id": "kattotuoli.0",
         "profile": "223x48",
         "axis_start": {"x": 754, "y": 1930, "z": 2645},
-        "axis_end": {"x": 754, "y": 5800, "z": 2160},
+        "axis_end": {"x": 754, "y": 5800, "z": 2280},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -283,14 +290,14 @@
         "id": "kattotuoli.vasen",
         "profile": "LP225x140",
         "axis_start": {"x": 125, "y": 1900, "z": 2550},
-        "axis_end": {"x": 125, "y": 5200, "z": 2130},
+        "axis_end": {"x": 125, "y": 5200, "z": 2230},
         "existing": false
       },
       {
         "id": "kattotuoli.oikea",
         "profile": "LP225x140",
         "axis_start": {"x": 7075, "y": 1900, "z": 2550},
-        "axis_end": {"x": 7075, "y": 5200, "z": 2130},
+        "axis_end": {"x": 7075, "y": 5200, "z": 2230},
         "existing": false
       }
     ],
@@ -298,43 +305,43 @@
       {
         "id": "orsi.vasen",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 2130, "z": 2679},
-        "axis_end": {"x": -369, "y": 2130, "z": 2679},
-        "section_rotation_deg": -6.7,
+        "axis_start": {"x": 750, "y": 2130, "z": 2690},
+        "axis_end": {"x": -369, "y": 2130, "z": 2690},
+        "section_rotation_deg": -6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -72},
+          "offset": {"x": 0, "y": 580, "z": -56},
           "id_template": "orsi.vasen.{i}"
         }
       },
       {
         "id": "orsi.oikea",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 2130, "z": 2679},
-        "axis_end": {"x": 7569, "y": 2130, "z": 2679},
-        "section_rotation_deg": 6.7,
+        "axis_start": {"x": 6450, "y": 2130, "z": 2690},
+        "axis_end": {"x": 7569, "y": 2130, "z": 2690},
+        "section_rotation_deg": 6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -72},
+          "offset": {"x": 0, "y": 580, "z": -56},
           "id_template": "orsi.oikea.{i}"
         }
       },
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 5090, "z": 2330},
-        "axis_end": {"x": 0, "y": 5800, "z": 2225},
-        "section_rotation_deg": -5.1,
+        "axis_start": {"x": 750, "y": 5090, "z": 2410},
+        "axis_end": {"x": 0, "y": 5800, "z": 2335},
+        "section_rotation_deg": -4,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 5090, "z": 2330},
-        "axis_end": {"x": 7200, "y": 5800, "z": 2225},
-        "section_rotation_deg": 5.1,
+        "axis_start": {"x": 6450, "y": 5090, "z": 2410},
+        "axis_end": {"x": 7200, "y": 5800, "z": 2335},
+        "section_rotation_deg": 4,
         "existing": false
       }
      ]
@@ -369,7 +376,7 @@
         "kattotuoli.0",
         "beam.outer"
       ],
-      "at": {"x": 754, "y": 5275, "z": 2209},
+      "at": {"x": 754, "y": 5275, "z": 2325},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -409,7 +416,7 @@
         "kattotuoli.vasen",
         "beam.outer"
       ],
-      "at": {"x": 125, "y": 5275, "z": 2150}
+      "at": {"x": 125, "y": 5275, "z": 2200}
     },
     {
       "id": "con.kattotuoli.oikea.on.outer_beam",
@@ -418,7 +425,7 @@
         "kattotuoli.oikea",
         "beam.outer"
       ],
-      "at": {"x": 7075, "y": 5275, "z": 2150}
+      "at": {"x": 7075, "y": 5275, "z": 2200}
     },
     {
       "id": "con.orsi.vasen.on.kattotuoli.0",
@@ -440,7 +447,7 @@
         "orsi.vasen",
         "kattotuoli.vasen"
       ],
-      "at": {"x": 125, "y": 2130, "z": 2639},
+      "at": {"x": 125, "y": 2130, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -462,7 +469,7 @@
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 2130, "z": 2639},
+      "at": {"x": 6424, "y": 2130, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -510,7 +517,7 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 530, "y": 5275, "z": 2250},
+      "at": {"x": 530, "y": 5275, "z": 2320},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -545,7 +552,7 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 6670, "y": 5275, "z": 2250},
+      "at": {"x": 6670, "y": 5275, "z": 2320},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -672,7 +679,7 @@
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 7.1,
+          "slope_deg": 5.4,
           "slope_sense": "-z",
           "slope_length_mm": 3908
         }
@@ -688,22 +695,22 @@
       "thickness_mm": 8,
       "density_kg_m3": 2500,
       "placement": {
-        "anchor": {"x": 1840, "y": 1800, "z": 2800},
+        "anchor": {"x": 1200, "y": 1800, "z": 2800},
         "u": {
           "dir": "+x",
-          "length_mm": 5110
+          "length_mm": 5750
         },
         "v": {
           "dir": "+z",
-          "length_mm": 1150
+          "length_mm": 1270
         }
       },
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
           [0, 0],
-          [5110, 0],
-          [5110, 1150]
+          [5750, 0],
+          [5750, 1270]
         ]
       },
       "supported_by": [
@@ -719,7 +726,7 @@
       "existing": true,
       "thickness_mm": 22,
       "placement": {
-        "anchor": {"x": 0, "y": 1750, "z": 2900},
+        "anchor": {"x": 0, "y": 1750, "z": 3020},
         "u": {
           "dir": "+x",
           "horizontal_mm": 7200,
@@ -754,7 +761,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -781,7 +788,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -808,7 +815,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -835,7 +842,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2000
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -935,7 +942,7 @@
         "col.outer.x0"
       ],
       "placement": {
-        "anchor": {"x": 125, "y": 1800, "z": 2000},
+        "anchor": {"x": 125, "y": 1800, "z": 2100},
         "u": {
           "dir": "+y",
           "length_mm": 3350
@@ -968,7 +975,7 @@
         "col.outer.x7200"
       ],
       "placement": {
-        "anchor": {"x": 7075, "y": 1800, "z": 2000},
+        "anchor": {"x": 7075, "y": 1800, "z": 2100},
         "u": {
           "dir": "+y",
           "length_mm": 3350

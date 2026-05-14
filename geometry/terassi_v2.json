@@ -2,7 +2,7 @@
   "$schema": "./schema.json",
   "project": {
     "id": "terassi-lasitus",
-    "name": "Lasitettu terassi 220cm",
+    "name": "Lasitettu terassi v2",
     "site": "04330 Lahela, Tuusula",
     "standards": [
       "EN 1990",
@@ -48,8 +48,8 @@
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
-          [0, 0],
-          [7200, 0],
+          [0, -2990],
+          [7200, -2990],
           [7200, 4200],
           [0, 2700]
         ]
@@ -74,7 +74,7 @@
         {
           "id": "opening.kitchen.window",
           "type": "window",
-          "u0_mm": 4400,
+          "u0_mm": 4600,
           "v0_mm": 900,
           "width_mm": 1400,
           "height_mm": 1400
@@ -85,11 +85,11 @@
       "id": "ref.house.roof",
       "type": "building_roof",
       "placement": {
-        "anchor": {"x": -400, "y": 0, "z": 2950},
+        "anchor": {"x": -600, "y": 0, "z": 2869},
         "u": {
           "dir": "+x",
-          "horizontal_mm": 8000,
-          "rise_mm": 1750
+          "horizontal_mm": 8300,
+          "rise_mm": 1840
         },
         "v": {
           "dir": "+y",
@@ -147,6 +147,13 @@
       "h_mm": 315
     },
     {
+      "id": "LP270x140",
+      "name": "LP270x140",
+      "material": "Liimapuu GL30c",
+      "b_mm": 140,
+      "h_mm": 270
+    },
+    {
       "id": "LP225x115",
       "name": "LP225x115",
       "material": "Liimapuu GL30c",
@@ -161,18 +168,11 @@
       "h_mm": 225
     },
     {
-      "id": "LP140x140",
-      "name": "LP140x140",
-      "material": "Liimapuu GL30c",
-      "b_mm": 140,
-      "h_mm": 140
-    },
-    {
-      "id": "LP180x180",
-      "name": "LP180x180",
-      "material": "Liimapuu GL30c",
-      "b_mm": 180,
-      "h_mm": 180
+      "id": "200x63",
+      "name": "C24 200x63",
+      "material": "Sahatavara",
+      "b_mm": 63,
+      "h_mm": 200
     },
     {
       "id": "223x48",
@@ -208,8 +208,8 @@
       {
         "id": "col.existing.inner.x125",
         "profile": "250x250",
-        "base": {"x": 125, "y": 1675, "z": -3470},
-        "top": {"x": 125, "y": 1675, "z": 2350},
+        "base": {"x": 125, "y": 1675, "z": -3510},
+        "top": {"x": 125, "y": 1675, "z": 2310},
         "existing": true
       },
       {
@@ -223,21 +223,21 @@
         "id": "col.outer.x0",
         "profile": "250x250",
         "base": {"x": 125, "y": 5275, "z": 0},
-        "top": {"x": 125, "y": 5275, "z": 2200},
+        "top": {"x": 125, "y": 5275, "z": 2100},
         "existing": false
       },
       {
         "id": "col.outer.x3600",
         "profile": "250x250",
         "base": {"x": 3600, "y": 5275, "z": 0},
-        "top": {"x": 3600, "y": 5275, "z": 2200},
+        "top": {"x": 3600, "y": 5275, "z": 2100},
         "existing": false
       },
       {
         "id": "col.outer.x7200",
         "profile": "250x250",
         "base": {"x": 7075, "y": 5275, "z": 0},
-        "top": {"x": 7075, "y": 5275, "z": 2200},
+        "top": {"x": 7075, "y": 5275, "z": 2100},
         "existing": false
       }
     ],
@@ -245,27 +245,27 @@
       {
         "id": "beam.existing.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1675, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1675, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2750},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4330},
         "existing": true
       },
       {
         "id": "beam.lp225.x125",
         "profile": "LP225x90",
-        "axis_start": {"x": 125, "y": 0, "z": 2480},
-        "axis_end": {"x": 125, "y": 1750, "z": 2480},
+        "axis_start": {"x": 125, "y": 0, "z": 2492.5},
+        "axis_end": {"x": 125, "y": 1725, "z": 2492.5},
         "existing": true
       },
       {
         "id": "beam.lp225.x7075",
         "profile": "LP225x90",
-        "axis_start": {"x": 7075, "y": 0, "z": 3990},
-        "axis_end": {"x": 7075, "y": 1750, "z": 3990},
+        "axis_start": {"x": 7075, "y": 0, "z": 4022.5},
+        "axis_end": {"x": 7075, "y": 1725, "z": 4022.5},
         "existing": true
       },
       {
         "id": "beam.inner.new",
-        "profile": "LP360x140",
+        "profile": "LP315x140",
         "render_color": "#ffffff",
         "ref": "pt.beam.inner.new.axis_start",
         "axis_start": {"x": 0, "y": 70, "z": -150},
@@ -274,18 +274,18 @@
       },
       {
         "id": "beam.outer",
-        "profile": "LP180x180",
-        "axis_start": {"x": 0, "y": 5275, "z": 2290},
-        "axis_end": {"x": 7200, "y": 5275, "z": 2290},
+        "profile": "LP225x115",
+        "axis_start": {"x": 180, "y": 5275, "z": 2220},
+        "axis_end": {"x": 7020, "y": 5275, "z": 2220},
         "existing": false
       }
     ],
     "rafters": [
       {
         "id": "kattotuoli.0",
-        "profile": "223x48",
-        "axis_start": {"x": 754, "y": 1930, "z": 2645},
-        "axis_end": {"x": 754, "y": 5800, "z": 2330},
+        "profile": "200x63",
+        "axis_start": {"x": 754, "y": 1930, "z": 2655},
+        "axis_end": {"x": 754, "y": 5800, "z": 2290},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -295,16 +295,16 @@
       },
       {
         "id": "kattotuoli.vasen",
-        "profile": "LP180x180",
-        "axis_start": {"x": 125, "y": 1900, "z": 2550},
-        "axis_end": {"x": 125, "y": 5200, "z": 2290},
+        "profile": "LP225x115",
+        "axis_start": {"x": 125, "y": 1800, "z": 2560},
+        "axis_end": {"x": 125, "y": 5340, "z": 2210},
         "existing": false
       },
       {
         "id": "kattotuoli.oikea",
-        "profile": "LP180x180",
-        "axis_start": {"x": 7075, "y": 1900, "z": 2560},
-        "axis_end": {"x": 7075, "y": 5200, "z": 2290},
+        "profile": "LP225x115",
+        "axis_start": {"x": 7075, "y": 1800, "z": 2560},
+        "axis_end": {"x": 7075, "y": 5340, "z": 2210},
         "existing": false
       }
     ],
@@ -314,11 +314,11 @@
         "profile": "98x48",
         "axis_start": {"x": 750, "y": 2130, "z": 2690},
         "axis_end": {"x": -369, "y": 2130, "z": 2690},
-        "section_rotation_deg": -5.0,
+        "section_rotation_deg": -6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -47},
+          "offset": {"x": 0, "y": 580, "z": -56},
           "id_template": "orsi.vasen.{i}"
         }
       },
@@ -327,28 +327,28 @@
         "profile": "98x48",
         "axis_start": {"x": 6450, "y": 2130, "z": 2690},
         "axis_end": {"x": 7569, "y": 2130, "z": 2690},
-        "section_rotation_deg": 5.0,
+        "section_rotation_deg": 6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -47},
+          "offset": {"x": 0, "y": 580, "z": -56},
           "id_template": "orsi.oikea.{i}"
         }
       },
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 5090, "z": 2450},
-        "axis_end": {"x": 0, "y": 5800, "z": 2395},
-        "section_rotation_deg": -3,
+        "axis_start": {"x": 750, "y": 5090, "z": 2410},
+        "axis_end": {"x": 0, "y": 5800, "z": 2335},
+        "section_rotation_deg": -4,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 5090, "z": 2450},
-        "axis_end": {"x": 7200, "y": 5800, "z": 2395},
-        "section_rotation_deg": 3,
+        "axis_start": {"x": 6450, "y": 5090, "z": 2410},
+        "axis_end": {"x": 7200, "y": 5800, "z": 2335},
+        "section_rotation_deg": 4,
         "existing": false
       }
      ]
@@ -383,7 +383,7 @@
         "kattotuoli.0",
         "beam.outer"
       ],
-      "at": {"x": 754, "y": 5275, "z": 2209},
+      "at": {"x": 754, "y": 5275, "z": 2325},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -393,7 +393,7 @@
           "kind": "birdsmouth_notch",
           "reference": "support_inner_edge",
           "offset_mm": 0,
-          "heel_depth_mm": 110,
+          "heel_depth_mm": 90,
           "seat_length_mm": 620
         }
       ]
@@ -402,37 +402,37 @@
       "id": "con.kattotuoli.vasen.on.inner_beam",
       "type": "supported_on",
       "members": [
-        "kattotuoli.vasen",
-        "beam.inner.new"
+        "beam.inner.new",
+        "kattotuoli.vasen"
       ],
-      "at": {"x": 125, "y": 1900, "z": 2600}
+      "at": {"x": 125, "y": 1850, "z": 2650}
     },
     {
       "id": "con.kattotuoli.oikea.on.inner_beam",
       "type": "supported_on",
       "members": [
-        "kattotuoli.oikea",
-        "beam.inner.new"
+        "beam.inner.new",
+        "kattotuoli.oikea"
       ],
-      "at": {"x": 7075, "y": 1900, "z": 2600}
+      "at": {"x": 7075, "y": 1850, "z": 2650}
     },
     {
       "id": "con.kattotuoli.vasen.on.outer_beam",
       "type": "supported_on",
       "members": [
         "kattotuoli.vasen",
-        "beam.outer"
+        "col.outer.x0"
       ],
-      "at": {"x": 125, "y": 5275, "z": 2150}
+      "at": {"x": 125, "y": 5275, "z": 2100}
     },
     {
       "id": "con.kattotuoli.oikea.on.outer_beam",
       "type": "supported_on",
       "members": [
         "kattotuoli.oikea",
-        "beam.outer"
+        "col.outer.x7200"
       ],
-      "at": {"x": 7075, "y": 5275, "z": 2150}
+      "at": {"x": 7075, "y": 5275, "z": 2100}
     },
     {
       "id": "con.orsi.vasen.on.kattotuoli.0",
@@ -441,7 +441,7 @@
         "orsi.vasen",
         "kattotuoli.0"
       ],
-      "at": {"x": 776, "y": 2130, "z": 2639},
+      "at": {"x": 776, "y": 2130, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -476,7 +476,7 @@
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 2130, "z": 2639},
+      "at": {"x": 6424, "y": 2130, "z": 2650},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -524,7 +524,7 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 530, "y": 5275, "z": 2250},
+      "at": {"x": 530, "y": 5275, "z": 2320},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -559,7 +559,7 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 6670, "y": 5275, "z": 2250},
+      "at": {"x": 6670, "y": 5275, "z": 2320},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -581,7 +581,7 @@
         "beam.outer",
         "col.outer.x0"
       ],
-      "at": {"x": 125, "y": 5275, "z": 2000}
+      "at": {"x": 200, "y": 5275, "z": 2100}
     },
     {
       "id": "con.outer_beam.on.col.x3600",
@@ -590,7 +590,7 @@
         "beam.outer",
         "col.outer.x3600"
       ],
-      "at": {"x": 3600, "y": 5275, "z": 2000}
+      "at": {"x": 3600, "y": 5275, "z": 2100}
     },
     {
       "id": "con.outer_beam.on.col.x7200",
@@ -599,7 +599,43 @@
         "beam.outer",
         "col.outer.x7200"
       ],
-      "at": {"x": 7075, "y": 5275, "z": 2000}
+      "at": {"x": 7000, "y": 5275, "z": 2100}
+    },
+    {
+      "id": "con.inner_beam.on.col.existing.inner.x7075",
+      "type": "supported_on",
+      "members": [
+        "beam.inner.new",
+        "col.existing.inner.x7075"
+      ],
+      "at": {"x": 7000, "y": 1800, "z": 2450}
+    },
+    {
+      "id": "con.kattotuoli.oikea.on.col.existing.inner.x7075",
+      "type": "supported_on",
+      "members": [
+        "kattotuoli.oikea",
+        "col.existing.inner.x7075"
+      ],
+      "at": {"x": 7075, "y": 1800, "z": 2450}
+    },
+    {
+      "id": "con.inner_beam.on.col.existing.inner.x125",
+      "type": "supported_on",
+      "members": [
+        "beam.inner.new",
+        "col.existing.inner.x125"
+      ],
+      "at": {"x": 200, "y": 1800, "z": 2450}
+    },
+    {
+      "id": "con.kattotuoli.vasen.on.col.existing.inner.x125",
+      "type": "supported_on",
+      "members": [
+        "kattotuoli.vasen",
+        "col.existing.inner.x125"
+      ],
+      "at": {"x": 125, "y": 1800, "z": 2450}
     },
     {
       "id": "con.inner_beam.to.existing_kp360x2",
@@ -686,7 +722,7 @@
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 4.6,
+          "slope_deg": 5.4,
           "slope_sense": "-z",
           "slope_length_mm": 3908
         }
@@ -702,22 +738,22 @@
       "thickness_mm": 8,
       "density_kg_m3": 2500,
       "placement": {
-        "anchor": {"x": 1840, "y": 1800, "z": 2800},
+        "anchor": {"x": 1200, "y": 1800, "z": 2800},
         "u": {
           "dir": "+x",
-          "length_mm": 5110
+          "length_mm": 5750
         },
         "v": {
           "dir": "+z",
-          "length_mm": 1150
+          "length_mm": 1270
         }
       },
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
           [0, 0],
-          [5110, 0],
-          [5110, 1150]
+          [5750, 0],
+          [5750, 1270]
         ]
       },
       "supported_by": [
@@ -733,7 +769,7 @@
       "existing": true,
       "thickness_mm": 22,
       "placement": {
-        "anchor": {"x": 0, "y": 1750, "z": 2900},
+        "anchor": {"x": 0, "y": 1750, "z": 3020},
         "u": {
           "dir": "+x",
           "horizontal_mm": 7200,
@@ -768,7 +804,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2200
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -795,7 +831,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2200
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -822,7 +858,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2150
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -849,7 +885,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2150
+          "length_mm": 2100
         }
       },
       "local_shape": {
@@ -869,14 +905,14 @@
         "beam.lp225.x125"
       ],
       "placement": {
-        "anchor": {"x": 125, "y": 0, "z": 0},
+        "anchor": {"x": 125, "y": 0, "z": 10},
         "u": {
           "dir": "+y",
           "length_mm": 1550
         },
         "v": {
           "dir": "+z",
-          "length_mm": 2480
+          "length_mm": 2340
         }
       },
       "local_shape": {
@@ -949,14 +985,14 @@
         "col.outer.x0"
       ],
       "placement": {
-        "anchor": {"x": 125, "y": 1800, "z": 2150},
+        "anchor": {"x": 125, "y": 1800, "z": 2100},
         "u": {
           "dir": "+y",
           "length_mm": 3350
         },
         "v": {
           "dir": "+z",
-          "length_mm": 290
+          "length_mm": 350
         }
       },
       "local_shape": {
@@ -965,8 +1001,7 @@
           [0, 0],
           [3350, 0],
           [3350, 20],
-          [40, 290],
-          [0, 290]
+          [0, 350]
         ]
       }
     },
@@ -982,14 +1017,14 @@
         "col.outer.x7200"
       ],
       "placement": {
-        "anchor": {"x": 7075, "y": 1800, "z": 2150},
+        "anchor": {"x": 7075, "y": 1800, "z": 2100},
         "u": {
           "dir": "+y",
           "length_mm": 3350
         },
         "v": {
           "dir": "+z",
-          "length_mm": 290
+          "length_mm": 350
         }
       },
       "local_shape": {
@@ -998,8 +1033,7 @@
           [0, 0],
           [3350, 0],
           [3350, 20],
-          [40, 290],
-          [0, 290]
+          [0, 350]
         ]
       }
     }

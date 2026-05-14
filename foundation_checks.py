@@ -11,6 +11,35 @@ _BASE_VEC = {
 }
 
 
+def _surface_elevation_points(reference_surface):
+    return [
+        (float(point["x"]), float(point["y"]), float(point["z"]))
+        for point in reference_surface.get("elevation_points", [])
+    ]
+
+
+def _interpolated_z_at(points, x_mm, y_mm):
+    x_mm = float(x_mm)
+    y_mm = float(y_mm)
+    distances = []
+    for px_mm, py_mm, pz_mm in points:
+        dx_mm = x_mm - px_mm
+        dy_mm = y_mm - py_mm
+        distance_sq = dx_mm * dx_mm + dy_mm * dy_mm
+        if distance_sq <= 1e-9:
+            return pz_mm
+        distances.append((distance_sq, pz_mm))
+
+    nearest = sorted(distances, key=lambda item: item[0])[: min(6, len(distances))]
+    weight_sum = 0.0
+    weighted_z_sum = 0.0
+    for distance_sq, pz_mm in nearest:
+        weight = 1.0 / distance_sq
+        weight_sum += weight
+        weighted_z_sum += weight * pz_mm
+    return weighted_z_sum / weight_sum
+
+
 def _axis_vector(axis):
     direction = _BASE_VEC[axis["dir"]]
     if "length_mm" in axis:
@@ -26,6 +55,10 @@ def _axis_vector(axis):
 
 
 def surface_z_at(reference_surface, x_mm, y_mm):
+    elevation_points = _surface_elevation_points(reference_surface)
+    if elevation_points:
+        return _interpolated_z_at(elevation_points, x_mm, y_mm)
+
     placement = reference_surface["placement"]
     anchor = placement["anchor"]
     u = _axis_vector(placement["u"])

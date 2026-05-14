@@ -516,6 +516,14 @@ house_roof_x0_mm = roof_eave_pts[0]["x"]
 house_roof_x1_mm = roof_eave_pts[-1]["x"]
 house_roof_z0_mm = roof_eave_pts[0]["z"]
 house_roof_z1_mm = roof_eave_pts[-1]["z"]
+house_wall = reference(GEO, "ref.house_wall")
+house_wall_xs_mm = [p["x"] for p in house_wall["polygon"]]
+drift_obstacle_x0_mm = max(min(house_wall_xs_mm), house_roof_x0_mm)
+drift_obstacle_x1_mm = min(max(house_wall_xs_mm), house_roof_x1_mm)
+
+
+def drift_obstacle_x_at(x_mm):
+    return clamp(float(x_mm), drift_obstacle_x0_mm, drift_obstacle_x1_mm)
 
 
 def house_roof_z_at_x(x_mm):
@@ -533,7 +541,8 @@ def roof_inner_z_at_x(x_mm):
 
 
 def local_wall_height_m_at_x(x_mm):
-    return max(0.0, (house_roof_z_at_x(x_mm) - roof_inner_z_at_x(x_mm)) / 1000.0)
+    obstacle_x_mm = drift_obstacle_x_at(x_mm)
+    return max(0.0, (house_roof_z_at_x(obstacle_x_mm) - roof_inner_z_at_x(obstacle_x_mm)) / 1000.0)
 
 
 def member_axis_delta(member_obj):
@@ -1666,7 +1675,7 @@ def existing_structure_case_key(case_key):
     return "ULS"
 
 DRIFT_SUMMARY = []
-for x_mm in sorted({roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m in rafters_all]}):
+for x_mm in sorted({drift_obstacle_x_at(x_mm) for x_mm in {roof_x0_mm, roof_x1_mm, *[float(m["axis_start"]["x"]) for m in rafters_all]}}):
     h_local_m = local_wall_height_m_at_x(x_mm)
     ls_m, mu2, mu2_h, _, s_peak_kNm2 = snow_drift_params(h_local_m, drift_depth_m, sk, mu1_=mu1)
     DRIFT_SUMMARY.append({
@@ -4039,8 +4048,9 @@ print(f"  ULS B kattokuorma             {roof_area_uls_B:.3f} kN/m²  (1.35G + 1
 print(f"  ULS DRIFT kattokuorma         1.35G + 1.5·S_kin(x,y)")
 print(f"  Uplift-kattokuorma            {roof_area_uplift:.3f} kN/m²  (0.9G + 1.5W↑)")
 print(f"  Seinää vasten h(x)            {h_seina_left_m:.2f} … {h_seina_right_m:.2f} m")
+print(f"  Kinostuman x-raja             este rajattu pääseinälle x = {drift_obstacle_x0_mm:.0f}…{drift_obstacle_x1_mm:.0f} mm")
 print(f"  Kinostuman alku               y = {drift_obstacle_y_mm:.0f} mm, paneelikentän sisäreuna y = {roof_y0_mm:.0f} mm")
-print(f"    hallitseva x                {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
+print(f"    hallitseva este-x           {critical_drift['x_mm']:.0f} mm, ls = {critical_drift['ls_m']:.2f} m, μ2 = {critical_drift['mu2']:.2f}")
 print(f"    s_kin,max / s@y_in          {critical_drift['s_peak_kNm2']:.2f} / {critical_drift['s_inner_rafter_kNm2']:.2f} kN/m²")
 
 print("\n── PANEELIT ──────────────────────────────────────────────────────")
