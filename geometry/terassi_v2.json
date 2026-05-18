@@ -608,7 +608,23 @@
         "beam.inner.new",
         "col.existing.inner.x7075"
       ],
-      "at": {"x": 7000, "y": 1800, "z": 2450}
+      "at": {"x": 7075, "y": 1800, "z": 2650},
+      "detail_instances": [
+        {
+          "detail_ref": "detail.inner_beam.gusseted_l_bracket",
+          "axes": {"u": "+x", "v": "-z", "n": "+y"},
+          "offset_uvn_mm": [0, 160, 0],
+          "existing": false,
+          "label": "alempi L-kannake"
+        },
+        {
+          "detail_ref": "detail.inner_beam.gusseted_l_bracket",
+          "axes": {"u": "+x", "v": "+z", "n": "+y"},
+          "offset_uvn_mm": [0, 160, 0],
+          "existing": false,
+          "label": "ylempi käännetty L-kannake"
+        }
+      ]
     },
     {
       "id": "con.kattotuoli.oikea.on.col.existing.inner.x7075",
@@ -626,7 +642,16 @@
         "beam.inner.new",
         "col.existing.inner.x125"
       ],
-      "at": {"x": 200, "y": 1800, "z": 2450}
+      "at": {"x": 200, "y": 1800, "z": 2650},
+      "detail_instances": [
+        {
+          "detail_ref": "detail.inner_beam.web_support_bracket",
+          "axes": {"u": "+x", "v": "-z", "n": "+y"},
+          "offset_uvn_mm": [-75, 160, 0],
+          "existing": false,
+          "label": "alempi web-tukikannake"
+        }
+      ]
     },
     {
       "id": "con.kattotuoli.vasen.on.col.existing.inner.x125",
@@ -668,6 +693,267 @@
         "col.outer.x7200"
       ],
       "at": {"x": 7075, "y": 5275, "z": 0}
+    }
+  ],
+  "steel_details": [
+    {
+      "id": "detail.inner_beam.gusseted_l_bracket",
+      "type": "plate_assembly",
+      "description": "Puolijäykkää palkkiliitosta jäykistävä pilarin ja palkin L-kannake, jossa kaksi 200x100x10 mm lattaterasta, pilarilevyn 18 mm pulttireiät, puupalkin 6 mm ruuviryhmä ja kaksi 50x50x10 mm kolmiojäykistettä.",
+      "material": "S355",
+      "render_color": "#B6BEC8",
+      "parts": [
+        {
+          "id": "plate.column",
+          "kind": "plate",
+          "plane": "uv",
+          "origin_uvn_mm": [-100, 0, 0],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 200,
+            "height_mm": 100
+          },
+          "thickness_mm": 10,
+          "holes": [
+            {"id": "hole.column.bolt.left", "type": "round", "diameter_mm": 18, "center_mm": [50, 50]},
+            {"id": "hole.column.bolt.right", "type": "round", "diameter_mm": 18, "center_mm": [150, 50]}
+          ]
+        },
+        {
+          "id": "plate.beam",
+          "kind": "plate",
+          "plane": "un",
+          "origin_uvn_mm": [-100, 0, 5],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 200,
+            "height_mm": 100
+          },
+          "thickness_mm": 10,
+          "holes": [
+            {"id": "hole.beam.screw.row1.x035", "type": "round", "diameter_mm": 6, "center_mm": [35, 25]},
+            {"id": "hole.beam.screw.row1.x080", "type": "round", "diameter_mm": 6, "center_mm": [80, 25]},
+            {"id": "hole.beam.screw.row1.x125", "type": "round", "diameter_mm": 6, "center_mm": [125, 25]},
+            {"id": "hole.beam.screw.row1.x170", "type": "round", "diameter_mm": 6, "center_mm": [170, 25]},
+            {"id": "hole.beam.screw.row2.x035", "type": "round", "diameter_mm": 6, "center_mm": [35, 50]},
+            {"id": "hole.beam.screw.row2.x080", "type": "round", "diameter_mm": 6, "center_mm": [80, 50]},
+            {"id": "hole.beam.screw.row2.x125", "type": "round", "diameter_mm": 6, "center_mm": [125, 50]},
+            {"id": "hole.beam.screw.row2.x170", "type": "round", "diameter_mm": 6, "center_mm": [170, 50]},
+            {"id": "hole.beam.screw.row3.x035", "type": "round", "diameter_mm": 6, "center_mm": [35, 75]},
+            {"id": "hole.beam.screw.row3.x080", "type": "round", "diameter_mm": 6, "center_mm": [80, 75]},
+            {"id": "hole.beam.screw.row3.x125", "type": "round", "diameter_mm": 6, "center_mm": [125, 75]},
+            {"id": "hole.beam.screw.row3.x170", "type": "round", "diameter_mm": 6, "center_mm": [170, 75]}
+          ]
+        },
+        {
+          "id": "gusset.left",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [-75, 5, 0],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [0, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.right",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [75, 5, 0],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [0, 50]]
+          },
+          "thickness_mm": 10
+        }
+      ],
+      "welds": [
+        {
+          "id": "weld.column.beam",
+          "type": "fillet",
+          "between": ["plate.column", "plate.beam"],
+          "size_mm": 5,
+          "path_uvn_mm": [[-100, 0, 5], [100, 0, 5]]
+        },
+        {
+          "id": "weld.left.column",
+          "type": "fillet",
+          "between": ["plate.column", "gusset.left"],
+          "size_mm": 4,
+          "path_uvn_mm": [[-75, 5, 0], [-75, 55, 0]]
+        },
+        {
+          "id": "weld.left.beam",
+          "type": "fillet",
+          "between": ["plate.beam", "gusset.left"],
+          "size_mm": 4,
+          "path_uvn_mm": [[-75, 5, 5], [-75, 5, 50]]
+        },
+        {
+          "id": "weld.right.column",
+          "type": "fillet",
+          "between": ["plate.column", "gusset.right"],
+          "size_mm": 4,
+          "path_uvn_mm": [[75, 5, 0], [75, 55, 0]]
+        },
+        {
+          "id": "weld.right.beam",
+          "type": "fillet",
+          "between": ["plate.beam", "gusset.right"],
+          "size_mm": 4,
+          "path_uvn_mm": [[75, 5, 5], [75, 5, 50]]
+        }
+      ]
+    },
+    {
+      "id": "detail.inner_beam.web_support_bracket",
+      "type": "plate_assembly",
+      "description": "Sisäpalkin tukikannake, jossa pystyverkko, pulttilevy, ylä- ja alatukilevyt, pilarituki, tukilevy ja kolmiojäykisteet.",
+      "material": "S355",
+      "render_color": "#B6BEC8",
+      "parts": [
+        {
+          "id": "plate.web",
+          "kind": "plate",
+          "plane": "uv",
+          "origin_uvn_mm": [-60, -320, -60],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 100,
+            "height_mm": 490
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "plate.bolt_lug",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [-60, 40, -160],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 100,
+            "height_mm": 100
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "plate.top",
+          "kind": "plate",
+          "plane": "un",
+          "origin_uvn_mm": [-60, -320, -55],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 100,
+            "height_mm": 200
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "plate.bottom",
+          "kind": "plate",
+          "plane": "un",
+          "origin_uvn_mm": [-50, 0, -55],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 100,
+            "height_mm": 200
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "plate.column_seat",
+          "kind": "plate",
+          "plane": "un",
+          "origin_uvn_mm": [-110, 175, -65],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 180,
+            "height_mm": 60
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "plate.beam_seat",
+          "kind": "plate",
+          "plane": "un",
+          "origin_uvn_mm": [-40, 115, -115],
+          "shape": {
+            "type": "rectangle",
+            "width_mm": 80,
+            "height_mm": 50
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.seat.left",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [-40, 120, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.seat.right",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [20, 120, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.bottom.left",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [-40, -55, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.bottom.right",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [20, -55, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.top.left",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [-40, -315, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [0, 50]]
+          },
+          "thickness_mm": 10
+        },
+        {
+          "id": "gusset.top.right",
+          "kind": "plate",
+          "plane": "vn",
+          "origin_uvn_mm": [20, -315, -60],
+          "shape": {
+            "type": "polygon",
+            "vertices_mm": [[0, 0], [50, 0], [0, 50]]
+          },
+          "thickness_mm": 10
+        }
+      ],
+      "welds": [
+      ]
     }
   ],
   "surfaces": [

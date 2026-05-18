@@ -2053,6 +2053,30 @@ def main() -> None:
             ior=1.45,
         ),
         "boarding": material_principled("Brown boarding", (0.42, 0.27, 0.14, 1), roughness=0.72),
+        "steel_detail": material_principled(
+            "Galvanized steel connection details",
+            (0.58, 0.62, 0.66, 1),
+            roughness=0.38,
+            metallic=0.55,
+        ),
+        "steel_detail_hole": material_principled(
+            "Dark steel detail hole marks",
+            (0.010, 0.012, 0.014, 1),
+            roughness=0.62,
+            metallic=0.15,
+        ),
+        "steel_detail_weld": material_principled(
+            "Dark steel detail welds",
+            (0.12, 0.14, 0.16, 1),
+            roughness=0.52,
+            metallic=0.45,
+        ),
+        "steel_detail_fastener": material_principled(
+            "Steel detail anchor fasteners",
+            (0.97, 0.78, 0.28, 1),
+            roughness=0.32,
+            metallic=0.65,
+        ),
         "bounce_wall": material_emission_color(
             "Camera-invisible wall bounce",
             (
@@ -2094,6 +2118,324 @@ def main() -> None:
             )
         return render_color_materials[key]
 
+    steel_detail_color_materials: dict[tuple[float, float, float, float], object] = {}
+    steel_detail_weld_color_materials: dict[tuple[float, float, float, float], object] = {}
+    steel_detail_fastener_color_materials: dict[tuple[float, float, float, float], object] = {}
+
+    def axis_dir_vector(axis_ref: str) -> Vector:
+        sign = -1.0 if str(axis_ref).startswith("-") else 1.0
+        axis = str(axis_ref)[1:]
+        if axis == "x":
+            return Vector((sign, 0, 0))
+        if axis == "y":
+            return Vector((0, 0, sign))
+        if axis == "z":
+            return Vector((0, sign, 0))
+        raise ValueError(f"Unsupported steel detail axis {axis_ref!r}")
+
+    def detail_axes_frame(instance: dict) -> dict[str, Vector]:
+        axes = instance.get("axes") or {}
+        base_axes = [str(axes.get(key, ""))[1:] for key in ("u", "v", "n")]
+        if len(set(base_axes)) != 3:
+            raise ValueError(f"steel detail axes must map u/v/n to distinct world axes: {axes!r}")
+        return {
+            "u": axis_dir_vector(axes["u"]),
+            "v": axis_dir_vector(axes["v"]),
+            "n": axis_dir_vector(axes["n"]),
+        }
+
+    def local_point_from_uvn(origin: Vector, frame: dict[str, Vector], uvn: list[float] | None) -> Vector:
+        values = list(uvn or [0.0, 0.0, 0.0])
+        while len(values) < 3:
+            values.append(0.0)
+        return (
+            origin.copy()
+            + frame["u"] * float(values[0])
+            + frame["v"] * float(values[1])
+            + frame["n"] * float(values[2])
+        )
+
+    def steel_detail_plane_frame(frame: dict[str, Vector], plane_name: str) -> tuple[Vector, Vector, Vector]:
+        if plane_name == "un":
+            return frame["u"], frame["n"], frame["v"]
+        if plane_name == "vn":
+            return frame["v"], frame["n"], frame["u"]
+        return frame["u"], frame["v"], frame["n"]
+
+    def steel_detail_shape_points(shape: dict) -> list[tuple[float, float]]:
+        if shape.get("type") == "rectangle":
+            width = float(shape.get("width_mm", 0.0))
+            height = float(shape.get("height_mm", 0.0))
+            return [(0, 0), (width, 0), (width, height), (0, height)] if width > 0 and height > 0 else []
+        if shape.get("type") == "polygon":
+            return [(float(a), float(b)) for a, b in shape.get("vertices_mm", [])]
+        return []
+
+    def steel_detail_material(detail: dict, instance: dict, part: dict):
+        color_text = part.get("render_color") or instance.get("render_color") or detail.get("render_color")
+        if not color_text:
+            return materials["steel_detail"]
+        color = parse_rgb_color(str(color_text))
+        if color is None:
+            return materials["steel_detail"]
+        key = tuple(round(channel, 6) for channel in color)
+        if key not in steel_detail_color_materials:
+            steel_detail_color_materials[key] = material_principled(
+                f"Steel detail render color {rgb_to_hex(color)}",
+                color,
+                roughness=0.38,
+                metallic=0.55,
+            )
+        return steel_detail_color_materials[key]
+
+    def steel_detail_weld_material(weld: dict):
+        color_text = weld.get("render_color")
+        if not color_text:
+            return materials["steel_detail_weld"]
+        color = parse_rgb_color(str(color_text))
+        if color is None:
+            return materials["steel_detail_weld"]
+        key = tuple(round(channel, 6) for channel in color)
+        if key not in steel_detail_weld_color_materials:
+            steel_detail_weld_color_materials[key] = material_principled(
+                f"Steel detail weld color {rgb_to_hex(color)}",
+                color,
+                roughness=0.52,
+                metallic=0.45,
+            )
+        return steel_detail_weld_color_materials[key]
+
+    def steel_detail_fastener_material(fastener: dict):
+        color_text = fastener.get("render_color")
+        if not color_text:
+            return materials["steel_detail_fastener"]
+        color = parse_rgb_color(str(color_text))
+        if color is None:
+            return materials["steel_detail_fastener"]
+        key = tuple(round(channel, 6) for channel in color)
+        if key not in steel_detail_fastener_color_materials:
+            steel_detail_fastener_color_materials[key] = material_principled(
+                f"Steel detail fastener color {rgb_to_hex(color)}",
+                color,
+                roughness=0.32,
+                metallic=0.65,
+            )
+        return steel_detail_fastener_color_materials[key]
+
+    def create_cylinder_between(name: str, p0: Vector, p1: Vector, radius_mm: float, mat, segments: int = 12):
+        delta = p1 - p0
+        length = delta.length
+        if length <= 1e-6 or radius_mm <= 0:
+            return None
+        direction = delta.normalized()
+        ref = Vector((0, 1, 0)) if abs(direction.dot(Vector((0, 1, 0)))) < 0.95 else Vector((1, 0, 0))
+        a_axis = direction.cross(ref)
+        if a_axis.length <= 1e-9:
+            ref = Vector((0, 0, 1))
+            a_axis = direction.cross(ref)
+        if a_axis.length <= 1e-9:
+            return None
+        a_axis.normalize()
+        b_axis = direction.cross(a_axis)
+        b_axis.normalize()
+
+        verts = []
+        for center in (p0, p1):
+            for i in range(segments):
+                angle = 2 * math.pi * i / segments
+                verts.append(center + a_axis * (math.cos(angle) * radius_mm) + b_axis * (math.sin(angle) * radius_mm))
+        faces = [list(range(segments - 1, -1, -1)), list(range(segments, 2 * segments))]
+        for i in range(segments):
+            faces.append([i, (i + 1) % segments, segments + (i + 1) % segments, segments + i])
+        return create_mesh_object(name, verts, faces, mat)
+
+    def create_steel_detail_hole_disks(
+        name: str,
+        center: Vector,
+        a_axis: Vector,
+        b_axis: Vector,
+        normal: Vector,
+        thickness_mm: float,
+        diameter_mm: float,
+        mat,
+    ) -> list:
+        radius = diameter_mm / 2
+        if radius <= 0:
+            return []
+        segments = 32
+        objects = []
+        for side in (-1.0, 1.0):
+            face_center = center + normal * (side * (thickness_mm / 2 + 0.7))
+            verts = [
+                face_center
+                + a_axis * (math.cos(2 * math.pi * i / segments) * radius)
+                + b_axis * (math.sin(2 * math.pi * i / segments) * radius)
+                for i in range(segments)
+            ]
+            face = list(range(segments)) if side > 0 else list(range(segments - 1, -1, -1))
+            objects.append(create_mesh_object(f"{name}.face{int(side)}", verts, [face], mat))
+        return objects
+
+    def create_steel_detail_fastener_objects(
+        name: str,
+        center: Vector,
+        normal: Vector,
+        thickness_mm: float,
+        hole: dict,
+    ) -> list:
+        fastener = hole.get("fastener") or {}
+        diameter_mm = float(fastener.get("diameter_mm", 0.0))
+        if diameter_mm <= 0:
+            return []
+
+        direction = normal.normalized()
+        embed_side = 1.0 if fastener.get("embed_side") == "+normal" else -1.0
+        outer_side = -embed_side
+        embedment_mm = float(fastener.get("embedment_mm", 0.0))
+        protrusion_mm = float(fastener.get("protrusion_mm", max(24.0, diameter_mm * 2.0)))
+        inner_end_mm = embed_side * (thickness_mm / 2 + embedment_mm)
+        outer_end_mm = outer_side * (thickness_mm / 2 + protrusion_mm)
+        p0 = center + direction * inner_end_mm
+        p1 = center + direction * outer_end_mm
+        mat = steel_detail_fastener_material(fastener)
+        objects = []
+
+        rod = create_cylinder_between(f"{name}.rod", p0, p1, diameter_mm / 2, mat, segments=16)
+        if rod:
+            objects.append(rod)
+
+        washer_diameter_mm = float(fastener.get("washer_diameter_mm", diameter_mm * 2.0))
+        washer_thickness_mm = float(fastener.get("washer_thickness_mm", 3.0))
+        if washer_diameter_mm > 0 and washer_thickness_mm > 0:
+            washer_center = center + direction * (outer_side * (thickness_mm / 2 + washer_thickness_mm / 2))
+            washer = create_cylinder_between(
+                f"{name}.washer",
+                washer_center - direction * (washer_thickness_mm / 2),
+                washer_center + direction * (washer_thickness_mm / 2),
+                washer_diameter_mm / 2,
+                mat,
+                segments=32,
+            )
+            if washer:
+                objects.append(washer)
+
+        nut_across_flats_mm = float(fastener.get("nut_across_flats_mm", diameter_mm * 1.5))
+        nut_height_mm = float(fastener.get("nut_height_mm", diameter_mm * 0.8))
+        if nut_across_flats_mm > 0 and nut_height_mm > 0:
+            nut_radius_mm = nut_across_flats_mm / math.sqrt(3)
+            nut_center = center + direction * (
+                outer_side * (thickness_mm / 2 + washer_thickness_mm + nut_height_mm / 2)
+            )
+            nut = create_cylinder_between(
+                f"{name}.nut",
+                nut_center - direction * (nut_height_mm / 2),
+                nut_center + direction * (nut_height_mm / 2),
+                nut_radius_mm,
+                mat,
+                segments=6,
+            )
+            if nut:
+                objects.append(nut)
+
+        return objects
+
+    def create_steel_detail_part_objects(con: dict, detail: dict, instance: dict, part: dict) -> list:
+        if not con.get("at"):
+            return []
+        frame = detail_axes_frame(instance)
+        a_axis, b_axis, normal = steel_detail_plane_frame(frame, part.get("plane", "uv"))
+        a_axis = a_axis.normalized()
+        b_axis = b_axis.normalized()
+        normal = normal.normalized()
+        thickness_mm = float(part.get("thickness_mm", 0.0))
+        points_ab = steel_detail_shape_points(part.get("shape") or {})
+        if thickness_mm <= 0 or len(points_ab) < 3:
+            return []
+
+        origin = local_point_from_uvn(
+            local_point_from_uvn(pt(con["at"]), frame, instance.get("offset_uvn_mm")),
+            frame,
+            part.get("origin_uvn_mm"),
+        )
+        front = [origin + a_axis * a + b_axis * b + normal * (thickness_mm / 2) for a, b in points_ab]
+        back = [origin + a_axis * a + b_axis * b - normal * (thickness_mm / 2) for a, b in points_ab]
+        verts = front + back
+        n_points = len(points_ab)
+        faces = [list(range(n_points)), list(range(2 * n_points - 1, n_points - 1, -1))]
+        for i in range(n_points):
+            faces.append([i, (i + 1) % n_points, n_points + (i + 1) % n_points, n_points + i])
+
+        part_name = f"steel_detail.{con['id']}.{instance['detail_ref']}.{part['id']}"
+        objects = [create_mesh_object(part_name, verts, faces, steel_detail_material(detail, instance, part))]
+        for hole in part.get("holes", []):
+            if hole.get("type") != "round":
+                continue
+            center_ab = hole.get("center_mm") or [0, 0]
+            center = origin + a_axis * float(center_ab[0]) + b_axis * float(center_ab[1])
+            objects.extend(create_steel_detail_hole_disks(
+                f"{part_name}.hole.{hole['id']}",
+                center,
+                a_axis,
+                b_axis,
+                normal,
+                thickness_mm,
+                float(hole.get("diameter_mm", 0.0)),
+                materials["steel_detail_hole"],
+            ))
+            if hole.get("fastener"):
+                objects.extend(create_steel_detail_fastener_objects(
+                    f"{part_name}.hole.{hole['id']}.fastener",
+                    center,
+                    normal,
+                    thickness_mm,
+                    hole,
+                ))
+        return objects
+
+    def create_steel_detail_weld_objects(con: dict, detail: dict, instance: dict) -> list:
+        if not con.get("at"):
+            return []
+        frame = detail_axes_frame(instance)
+        origin = local_point_from_uvn(pt(con["at"]), frame, instance.get("offset_uvn_mm"))
+        objects = []
+        for weld in detail.get("welds", []):
+            size_mm = float(weld.get("size_mm", 0.0))
+            path = weld.get("path_uvn_mm") or []
+            if size_mm <= 0 or len(path) < 2:
+                continue
+            points = [local_point_from_uvn(origin, frame, uvn) for uvn in path]
+            mat = steel_detail_weld_material(weld)
+            for index, (p0, p1) in enumerate(zip(points, points[1:])):
+                obj = create_cylinder_between(
+                    f"steel_detail.{con['id']}.{instance['detail_ref']}.{weld['id']}.{index}",
+                    p0,
+                    p1,
+                    size_mm / 2,
+                    mat,
+                )
+                if obj:
+                    objects.append(obj)
+        return objects
+
+    def create_steel_detail_objects(geo: dict) -> list:
+        details_by_id = {detail["id"]: detail for detail in geo.get("steel_details", [])}
+        if not details_by_id:
+            return []
+        objects = []
+        for con in geometry_loader.expanded_connections(geo):
+            for instance in con.get("detail_instances", []):
+                if instance.get("existing", False):
+                    continue
+                detail = details_by_id.get(instance.get("detail_ref"))
+                if detail is None:
+                    raise KeyError(f"steel detail {instance.get('detail_ref')!r} not found for connection {con.get('id')}")
+                for part in detail.get("parts", []):
+                    if part.get("kind") != "plate":
+                        continue
+                    objects.extend(create_steel_detail_part_objects(con, detail, instance, part))
+                objects.extend(create_steel_detail_weld_objects(con, detail, instance))
+        return objects
+
     render_objects = []
 
     member_index = build_member_index(geo)
@@ -2133,6 +2475,8 @@ def main() -> None:
             obj = create_surface(surface["id"], poly, float(surface.get("thickness_mm", 0)), materials["boarding"])
             if obj:
                 render_objects.append(obj)
+
+    render_objects.extend(create_steel_detail_objects(geo))
 
     bounce_objects = create_bounce_surfaces(geo, render_objects, materials)
     sky_reflection_objects = create_solar_sky_reflection_surfaces(render_objects, materials)

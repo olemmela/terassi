@@ -90,6 +90,11 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Ulkokulmien vinojen orsien kuormansiirron geometrian mukaisten liitosten kautta toiseksi uloimpaan kattotuoliin, reunakattotuoliin ja ulkopalkille
 - Liitosten `connections.analysis`-metadatasta luetut tuki- ja rotaatiomallit
   (`support_model`, `support_line_ref`, `rotation_spring`)
+- Hitsattujen teräsliitosdetailien `steel_details`-kirjasto: liitos voi sijoittaa
+  uudelleenkäytettävän levykokoonpanon `detail_instances`-viitteellä
+  `connection.at`-pisteeseen ja `u/v/n`-akseleilla; viewer ja Blender renderöivät
+  levypolygoneista pursotetut osat, levyjen `holes`-reiät ja `welds`-pienahitsit;
+  Blender ohittaa `existing: true` -instanssit
 - Nykygeometrian mukaiset orsien niveltuet, sisäkattotuolien puolijäykkä sisäpään
   palkkikenkä sekä reunimmaisten kattotuolien puolijäykät `N 48×136` -liitokset
 - Orsien, nurkkaorten, sisäkattotuolien ja reunakattotuolien taivutus-, leikkaus- ja taipumatarkistukset

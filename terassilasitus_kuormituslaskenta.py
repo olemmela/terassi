@@ -3,7 +3,7 @@ LASITETUN TERASSIN LOPULLINEN PUURATKAISU – KUORMITUSLASKENTA – ETELÄSUOMI
 ============================================================================
 Standardit: EN 1990, EN 1991-1-1, EN 1991-1-3, EN 1991-1-4, EN 1995-1-1
 
-Geometria luetaan tiedostosta geometry/terassi_v2.json:
+Geometria luetaan tiedostosta geometry/terassi_puu.json:
   - uusi puuratkaisu: jäsenten profiilit, mitat ja tukilinjat luetaan geometriasta
   - lineaarijäsenten poikkileikkauksen kierto luetaan section_rotation_deg-kentästä
   - aurinkopaneelien reunakaistat siirtyvät reunakattotuoleille vain orsien kautta
@@ -123,20 +123,28 @@ GEO = load(GEOMETRY_FILE)
 FOUNDATION_GEO = load("katos.json")
 CONNECTIONS = {conn["id"]: conn for conn in GEO["connections"]}
 CONNECTION_INSTANCES = expanded_connections(GEO)
+STEEL_DETAILS_BY_ID = {detail["id"]: detail for detail in GEO.get("steel_details", [])}
 MEMBERS_BY_ID = {}
 for group_name in GEO["members"]:
     for member_obj in expanded_members(GEO, group_name):
         MEMBERS_BY_ID[member_obj["id"]] = member_obj
+MEMBER_ID_ALIASES = {}
+if "beam.existing.kp360x2" not in MEMBERS_BY_ID and "beam.kp360x2" in MEMBERS_BY_ID:
+    MEMBER_ID_ALIASES["beam.existing.kp360x2"] = "beam.kp360x2"
+
+
+def canonical_member_id(member_id):
+    return MEMBER_ID_ALIASES.get(member_id, member_id)
 
 
 def connections_by_members(member_a_id, member_b_id, connection_objs=None):
     if connection_objs is None:
         connection_objs = GEO["connections"]
-    wanted = {member_a_id, member_b_id}
+    wanted = {canonical_member_id(member_a_id), canonical_member_id(member_b_id)}
     return [
         conn
         for conn in connection_objs
-        if set(conn.get("members", [])) == wanted
+        if {canonical_member_id(member_id) for member_id in conn.get("members", [])} == wanted
     ]
 
 
@@ -172,15 +180,77 @@ def support_connection(member_id, support_member_id, support_line_ref, connectio
 
 
 def member_by_id_any(member_id):
-    return MEMBERS_BY_ID[member_id]
+    return MEMBERS_BY_ID[canonical_member_id(member_id)]
 
 
 def first_connection_matching(member_id, predicate):
+    canonical_id = canonical_member_id(member_id)
     for conn in GEO["connections"]:
         members = conn.get("members", [])
-        if member_id in members and predicate(conn, members):
+        canonical_members = [canonical_member_id(item) for item in members]
+        if canonical_id in canonical_members and predicate(conn, canonical_members):
             return conn
     return None
+
+
+AXIS_DIRECTION_VECTORS = {
+    "+x": (1.0, 0.0, 0.0),
+    "-x": (-1.0, 0.0, 0.0),
+    "+y": (0.0, 1.0, 0.0),
+    "-y": (0.0, -1.0, 0.0),
+    "+z": (0.0, 0.0, 1.0),
+    "-z": (0.0, 0.0, -1.0),
+}
+
+
+def detail_instance_frame(detail_instance):
+    axes = detail_instance["axes"]
+    return {
+        "u": AXIS_DIRECTION_VECTORS[axes["u"]],
+        "v": AXIS_DIRECTION_VECTORS[axes["v"]],
+        "n": AXIS_DIRECTION_VECTORS[axes["n"]],
+    }
+
+
+def point_add_uvn(point_xyz, frame, uvn_mm):
+    return {
+        "x": point_xyz["x"] + frame["u"][0] * uvn_mm[0] + frame["v"][0] * uvn_mm[1] + frame["n"][0] * uvn_mm[2],
+        "y": point_xyz["y"] + frame["u"][1] * uvn_mm[0] + frame["v"][1] * uvn_mm[1] + frame["n"][1] * uvn_mm[2],
+        "z": point_xyz["z"] + frame["u"][2] * uvn_mm[0] + frame["v"][2] * uvn_mm[1] + frame["n"][2] * uvn_mm[2],
+    }
+
+
+def detail_world_point(connection_obj, detail_instance, uvn_mm):
+    frame = detail_instance_frame(detail_instance)
+    offset_uvn_mm = detail_instance.get("offset_uvn_mm", [0.0, 0.0, 0.0])
+    shifted_uvn_mm = [
+        float(uvn_mm[0]) + float(offset_uvn_mm[0]),
+        float(uvn_mm[1]) + float(offset_uvn_mm[1]),
+        float(uvn_mm[2]) + float(offset_uvn_mm[2]),
+    ]
+    return point_add_uvn(connection_obj["at"], frame, shifted_uvn_mm)
+
+
+def part_hole_center_uvn(part_obj, hole_obj):
+    center_mm = hole_obj["center_mm"]
+    origin_uvn_mm = part_obj["origin_uvn_mm"]
+    if part_obj["plane"] == "uv":
+        return [
+            float(origin_uvn_mm[0]) + float(center_mm[0]),
+            float(origin_uvn_mm[1]) + float(center_mm[1]),
+            float(origin_uvn_mm[2]),
+        ]
+    if part_obj["plane"] == "un":
+        return [
+            float(origin_uvn_mm[0]) + float(center_mm[0]),
+            float(origin_uvn_mm[1]),
+            float(origin_uvn_mm[2]) + float(center_mm[1]),
+        ]
+    return [
+        float(origin_uvn_mm[0]),
+        float(origin_uvn_mm[1]) + float(center_mm[0]),
+        float(origin_uvn_mm[2]) + float(center_mm[1]),
+    ]
 
 
 def connection_cut(connection, kind=None):
@@ -631,7 +701,7 @@ slanted_edge_purlin_ids = [member_obj["id"] for member_obj in corner_purlins]
 
 outer_beam = member(GEO, "beams", "beam.outer")
 inner_beam = member(GEO, "beams", "beam.inner.new")
-existing_beam = member(GEO, "beams", "beam.existing.kp360x2")
+existing_beam = member_by_id_any("beam.existing.kp360x2")
 
 OUTER_SUPPORT_COLUMN_IDS = ("col.outer.x0", "col.outer.x3600", "col.outer.x7200")
 INNER_SUPPORT_COLUMN_IDS = ("col.existing.inner.x125", "col.existing.inner.x7075")
@@ -1407,6 +1477,121 @@ def connection_rotational_spring_k_Nmm_per_rad(connection_id):
     return rotation_spring_k_from_info(analysis["rotation_spring"])
 
 
+DETAIL_FASTENER_HOLE_MAX_DIAMETER_MM = 10.0
+DETAIL_FASTENER_MEMBER_TOLERANCE_MM = 20.0
+
+
+def steel_detail_fastener_holes_on_member(connection_obj, member_obj):
+    axis_y_mm = 0.5 * (float(member_obj["axis_start"]["y"]) + float(member_obj["axis_end"]["y"]))
+    axis_z_mm = 0.5 * (float(member_obj["axis_start"]["z"]) + float(member_obj["axis_end"]["z"]))
+    x_min_mm = min(float(member_obj["axis_start"]["x"]), float(member_obj["axis_end"]["x"])) - DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+    x_max_mm = max(float(member_obj["axis_start"]["x"]), float(member_obj["axis_end"]["x"])) + DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+    y_min_mm = axis_y_mm - profile_b(member_obj) / 2.0 - DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+    y_max_mm = axis_y_mm + profile_b(member_obj) / 2.0 + DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+    z_min_mm = axis_z_mm - profile_h(member_obj) / 2.0 - DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+    z_max_mm = axis_z_mm + profile_h(member_obj) / 2.0 + DETAIL_FASTENER_MEMBER_TOLERANCE_MM
+
+    holes = []
+    for detail_instance in connection_obj.get("detail_instances", []):
+        detail = STEEL_DETAILS_BY_ID[detail_instance["detail_ref"]]
+        for part_obj in detail.get("parts", []):
+            for hole_obj in part_obj.get("holes", []):
+                if hole_obj.get("type") != "round":
+                    continue
+                diameter_mm = float(hole_obj["diameter_mm"])
+                if diameter_mm > DETAIL_FASTENER_HOLE_MAX_DIAMETER_MM:
+                    continue
+                center = detail_world_point(connection_obj, detail_instance, part_hole_center_uvn(part_obj, hole_obj))
+                if not (
+                    x_min_mm <= center["x"] <= x_max_mm
+                    and y_min_mm <= center["y"] <= y_max_mm
+                    and z_min_mm <= center["z"] <= z_max_mm
+                ):
+                    continue
+                holes.append({
+                    "diameter_mm": diameter_mm,
+                    "x_mm": center["x"],
+                    "y_mm": center["y"],
+                    "z_mm": center["z"],
+                    "detail_id": detail["id"],
+                    "part_id": part_obj["id"],
+                    "hole_id": hole_obj.get("id", ""),
+                })
+    return holes
+
+
+def steel_detail_rotational_spring_info(connection_obj, member_obj):
+    if not connection_obj.get("detail_instances"):
+        return {
+            "k_theta_Nmm_per_rad": None,
+            "hole_count": 0,
+            "reason": "ei steel detail -instansseja",
+        }
+    holes = steel_detail_fastener_holes_on_member(connection_obj, member_obj)
+    if not holes:
+        return {
+            "k_theta_Nmm_per_rad": None,
+            "hole_count": 0,
+            "reason": f"ei enintään Ø{DETAIL_FASTENER_HOLE_MAX_DIAMETER_MM:.0f} mm puuhun osuvia ruuvi-/pulttireikiä",
+        }
+
+    axis_z_mm = 0.5 * (float(member_obj["axis_start"]["z"]) + float(member_obj["axis_end"]["z"]))
+    holes_below = [hole for hole in holes if hole["z_mm"] < axis_z_mm - 1.0]
+    holes_above = [hole for hole in holes if hole["z_mm"] > axis_z_mm + 1.0]
+    if not holes_below or not holes_above:
+        return {
+            "k_theta_Nmm_per_rad": None,
+            "hole_count": len(holes),
+            "reason": "reiät eivät muodosta ylä-/alapinnan momenttiparia",
+        }
+
+    k_theta_Nmm_per_rad = 0.0
+    for hole in holes:
+        kser_N_per_mm = rho_c24**1.5 * hole["diameter_mm"] / 23.0
+        lever_mm = hole["z_mm"] - axis_z_mm
+        k_theta_Nmm_per_rad += kser_N_per_mm * lever_mm**2
+
+    diameters = sorted({round(hole["diameter_mm"], 3) for hole in holes})
+    z_values = [hole["z_mm"] for hole in holes]
+    return {
+        "k_theta_Nmm_per_rad": k_theta_Nmm_per_rad,
+        "hole_count": len(holes),
+        "diameters_mm": diameters,
+        "effective_height_mm": max(z_values) - min(z_values),
+        "reason": None,
+    }
+
+
+def combined_inner_beam_support_rotational_spring_rows():
+    rows = []
+    for support_row in inner_support_rows:
+        connection_id = support_row["connection_id"]
+        connection_k = connection_rotational_spring_k_Nmm_per_rad(connection_id)
+        detail_info = steel_detail_rotational_spring_info(CONNECTIONS[connection_id], inner_beam)
+        detail_k = detail_info["k_theta_Nmm_per_rad"]
+        total_k = None
+        if connection_k is not None or detail_k is not None:
+            total_k = (0.0 if connection_k is None else connection_k) + (0.0 if detail_k is None else detail_k)
+        rows.append({
+            "connection_id": connection_id,
+            "member_id": support_row["member_id"],
+            "x_mm": support_row["x_mm"],
+            "connection_k_Nmm_per_rad": connection_k,
+            "detail_info": detail_info,
+            "detail_k_Nmm_per_rad": detail_k,
+            "rot_k_Nmm_per_rad": total_k,
+        })
+    return rows
+
+
+inner_beam_support_rotational_spring_rows = combined_inner_beam_support_rotational_spring_rows()
+inner_beam_rotational_springs_Nmm_per_rad = {
+    row["x_mm"]: row["rot_k_Nmm_per_rad"]
+    for row in inner_beam_support_rotational_spring_rows
+    if row["rot_k_Nmm_per_rad"] is not None
+}
+
+
 inner_hanger_analysis = connection_analysis_info("con.kattotuoli.on.inner_beam")
 inner_hanger_name = inner_hanger_analysis.get("label", "liitos")
 inner_hanger_fastener = inner_hanger_analysis.get("fastener_label", "")
@@ -1447,6 +1632,25 @@ def format_connection_behavior(analysis, rot_k_Nmm_per_rad):
     elif rot_k_Nmm_per_rad is not None:
         parts.append(f"kθ ≈ {rot_k_Nmm_per_rad/1.0e6:.1f} kNm/rad")
     return ", ".join(parts) if parts else analysis["support_model"]
+
+
+def format_detail_diameters(diameters_mm):
+    return "/".join(f"Ø{diameter_mm:g}" for diameter_mm in diameters_mm)
+
+
+def format_inner_beam_detail_spring_row(row):
+    detail_info = row["detail_info"]
+    if row["rot_k_Nmm_per_rad"] is None:
+        return f"x={row['x_mm']:.0f}: ei kθ ({detail_info['reason']})"
+    parts = [f"x={row['x_mm']:.0f}: kθ ≈ {row['rot_k_Nmm_per_rad']/1.0e6:.0f} kNm/rad"]
+    if detail_info.get("k_theta_Nmm_per_rad") is not None:
+        parts.append(
+            f"{detail_info['hole_count']}×{format_detail_diameters(detail_info['diameters_mm'])}, "
+            f"h_eff {detail_info['effective_height_mm']:.0f} mm"
+        )
+    if row["connection_k_Nmm_per_rad"] is not None:
+        parts.append("connection.analysis mukana")
+    return ", ".join(parts)
 
 
 def format_edge_support_route(side):
@@ -2508,7 +2712,18 @@ def analyse_rafter_case(member_obj, direct_width_m, roof_area_kNm2_at, gamma_sel
     }
 
 
-def analyse_beam_case(member_obj, support_xs_mm, point_loads_kN, gamma_self, E_Nmm2, section_I_mm4, MRd_kNm, VRd_kN, extra_uniform_intervals=None):
+def analyse_beam_case(
+    member_obj,
+    support_xs_mm,
+    point_loads_kN,
+    gamma_self,
+    E_Nmm2,
+    section_I_mm4,
+    MRd_kNm,
+    VRd_kN,
+    extra_uniform_intervals=None,
+    rotational_springs_Nmm_per_rad=None,
+):
     x0_mm = float(member_obj["axis_start"]["x"])
     x1_mm = float(member_obj["axis_end"]["x"])
     if member_obj["id"] == "beam.outer":
@@ -2529,8 +2744,16 @@ def analyse_beam_case(member_obj, support_xs_mm, point_loads_kN, gamma_self, E_N
     uniform = uniform_loads_for_nodes(nodes_mm, gamma_self * self_kNm / 1000.0)
     if extra_uniform_intervals:
         uniform = combine_uniform_loads(uniform, intervals_to_uniform_loads(nodes_mm, extra_uniform_intervals))
-    response, internal, delta = solve_member_response(nodes_mm, support_xs_mm, point_loads_kN, uniform, EI_Nmm2=E_Nmm2 * section_I_mm4)
+    response, internal, delta = solve_member_response(
+        nodes_mm,
+        support_xs_mm,
+        point_loads_kN,
+        uniform,
+        EI_Nmm2=E_Nmm2 * section_I_mm4,
+        rotational_springs_Nmm_per_rad=rotational_springs_Nmm_per_rad,
+    )
     moment_gov = governing_moment(internal)
+    rotational_springs_Nmm_per_rad = {} if rotational_springs_Nmm_per_rad is None else dict(rotational_springs_Nmm_per_rad)
     return {
         "reactions_kN": response["reactions_kN"],
         "M_pos": internal["M_pos"],
@@ -2538,6 +2761,11 @@ def analyse_beam_case(member_obj, support_xs_mm, point_loads_kN, gamma_self, E_N
         "M_gov": moment_gov,
         "V_abs": internal["V_abs"],
         "delta": delta,
+        "rotational_springs_Nmm_per_rad": rotational_springs_Nmm_per_rad,
+        "spring_moments_kNm": {
+            float(x_mm): response["rot_rad"].get(float(x_mm), 0.0) * float(k_theta) / 1.0e6
+            for x_mm, k_theta in rotational_springs_Nmm_per_rad.items()
+        },
         "eta_M": moment_gov["value_kNm"] / MRd_kNm * 100.0,
         "eta_V": abs(internal["V_abs"]["value_kN"]) / VRd_kN * 100.0,
     }
@@ -2868,6 +3096,17 @@ def analyse_case(case_key):
         OUTER_BEAM_MRd_y_kNm,
         OUTER_BEAM_VRd_kN,
     )
+    inner_beam_pinned_reference = analyse_beam_case(
+        inner_beam,
+        inner_supports_x_mm,
+        sorted(inner_beam_point_loads, key=lambda item: item[0]),
+        gamma_self,
+        E_gl30c,
+        INNER_BEAM_PROPS["I_vertical_mm4"],
+        INNER_BEAM_MRd_kNm,
+        INNER_BEAM_VRd_kN,
+        extra_uniform_intervals=inner_beam_extra_uniform_intervals,
+    )
     inner_beam_result = analyse_beam_case(
         inner_beam,
         inner_supports_x_mm,
@@ -2878,6 +3117,7 @@ def analyse_case(case_key):
         INNER_BEAM_MRd_kNm,
         INNER_BEAM_VRd_kN,
         extra_uniform_intervals=inner_beam_extra_uniform_intervals,
+        rotational_springs_Nmm_per_rad=inner_beam_rotational_springs_Nmm_per_rad,
     )
 
     return {
@@ -2892,6 +3132,7 @@ def analyse_case(case_key):
         "direct_column_loads_kN": direct_column_loads_kN,
         "outer_beam": outer_beam_result,
         "inner_beam": inner_beam_result,
+        "inner_beam_pinned_reference": inner_beam_pinned_reference,
     }
 
 
@@ -3172,12 +3413,449 @@ outer_beam_sls_delta_mm = max(outer_beam_sls_normal_delta_mm, outer_beam_sls_dri
 inner_beam_sls_normal_delta_mm = abs(RESULTS["SLS"]["inner_beam"]["delta"]["value_mm"])
 inner_beam_sls_drift_delta_mm = abs(RESULTS["SLS DRIFT"]["inner_beam"]["delta"]["value_mm"])
 inner_beam_sls_delta_mm = max(inner_beam_sls_normal_delta_mm, inner_beam_sls_drift_delta_mm)
+inner_beam_pinned_sls_normal_delta_mm = abs(RESULTS["SLS"]["inner_beam_pinned_reference"]["delta"]["value_mm"])
+inner_beam_pinned_sls_drift_delta_mm = abs(RESULTS["SLS DRIFT"]["inner_beam_pinned_reference"]["delta"]["value_mm"])
 outer_beam_governing_point_load = max(RESULTS[outer_beam_governing_case]["outer_beam_point_loads"], key=lambda item: item[1])
 outer_reaction_case = max(ULS_CASE_KEYS, key=lambda case_key: max(RESULTS[case_key]["outer_beam"]["reactions_kN"].values()))
 inner_reaction_case = max(ULS_CASE_KEYS, key=lambda case_key: max(RESULTS[case_key]["inner_beam"]["reactions_kN"].values()))
 
 outer_uplift = RESULTS["UPLIFT"]["outer_beam"]["reactions_kN"]
 inner_uplift = RESULTS["UPLIFT"]["inner_beam"]["reactions_kN"]
+
+STEEL_S355_FY_NMM2 = 355.0
+STEEL_S355_FU_NMM2 = 510.0
+STEEL_GAMMA_M0 = 1.0
+STEEL_GAMMA_M2 = 1.25
+FILLET_WELD_BETA_W = 0.9
+M16_BOLT_D_MM = 16.0
+M16_BOLT_HOLE_D_MM = 18.0
+M16_8_8_FUB_NMM2 = 800.0
+M16_TENSILE_AREA_MM2 = 157.0
+CONCRETE_COLUMN_FACE_GRADE = "C20/25-oletus"
+CONCRETE_COLUMN_FACE_FCK_NMM2 = 20.0
+CONCRETE_GAMMA_C = 1.5
+CONCRETE_ALPHA_CC = 0.85
+CONCRETE_COLUMN_FACE_FCD_NMM2 = CONCRETE_ALPHA_CC * CONCRETE_COLUMN_FACE_FCK_NMM2 / CONCRETE_GAMMA_C
+
+
+def steel_detail_part(detail_obj, part_id):
+    for part_obj in detail_obj.get("parts", []):
+        if part_obj["id"] == part_id:
+            return part_obj
+    raise KeyError(f"steel detail part not found: {detail_obj['id']} / {part_id}")
+
+
+def steel_detail_weld_length_mm(weld_obj):
+    points = weld_obj["path_uvn_mm"]
+    length_mm = 0.0
+    for p0, p1 in zip(points, points[1:]):
+        length_mm += math.sqrt(sum((float(p1[i]) - float(p0[i])) ** 2 for i in range(3)))
+    return length_mm
+
+
+def steel_detail_weld_capacity_kN(weld_obj):
+    f_vw_d_Nmm2 = STEEL_S355_FU_NMM2 / (math.sqrt(3.0) * FILLET_WELD_BETA_W * STEEL_GAMMA_M2)
+    return float(weld_obj["size_mm"]) * steel_detail_weld_length_mm(weld_obj) * f_vw_d_Nmm2 / 1000.0
+
+
+def steel_detail_welds_between(detail_obj, part_a_id, part_b_id):
+    wanted = {part_a_id, part_b_id}
+    return [
+        weld_obj
+        for weld_obj in detail_obj.get("welds", [])
+        if set(weld_obj.get("between", [])) == wanted
+    ]
+
+
+def steel_detail_gussets_for_supported_part(detail_obj, supported_part_id):
+    gussets = []
+    vertical_part_ids = {"plate.web", "plate.column", "plate.pysty", "plate.vertical"}
+    for weld_obj in detail_obj.get("welds", []):
+        between = weld_obj.get("between", [])
+        if supported_part_id not in between:
+            continue
+        gusset_id = next((part_id for part_id in between if part_id != supported_part_id and part_id.startswith("gusset.")), None)
+        if gusset_id is None:
+            continue
+        gusset = steel_detail_part(detail_obj, gusset_id)
+        if gusset["plane"] != "vn" or gusset["shape"]["type"] != "polygon":
+            continue
+        v_values = [float(gusset["origin_uvn_mm"][1]) + float(vertex[0]) for vertex in gusset["shape"]["vertices_mm"]]
+        n_values = [float(gusset["origin_uvn_mm"][2]) + float(vertex[1]) for vertex in gusset["shape"]["vertices_mm"]]
+        supported_welds = steel_detail_welds_between(detail_obj, supported_part_id, gusset_id)
+        pysty_welds = [
+            weld
+            for vertical_part_id in vertical_part_ids
+            for weld in steel_detail_welds_between(detail_obj, vertical_part_id, gusset_id)
+        ]
+        gussets.append({
+            "part_id": gusset_id,
+            "u_mm": float(gusset["origin_uvn_mm"][0]),
+            "height_mm": max(v_values) - min(v_values),
+            "depth_mm": max(n_values) - min(n_values),
+            "thickness_mm": float(gusset["thickness_mm"]),
+            "supported_weld_capacity_kN": sum(steel_detail_weld_capacity_kN(item) for item in supported_welds),
+            "pysty_weld_capacity_kN": sum(steel_detail_weld_capacity_kN(item) for item in pysty_welds),
+        })
+    return sorted(gussets, key=lambda item: item["u_mm"])
+
+
+def assign_hole_force_to_gussets(hole_u_mm, gussets):
+    distances = [abs(hole_u_mm - gusset["u_mm"]) for gusset in gussets]
+    nearest = min(distances)
+    nearest_idxs = [idx for idx, distance in enumerate(distances) if abs(distance - nearest) <= 1.0e-9]
+    share = 1.0 / len(nearest_idxs)
+    return [(idx, share, distances[idx]) for idx in nearest_idxs]
+
+
+def gusset_plate_capacity_kN(gusset):
+    area_mm2 = gusset["thickness_mm"] * min(gusset["height_mm"], gusset["depth_mm"])
+    return STEEL_S355_FY_NMM2 * area_mm2 / STEEL_GAMMA_M0 / 1000.0
+
+
+def steel_detail_screw_plate_bending_check(detail_obj, part_id, force_kN, label):
+    part_obj = steel_detail_part(detail_obj, part_id)
+    shape = part_obj["shape"]
+    if shape["type"] != "rectangle":
+        raise ValueError(f"Unsupported screw plate shape for check: {part_id}")
+    holes = [
+        hole_obj
+        for hole_obj in part_obj.get("holes", [])
+        if hole_obj.get("type") == "round" and float(hole_obj["diameter_mm"]) <= DETAIL_FASTENER_HOLE_MAX_DIAMETER_MM
+    ]
+    if not holes:
+        return {
+            "label": label,
+            "active": False,
+            "reason": "ei Ø6-ruuvireikiä",
+        }
+    weld_n_mm = float(part_obj["origin_uvn_mm"][2])
+    hole_rows = [
+        {
+            "u_mm": part_hole_center_uvn(part_obj, hole_obj)[0],
+            "lever_mm": abs(part_hole_center_uvn(part_obj, hole_obj)[2] - weld_n_mm),
+        }
+        for hole_obj in holes
+    ]
+    raw_lever_arms_mm = [hole["lever_mm"] for hole in hole_rows]
+    gussets = steel_detail_gussets_for_supported_part(detail_obj, part_id)
+    thickness_mm = float(part_obj["thickness_mm"])
+    width_mm = float(shape["width_mm"])
+    W_el_mm3 = width_mm * thickness_mm**2 / 6.0
+    M_Rd_kNm = STEEL_S355_FY_NMM2 * W_el_mm3 / STEEL_GAMMA_M0 / 1.0e6
+    force_per_hole_kN = force_kN / len(hole_rows)
+
+    if gussets:
+        gusset_rows = [
+            {
+                **gusset,
+                "force_kN": 0.0,
+                "max_hole_offset_u_mm": 0.0,
+                "max_hole_lever_mm": 0.0,
+            }
+            for gusset in gussets
+        ]
+        residual_moment_kNmm = 0.0
+        residual_force_kN = 0.0
+        for hole in hole_rows:
+            assignments = assign_hole_force_to_gussets(hole["u_mm"], gussets)
+            if not assignments:
+                residual_force_kN += force_per_hole_kN
+                residual_moment_kNmm += force_per_hole_kN * hole["lever_mm"]
+                continue
+            for idx, share, distance_mm in assignments:
+                assigned_force_kN = force_per_hole_kN * share
+                gusset_rows[idx]["force_kN"] += assigned_force_kN
+                gusset_rows[idx]["max_hole_offset_u_mm"] = max(gusset_rows[idx]["max_hole_offset_u_mm"], distance_mm)
+                gusset_rows[idx]["max_hole_lever_mm"] = max(gusset_rows[idx]["max_hole_lever_mm"], hole["lever_mm"])
+
+        for row in gusset_rows:
+            angle_rad = math.atan2(row["height_mm"], row["depth_mm"])
+            diagonal_force_kN = row["force_kN"] / max(math.sin(angle_rad), 1.0e-9)
+            plate_capacity_kN = gusset_plate_capacity_kN(row)
+            supported_weld_eta = (
+                row["force_kN"] / row["supported_weld_capacity_kN"] * 100.0
+                if row["supported_weld_capacity_kN"] > 0.0 else float("inf")
+            )
+            pysty_weld_eta = (
+                row["force_kN"] / row["pysty_weld_capacity_kN"] * 100.0
+                if row["pysty_weld_capacity_kN"] > 0.0 else float("inf")
+            )
+            plate_eta = diagonal_force_kN / plate_capacity_kN * 100.0
+            row.update({
+                "angle_deg": math.degrees(angle_rad),
+                "diagonal_force_kN": diagonal_force_kN,
+                "plate_capacity_kN": plate_capacity_kN,
+                "supported_weld_eta": supported_weld_eta,
+                "pysty_weld_eta": pysty_weld_eta,
+                "plate_eta": plate_eta,
+                "eta": max(supported_weld_eta, pysty_weld_eta, plate_eta),
+            })
+
+        residual_M_Ed_kNm = residual_moment_kNmm / 1000.0
+        residual_eta = residual_M_Ed_kNm / M_Rd_kNm * 100.0 if residual_M_Ed_kNm > 0.0 else 0.0
+        return {
+            "label": label,
+            "active": True,
+            "model": "gusset_force_path",
+            "part_id": part_id,
+            "hole_count": len(holes),
+            "thickness_mm": thickness_mm,
+            "width_mm": width_mm,
+            "raw_lever_eff_mm": sum(raw_lever_arms_mm) / len(raw_lever_arms_mm),
+            "raw_lever_max_mm": max(raw_lever_arms_mm),
+            "force_kN": force_kN,
+            "force_per_hole_kN": force_per_hole_kN,
+            "gusset_rows": gusset_rows,
+            "max_gusset_force_kN": max(row["force_kN"] for row in gusset_rows),
+            "max_hole_offset_u_mm": max(row["max_hole_offset_u_mm"] for row in gusset_rows),
+            "residual_force_kN": residual_force_kN,
+            "residual_M_Ed_kNm": residual_M_Ed_kNm,
+            "residual_M_Rd_kNm": M_Rd_kNm,
+            "residual_eta": residual_eta,
+            "eta": max([residual_eta, *(row["eta"] for row in gusset_rows)]),
+        }
+
+    lever_arms_mm = raw_lever_arms_mm
+    lever_eff_mm = sum(lever_arms_mm) / len(lever_arms_mm)
+    M_Ed_kNm = force_kN * lever_eff_mm / 1000.0
+    return {
+        "label": label,
+        "active": True,
+        "model": "cantilever",
+        "part_id": part_id,
+        "hole_count": len(holes),
+        "thickness_mm": thickness_mm,
+        "width_mm": width_mm,
+        "gusset_support_depth_mm": 0.0,
+        "lever_eff_mm": lever_eff_mm,
+        "lever_max_mm": max(lever_arms_mm),
+        "raw_lever_eff_mm": sum(raw_lever_arms_mm) / len(raw_lever_arms_mm),
+        "raw_lever_max_mm": max(raw_lever_arms_mm),
+        "M_Ed_kNm": M_Ed_kNm,
+        "M_Rd_kNm": M_Rd_kNm,
+        "eta": M_Ed_kNm / M_Rd_kNm * 100.0,
+    }
+
+
+def steel_detail_weld_check(detail_obj, part_a_id, part_b_id, force_kN, label):
+    welds = steel_detail_welds_between(detail_obj, part_a_id, part_b_id)
+    if not welds:
+        return {
+            "label": label,
+            "active": False,
+            "reason": "saumaa ei ole mallinnettu",
+        }
+    capacity_kN = sum(steel_detail_weld_capacity_kN(weld_obj) for weld_obj in welds)
+    return {
+        "label": label,
+        "active": True,
+        "weld_count": len(welds),
+        "length_mm": sum(steel_detail_weld_length_mm(weld_obj) for weld_obj in welds),
+        "capacity_kN": capacity_kN,
+        "force_kN": force_kN,
+        "eta": force_kN / capacity_kN * 100.0,
+    }
+
+
+def steel_detail_m16_fork_check(detail_obj, force_kN):
+    fork_part_ids = ("plate.fork.left", "plate.fork.right")
+    hole_rows = []
+    bearing_capacity_kN = 0.0
+    net_tension_capacity_kN = 0.0
+    for part_id in fork_part_ids:
+        part_obj = steel_detail_part(detail_obj, part_id)
+        shape = part_obj["shape"]
+        if shape["type"] != "rectangle":
+            raise ValueError(f"Unsupported fork plate shape for check: {part_id}")
+        bolt_holes = [
+            hole_obj
+            for hole_obj in part_obj.get("holes", [])
+            if hole_obj.get("type") == "round" and abs(float(hole_obj["diameter_mm"]) - M16_BOLT_HOLE_D_MM) <= 0.5
+        ]
+        if len(bolt_holes) != 1:
+            raise ValueError(f"M16 bolt hole missing or ambiguous in {part_id}")
+        hole_obj = bolt_holes[0]
+        center_a_mm = float(hole_obj["center_mm"][0])
+        center_b_mm = float(hole_obj["center_mm"][1])
+        width_mm = float(shape["width_mm"])
+        height_mm = float(shape["height_mm"])
+        thickness_mm = float(part_obj["thickness_mm"])
+        edge_mm = min(center_a_mm, width_mm - center_a_mm, center_b_mm, height_mm - center_b_mm)
+        alpha_b = min(edge_mm / (3.0 * M16_BOLT_HOLE_D_MM), 1.0)
+        bearing_capacity_kN += 2.5 * alpha_b * STEEL_S355_FU_NMM2 * M16_BOLT_D_MM * thickness_mm / STEEL_GAMMA_M2 / 1000.0
+        net_tension_capacity_kN += (min(width_mm, height_mm) - M16_BOLT_HOLE_D_MM) * thickness_mm * STEEL_S355_FY_NMM2 / STEEL_GAMMA_M0 / 1000.0
+        hole_rows.append({
+            "part_id": part_id,
+            "edge_mm": edge_mm,
+            "alpha_b": alpha_b,
+        })
+    bolt_shear_capacity_kN = 2.0 * 0.6 * M16_8_8_FUB_NMM2 * M16_TENSILE_AREA_MM2 / STEEL_GAMMA_M2 / 1000.0
+    return {
+        "force_kN": force_kN,
+        "bolt_shear_capacity_kN": bolt_shear_capacity_kN,
+        "bearing_capacity_kN": bearing_capacity_kN,
+        "net_tension_capacity_kN": net_tension_capacity_kN,
+        "bolt_shear_eta": force_kN / bolt_shear_capacity_kN * 100.0,
+        "bearing_eta": force_kN / bearing_capacity_kN * 100.0,
+        "net_tension_eta": force_kN / net_tension_capacity_kN * 100.0,
+        "hole_rows": hole_rows,
+    }
+
+
+def steel_detail_m16_plate_bolt_group_check(detail_obj, part_id, force_kN, shear_planes=1):
+    part_obj = steel_detail_part(detail_obj, part_id)
+    shape = part_obj["shape"]
+    if shape["type"] != "rectangle":
+        raise ValueError(f"Unsupported bolt plate shape for check: {part_id}")
+    bolt_holes = [
+        hole_obj
+        for hole_obj in part_obj.get("holes", [])
+        if hole_obj.get("type") == "round" and abs(float(hole_obj["diameter_mm"]) - M16_BOLT_HOLE_D_MM) <= 0.5
+    ]
+    if not bolt_holes:
+        raise ValueError(f"M16 bolt holes missing in {part_id}")
+    width_mm = float(shape["width_mm"])
+    height_mm = float(shape["height_mm"])
+    thickness_mm = float(part_obj["thickness_mm"])
+    bearing_capacity_kN = 0.0
+    net_tension_capacity_kN = 0.0
+    hole_rows = []
+    for hole_obj in bolt_holes:
+        center_u_mm = float(hole_obj["center_mm"][0])
+        center_v_mm = float(hole_obj["center_mm"][1])
+        edge_u_mm = min(center_u_mm, width_mm - center_u_mm)
+        edge_v_mm = min(center_v_mm, height_mm - center_v_mm)
+        alpha_b = min(edge_u_mm / (3.0 * M16_BOLT_HOLE_D_MM), 1.0)
+        bearing_capacity_kN += 2.5 * alpha_b * STEEL_S355_FU_NMM2 * M16_BOLT_D_MM * thickness_mm / STEEL_GAMMA_M2 / 1000.0
+        net_tension_capacity_kN += (height_mm - M16_BOLT_HOLE_D_MM) * thickness_mm * STEEL_S355_FY_NMM2 / STEEL_GAMMA_M0 / 1000.0
+        hole_rows.append({
+            "hole_id": hole_obj["id"],
+            "edge_u_mm": edge_u_mm,
+            "edge_v_mm": edge_v_mm,
+            "alpha_b": alpha_b,
+        })
+    bolt_shear_capacity_kN = len(bolt_holes) * shear_planes * 0.6 * M16_8_8_FUB_NMM2 * M16_TENSILE_AREA_MM2 / STEEL_GAMMA_M2 / 1000.0
+    return {
+        "force_kN": force_kN,
+        "bolt_count": len(bolt_holes),
+        "shear_planes": shear_planes,
+        "bolt_shear_capacity_kN": bolt_shear_capacity_kN,
+        "bearing_capacity_kN": bearing_capacity_kN,
+        "net_tension_capacity_kN": net_tension_capacity_kN,
+        "bolt_shear_eta": force_kN / bolt_shear_capacity_kN * 100.0,
+        "bearing_eta": force_kN / bearing_capacity_kN * 100.0,
+        "net_tension_eta": force_kN / net_tension_capacity_kN * 100.0,
+        "hole_rows": hole_rows,
+    }
+
+
+def steel_detail_rect_plate_concrete_bearing_check(detail_obj, part_id, force_kN, label):
+    part_obj = steel_detail_part(detail_obj, part_id)
+    shape = part_obj["shape"]
+    if shape["type"] != "rectangle":
+        raise ValueError(f"Unsupported contact plate shape for check: {part_id}")
+    area_mm2 = float(shape["width_mm"]) * float(shape["height_mm"])
+    pressure_Nmm2 = force_kN * 1000.0 / area_mm2
+    return {
+        "label": label,
+        "part_id": part_id,
+        "width_mm": float(shape["width_mm"]),
+        "height_mm": float(shape["height_mm"]),
+        "force_kN": force_kN,
+        "area_mm2": area_mm2,
+        "pressure_Nmm2": pressure_Nmm2,
+        "concrete_grade": CONCRETE_COLUMN_FACE_GRADE,
+        "concrete_fcd_Nmm2": CONCRETE_COLUMN_FACE_FCD_NMM2,
+        "concrete_eta": pressure_Nmm2 / CONCRETE_COLUMN_FACE_FCD_NMM2 * 100.0,
+    }
+
+
+def x125_steel_detail_check():
+    support_row = next((row for row in inner_beam_support_rotational_spring_rows if row["member_id"] == "col.existing.inner.x125"), None)
+    if support_row is None or support_row["detail_info"].get("k_theta_Nmm_per_rad") is None:
+        return {"active": False, "reason": "x125-teräsdetailillä ei ole rotaatiojousivoimaa"}
+    x_mm = support_row["x_mm"]
+    case_key = max(ULS_CASE_KEYS, key=lambda item: abs(RESULTS[item]["inner_beam"]["spring_moments_kNm"].get(x_mm, 0.0)))
+    M_Ed_kNm = abs(RESULTS[case_key]["inner_beam"]["spring_moments_kNm"].get(x_mm, 0.0))
+    effective_height_mm = float(support_row["detail_info"]["effective_height_mm"])
+    force_kN = M_Ed_kNm * 1000.0 / effective_height_mm
+    connection_obj = CONNECTIONS[support_row["connection_id"]]
+    detail_ref = connection_obj["detail_instances"][0]["detail_ref"]
+    detail_obj = STEEL_DETAILS_BY_ID[detail_ref]
+    plate_checks = [
+        steel_detail_screw_plate_bending_check(detail_obj, "plate.top", force_kN, "ylätukilevy"),
+        steel_detail_screw_plate_bending_check(detail_obj, "plate.bottom", force_kN, "alatukilevy"),
+    ]
+    weld_checks = [
+        steel_detail_weld_check(detail_obj, "plate.web", "plate.top", force_kN, "pysty–ylätuki a5"),
+        steel_detail_weld_check(detail_obj, "plate.web", "plate.bottom", force_kN, "pysty–alatuki a5"),
+        steel_detail_weld_check(detail_obj, "plate.web", "plate.fork.left", force_kN / 2.0, "pysty–haarukka vasen a5"),
+        steel_detail_weld_check(detail_obj, "plate.web", "plate.fork.right", force_kN / 2.0, "pysty–haarukka oikea a5"),
+    ]
+    bolt_check = steel_detail_m16_fork_check(detail_obj, force_kN)
+    eta_values = [
+        *(row["eta"] for row in plate_checks if row.get("active")),
+        *(row["eta"] for row in weld_checks if row.get("active")),
+        bolt_check["bolt_shear_eta"],
+        bolt_check["bearing_eta"],
+        bolt_check["net_tension_eta"],
+    ]
+    return {
+        "active": True,
+        "case_key": case_key,
+        "x_mm": x_mm,
+        "M_Ed_kNm": M_Ed_kNm,
+        "effective_height_mm": effective_height_mm,
+        "force_kN": force_kN,
+        "plate_checks": plate_checks,
+        "weld_checks": weld_checks,
+        "bolt_check": bolt_check,
+        "eta_max": max(eta_values),
+    }
+
+
+def x7075_steel_detail_check():
+    support_row = next((row for row in inner_beam_support_rotational_spring_rows if row["member_id"] == "col.existing.inner.x7075"), None)
+    if support_row is None or support_row["detail_info"].get("k_theta_Nmm_per_rad") is None:
+        return {"active": False, "reason": "x7075-teräsdetailillä ei ole rotaatiojousivoimaa"}
+    x_mm = support_row["x_mm"]
+    case_key = max(ULS_CASE_KEYS, key=lambda item: abs(RESULTS[item]["inner_beam"]["spring_moments_kNm"].get(x_mm, 0.0)))
+    M_Ed_kNm = abs(RESULTS[case_key]["inner_beam"]["spring_moments_kNm"].get(x_mm, 0.0))
+    effective_height_mm = float(support_row["detail_info"]["effective_height_mm"])
+    force_kN = M_Ed_kNm * 1000.0 / effective_height_mm
+    connection_obj = CONNECTIONS[support_row["connection_id"]]
+    detail_ref = connection_obj["detail_instances"][0]["detail_ref"]
+    detail_obj = STEEL_DETAILS_BY_ID[detail_ref]
+    horizontal_plate_check = steel_detail_screw_plate_bending_check(detail_obj, "plate.beam", force_kN, "vaakalevy")
+    corner_weld_check = steel_detail_weld_check(detail_obj, "plate.column", "plate.beam", force_kN, "pysty–vaakalevy a5")
+    bolt_check = steel_detail_m16_plate_bolt_group_check(detail_obj, "plate.column", force_kN, shear_planes=1)
+    face_pressure_check = steel_detail_rect_plate_concrete_bearing_check(detail_obj, "plate.column", force_kN, "pilarin vastalevy")
+    eta_values = [
+        horizontal_plate_check["eta"],
+        corner_weld_check["eta"],
+        bolt_check["bolt_shear_eta"],
+        bolt_check["bearing_eta"],
+        bolt_check["net_tension_eta"],
+        face_pressure_check["concrete_eta"],
+    ]
+    return {
+        "active": True,
+        "case_key": case_key,
+        "x_mm": x_mm,
+        "M_Ed_kNm": M_Ed_kNm,
+        "effective_height_mm": effective_height_mm,
+        "force_kN": force_kN,
+        "horizontal_plate_check": horizontal_plate_check,
+        "corner_weld_check": corner_weld_check,
+        "bolt_check": bolt_check,
+        "face_pressure_check": face_pressure_check,
+        "eta_max": max(eta_values),
+    }
+
+
+x125_detail_steel_check = x125_steel_detail_check()
+x7075_detail_steel_check = x7075_steel_detail_check()
 
 column_case_groups = {
     case_key: ("UPLIFT" if case_key == "UPLIFT" else "SLS" if case_key in SLS_CASE_KEYS else "ULS")
@@ -3572,7 +4250,7 @@ if VERTICAL_GLAZING_ROWS:
             f"max H_tuki = {max(abs(value) for value in inner_h['reactions_kN'].values()):.2f} kN"
         )
         print(
-            f"    {'beam.existing.kp360x2':<24} Md,z = {existing_h['M_gov']['value_kNm']:.2f} kNm, "
+            f"    {existing_beam['id']:<24} Md,z = {existing_h['M_gov']['value_kNm']:.2f} kNm, "
             f"η_M/η_V = {existing_h['eta_M']:.1f}%/{existing_h['eta_V']:.1f}%, "
             f"δ = {existing_sls_delta:.2f}/{existing_span_limit_mm:.1f} mm, "
             f"max H_tuki = {max(abs(value) for value in existing_h['reactions_kN'].values()):.2f} kN"
@@ -3842,6 +4520,121 @@ print(
     f"  Taipuma SLS / DRIFT           {inner_beam_sls_normal_delta_mm:.2f} / {inner_beam_sls_drift_delta_mm:.2f}"
     f" / {(inner_supports_x_mm[-1]-inner_supports_x_mm[0])/300.0:.1f} mm  {format_ok(inner_beam_sls_delta_mm <= (inner_supports_x_mm[-1]-inner_supports_x_mm[0])/300.0)}"
 )
+print(
+    f"  Taipuma ilman detailijousia    {inner_beam_pinned_sls_normal_delta_mm:.2f} / {inner_beam_pinned_sls_drift_delta_mm:.2f} mm"
+)
+print("  Teräsdetailien kθ-malli        " + " ; ".join(format_inner_beam_detail_spring_row(row) for row in inner_beam_support_rotational_spring_rows))
+if inner_beam_rotational_springs_Nmm_per_rad:
+    print("    mukana vain puuhun osuvat ruuvi-/pulttireiät EC5 kser -slipmodulilla; laakerikosketus ja kitka eivät jäykistä mallia")
+if x125_detail_steel_check["active"]:
+    print(
+        f"  x125 teräsdetailin tarkistus   {x125_detail_steel_check['case_key']}: "
+        f"MEd = {x125_detail_steel_check['M_Ed_kNm']:.2f} kNm → "
+        f"Fpari = {x125_detail_steel_check['force_kN']:.1f} kN "
+        f"(h_eff {x125_detail_steel_check['effective_height_mm']:.0f} mm)"
+    )
+    for row in x125_detail_steel_check["plate_checks"]:
+        if row["active"]:
+            if row.get("model") == "gusset_force_path":
+                print(
+                    f"    {row['label']:<24} gussettireitti: "
+                    f"Fg,max = {row['max_gusset_force_kN']:.1f} kN, "
+                    f"Δu,max = {row['max_hole_offset_u_mm']:.0f} mm, "
+                    f"hitsi/levy ηmax = "
+                    f"{max(max(g['supported_weld_eta'], g['pysty_weld_eta']) for g in row['gusset_rows']):.1f}%/"
+                    f"{max(g['plate_eta'] for g in row['gusset_rows']):.1f}%, "
+                    f"η = {row['eta']:.1f}%  {format_ok(row['eta'] <= 100.0)}"
+                )
+                if row["residual_force_kN"] > 0.0:
+                    print(
+                        f"      gussettien ulkopuolinen uloke ME/MR = "
+                        f"{row['residual_M_Ed_kNm']:.2f}/{row['residual_M_Rd_kNm']:.2f} kNm, "
+                        f"η = {row['residual_eta']:.0f}%"
+                    )
+            else:
+                print(
+                    f"    {row['label']:<24} 10 mm uloketaivutus: "
+                    f"ME/MR = {row['M_Ed_kNm']:.2f}/{row['M_Rd_kNm']:.2f} kNm, "
+                    f"l_eff = {row['lever_eff_mm']:.0f} mm "
+                    f"(kolmiot {row['gusset_support_depth_mm']:.0f} mm), "
+                    f"η = {row['eta']:.0f}%  {format_ok(row['eta'] <= 100.0)}"
+                )
+        else:
+            print(f"    {row['label']:<24} ei tarkistettu: {row['reason']}")
+    for row in x125_detail_steel_check["weld_checks"]:
+        if row["active"]:
+            print(
+                f"    {row['label']:<24} hitsin leikkaus: "
+                f"FE/FR = {row['force_kN']:.1f}/{row['capacity_kN']:.1f} kN, "
+                f"η = {row['eta']:.1f}%  {format_ok(row['eta'] <= 100.0)}"
+            )
+        else:
+            print(f"    {row['label']:<24} ei tarkistettu: {row['reason']}")
+    bolt = x125_detail_steel_check["bolt_check"]
+    bolt_ok = max(bolt["bolt_shear_eta"], bolt["bearing_eta"], bolt["net_tension_eta"]) <= 100.0
+    print(
+        f"    M16 8.8 pulttihaarukka      leikkaus/reunapuristus/netto η = "
+        f"{bolt['bolt_shear_eta']:.1f}%/{bolt['bearing_eta']:.1f}%/{bolt['net_tension_eta']:.1f}%  {format_ok(bolt_ok)}"
+    )
+    print(
+        f"    x125 teräsdetail yhteensä    η_max = {x125_detail_steel_check['eta_max']:.0f}%  "
+        f"{format_ok(x125_detail_steel_check['eta_max'] <= 100.0)}"
+    )
+else:
+    print(f"  x125 teräsdetailin tarkistus   ei aktiivinen: {x125_detail_steel_check['reason']}")
+if x7075_detail_steel_check["active"]:
+    print(
+        f"  x7075 teräsdetailin tarkistus  {x7075_detail_steel_check['case_key']}: "
+        f"MEd = {x7075_detail_steel_check['M_Ed_kNm']:.2f} kNm → "
+        f"Fkannake = {x7075_detail_steel_check['force_kN']:.1f} kN "
+        f"(h_eff {x7075_detail_steel_check['effective_height_mm']:.0f} mm)"
+    )
+    row = x7075_detail_steel_check["horizontal_plate_check"]
+    if row.get("model") == "gusset_force_path":
+        print(
+            f"    vaakalevy                gussettireitti: "
+            f"Fg,max = {row['max_gusset_force_kN']:.1f} kN, "
+            f"Δu,max = {row['max_hole_offset_u_mm']:.0f} mm, "
+            f"hitsi/levy ηmax = "
+            f"{max(max(g['supported_weld_eta'], g['pysty_weld_eta']) for g in row['gusset_rows']):.1f}%/"
+            f"{max(g['plate_eta'] for g in row['gusset_rows']):.1f}%, "
+            f"η = {row['eta']:.1f}%  {format_ok(row['eta'] <= 100.0)}"
+        )
+    else:
+        print(
+            f"    vaakalevy                12 mm uloketaivutus: "
+            f"ME/MR = {row['M_Ed_kNm']:.2f}/{row['M_Rd_kNm']:.2f} kNm, "
+            f"η = {row['eta']:.0f}%  {format_ok(row['eta'] <= 100.0)}"
+        )
+    weld = x7075_detail_steel_check["corner_weld_check"]
+    print(
+        f"    {weld['label']:<24} hitsin leikkaus: "
+        f"FE/FR = {weld['force_kN']:.1f}/{weld['capacity_kN']:.1f} kN, "
+        f"η = {weld['eta']:.1f}%  {format_ok(weld['eta'] <= 100.0)}"
+    )
+    bolt = x7075_detail_steel_check["bolt_check"]
+    bolt_ok = max(bolt["bolt_shear_eta"], bolt["bearing_eta"], bolt["net_tension_eta"]) <= 100.0
+    print(
+        f"    2×M16 8.8 pystylevyssä      leikkaus/reunapuristus/netto η = "
+        f"{bolt['bolt_shear_eta']:.1f}%/{bolt['bearing_eta']:.1f}%/{bolt['net_tension_eta']:.1f}%  {format_ok(bolt_ok)}"
+    )
+    face = x7075_detail_steel_check["face_pressure_check"]
+    face_ok = face["concrete_eta"] <= 100.0
+    print(
+        f"    {face['width_mm']:.0f}×{face['height_mm']:.0f} pystylevy betonia vasten p = {face['pressure_Nmm2']:.1f} N/mm², "
+        f"{face['concrete_grade']} fcd = {face['concrete_fcd_Nmm2']:.1f} N/mm², "
+        f"η = {face['concrete_eta']:.1f}%  {format_ok(face_ok)}"
+    )
+    print(
+        "    Huom: kemiallisen ankkurin betonikartio-/ulosveto-/halkaisumurtumat "
+        "eivät sisälly tähän tarkistukseen."
+    )
+    print(
+        f"    x7075 teräsdetail yhteensä   η_max = {x7075_detail_steel_check['eta_max']:.0f}%  "
+        f"{format_ok(x7075_detail_steel_check['eta_max'] <= 100.0)}"
+    )
+else:
+    print(f"  x7075 teräsdetailin tarkistus  ei aktiivinen: {x7075_detail_steel_check['reason']}")
 print(f"  Tulos                         η_M = {inner_beam_governing['eta_M']:.1f}%,  η_V = {inner_beam_governing['eta_V']:.1f}%  {format_ok(inner_beam_governing['eta_M'] <= 100.0 and inner_beam_governing['eta_V'] <= 100.0)}")
 
 print("\n── PILARIKUORMAT JA NOSTO ───────────────────────────────────────")

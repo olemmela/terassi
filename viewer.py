@@ -802,6 +802,10 @@ const SUPPORT_LINE_SHIFT_COLOR = 0x99ff33;
 const CONNECTION_DETAIL_PLATE_COLOR = 0xb0b7c3;
 const CONNECTION_DETAIL_POINT_COLOR = 0xffe066;
 const CONNECTION_DETAIL_BOLT_COLOR = 0xf7c948;
+const STEEL_DETAIL_COLOR = 0xaeb8c2;
+const STEEL_DETAIL_EDGE_COLOR = 0x3a4652;
+const STEEL_DETAIL_HOLE_COLOR = 0x111820;
+const STEEL_DETAIL_WELD_COLOR = 0x2f3740;
 const SOLAR_PANEL_GRID_COLOR = 0xe8f2ff;
 const OPENING_EDGE_COLOR = 0xffdd33;
 
@@ -1021,6 +1025,9 @@ function connectionTooltipLines(con) {
       );
     }
   }
+  if (Array.isArray(con.detail_instances) && con.detail_instances.length) {
+    lines.push(`detail-instanssit: ${con.detail_instances.map(inst => inst.detail_ref).join(', ')}`);
+  }
   const cuts = connectionCuts(con);
   if (cuts.length) lines.push(`cuts: ${cuts.map(cut => cutLabel(cut)).join(', ')}`);
   return lines;
@@ -1094,6 +1101,27 @@ function clearGeoFor(name) {
   pickable = pickable.filter(o => o.userData._geoName !== name);
 }
 
+function setMaterialDepthMode(material, overlayOnTop) {
+  if (!material) return;
+  if (Array.isArray(material)) {
+    for (const item of material) setMaterialDepthMode(item, overlayOnTop);
+    return;
+  }
+  material.depthTest = !overlayOnTop;
+  material.depthWrite = false;
+  material.needsUpdate = true;
+}
+
+function updateConnectionDetailOverlayMode() {
+  const overlayOnTop = showConnectionMarkers || showAnalysisOverlays;
+  for (const g of geoGroups.values()) {
+    g.traverse(o => {
+      if (!o.userData?._isAlwaysVisibleConnectionDetail) return;
+      setMaterialDepthMode(o.material, overlayOnTop);
+    });
+  }
+}
+
 function setConnectionMarkerVisibility(show) {
   showConnectionMarkers = show;
   const btn = document.getElementById('btn-connections');
@@ -1110,6 +1138,7 @@ function setConnectionMarkerVisibility(show) {
       if (o.userData?._isNotchOverlay) o.visible = show;
     });
   }
+  updateConnectionDetailOverlayMode();
 }
 
 function toggleConnectionMarkers() {
@@ -1130,6 +1159,7 @@ function setAnalysisOverlayVisibility(show) {
       if (o.userData?._isAnalysisOverlay) o.visible = show;
     });
   }
+  updateConnectionDetailOverlayMode();
 }
 
 function toggleAnalysisOverlays() {
@@ -1637,6 +1667,421 @@ function addPlateBracketVisuals(g, pk, con, memberIndex, tooltipLines) {
     pointMesh.userData = { ...detailUserData };
     g.add(pointMesh);
     pk.push(pointMesh);
+  }
+}
+
+function parseRenderColor(value, fallback) {
+  if (typeof value !== 'string') return fallback;
+  const text = value.trim();
+  const match = text.match(/^#?([0-9a-fA-F]{6})$/);
+  return match ? parseInt(match[1], 16) : fallback;
+}
+
+function detailAxisVector(axisRef) {
+  const sign = axisRef?.startsWith('-') ? -1 : 1;
+  const axis = axisRef?.slice(1);
+  if (axis === 'x') return new THREE.Vector3(sign, 0, 0);
+  if (axis === 'y') return new THREE.Vector3(0, 0, sign);
+  if (axis === 'z') return new THREE.Vector3(0, sign, 0);
+  return null;
+}
+
+function detailAxesFrame(instance) {
+  const axes = instance?.axes ?? {};
+  const u = detailAxisVector(axes.u);
+  const v = detailAxisVector(axes.v);
+  const n = detailAxisVector(axes.n);
+  const baseAxes = [axes.u, axes.v, axes.n].map(axis => axis?.slice(1));
+  if (!u || !v || !n || new Set(baseAxes).size !== 3) return null;
+  return { u, v, n };
+}
+
+function localPointFromUvn(origin, frame, uvn) {
+  return origin.clone()
+    .add(frame.u.clone().multiplyScalar(Number(uvn?.[0] ?? 0)))
+    .add(frame.v.clone().multiplyScalar(Number(uvn?.[1] ?? 0)))
+    .add(frame.n.clone().multiplyScalar(Number(uvn?.[2] ?? 0)));
+}
+
+function steelDetailPlaneFrame(frame, planeName) {
+  if (planeName === 'un') return { aAxis: frame.u, bAxis: frame.n, normal: frame.v };
+  if (planeName === 'vn') return { aAxis: frame.v, bAxis: frame.n, normal: frame.u };
+  return { aAxis: frame.u, bAxis: frame.v, normal: frame.n };
+}
+
+function steelDetailShapePoints(shape) {
+  if (shape?.type === 'rectangle') {
+    const w = Number(shape.width_mm ?? 0);
+    const h = Number(shape.height_mm ?? 0);
+    return w > 0 && h > 0 ? [[0, 0], [w, 0], [w, h], [0, h]] : [];
+  }
+  if (shape?.type === 'polygon') {
+    return (shape.vertices_mm ?? []).map(([a, b]) => [Number(a), Number(b)]);
+  }
+  return [];
+}
+
+function steelDetailPartGeometry(con, instance, part) {
+  if (!con.at) return null;
+  const frame = detailAxesFrame(instance);
+  if (!frame) return null;
+  const plane = steelDetailPlaneFrame(frame, part.plane);
+  const thicknessMm = Number(part.thickness_mm ?? 0);
+  const points2 = steelDetailShapePoints(part.shape).map(([a, b]) => new THREE.Vector2(a, b));
+  if (thicknessMm <= 0 || points2.length < 3) return null;
+  if (signedArea2D(points2) < 0) points2.reverse();
+
+  const origin = localPointFromUvn(
+    localPointFromUvn(pt(con.at), frame, instance.offset_uvn_mm),
+    frame,
+    part.origin_uvn_mm
+  );
+  const normal = plane.normal.clone().normalize();
+  const shape = new THREE.Shape(points2);
+  const geom = new THREE.ExtrudeGeometry(shape, { depth: thicknessMm, bevelEnabled: false });
+  geom.translate(0, 0, -thicknessMm / 2);
+  const basis = new THREE.Matrix4().makeBasis(
+    plane.aAxis.clone().normalize(),
+    plane.bAxis.clone().normalize(),
+    normal
+  );
+  basis.setPosition(origin);
+  geom.applyMatrix4(basis);
+  geom.computeVertexNormals();
+  return { geom, origin, aAxis: plane.aAxis.clone().normalize(), bAxis: plane.bAxis.clone().normalize(), normal, thicknessMm };
+}
+
+function steelDetailTooltipLines(con, detail, instance, part = null, weld = null) {
+  const lines = [
+    `${con.id}  —  steel detail`,
+    `detail: ${detail.id}`,
+  ];
+  if (detail.description) lines.push(detail.description);
+  if (instance.label) lines.push(`instanssi: ${instance.label}`);
+  if (instance.existing) lines.push('existing: true');
+  if (Array.isArray(detail.welds) && detail.welds.length) lines.push(`hitsit: ${detail.welds.length} kpl`);
+  if (part) {
+    lines.push(`osa: ${part.id} (${part.kind ?? 'plate'}), plane ${part.plane}`);
+    lines.push(`paksuus: ${part.thickness_mm} mm`);
+    if (part.material || detail.material) lines.push(`materiaali: ${part.material ?? detail.material}`);
+    if (Array.isArray(part.holes) && part.holes.length) lines.push(`reiät: ${part.holes.length} kpl`);
+  }
+  if (weld) {
+    lines.push(`hitsi: ${weld.id} (${weld.type ?? 'weld'}), a${weld.size_mm} mm`);
+    if (Array.isArray(weld.between) && weld.between.length) lines.push(`osat: ${weld.between.join(' + ')}`);
+  }
+  return lines;
+}
+
+function addSteelDetailFastenerVisual(g, pk, con, detail, instance, part, partGeom, hole, center, opacity, fallbackDiameterMm) {
+  const fastener = hole.fastener ?? null;
+  const diameterMm = Number(fastener?.diameter_mm ?? fallbackDiameterMm ?? 0);
+  if (diameterMm <= 0) return;
+
+  const normal = partGeom.normal.clone().normalize();
+  const boltQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+  const color = parseRenderColor(fastener?.render_color, CONNECTION_DETAIL_BOLT_COLOR);
+  const baseUserData = {
+    id: `${con.id}.${instance.detail_ref}.${part.id}.${hole.id}.fastener`,
+    kind: `steel_detail / ${fastener?.type ?? 'bolt'}`,
+    _geoName: g.userData.geoName,
+    _isAlwaysVisibleConnectionDetail: true,
+  };
+
+  if (!fastener) {
+    const boltLengthMm = Math.max(partGeom.thicknessMm + 48, diameterMm * 3.5);
+    const boltMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(diameterMm / 2, diameterMm / 2, boltLengthMm, 16),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: Math.min(opacity * 1.8, 1),
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    boltMesh.position.copy(center);
+    boltMesh.quaternion.copy(boltQuat);
+    boltMesh.renderOrder = 36;
+    boltMesh.userData = {
+      ...baseUserData,
+      tooltipLines: [
+        ...steelDetailTooltipLines(con, detail, instance, part),
+        `pultti/tanko: M${Math.round(diameterMm)} (reikä Ø${hole.diameter_mm} mm)`,
+      ],
+    };
+    g.add(boltMesh);
+    pk.push(boltMesh);
+    return;
+  }
+
+  const embedSide = fastener.embed_side === '+normal' ? 1 : -1;
+  const outerSide = -embedSide;
+  const embedmentMm = Number(fastener.embedment_mm ?? 0);
+  const protrusionMm = Number(fastener.protrusion_mm ?? Math.max(24, diameterMm * 2));
+  const innerEndMm = embedSide * (partGeom.thicknessMm / 2 + embedmentMm);
+  const outerEndMm = outerSide * (partGeom.thicknessMm / 2 + protrusionMm);
+  const rodLengthMm = Math.abs(outerEndMm - innerEndMm);
+  const rodCenterShiftMm = 0.5 * (innerEndMm + outerEndMm);
+  const rodMesh = new THREE.Mesh(
+    new THREE.CylinderGeometry(diameterMm / 2, diameterMm / 2, rodLengthMm, 16),
+    new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: Math.min(opacity * 1.8, 1),
+      depthWrite: false,
+      depthTest: false,
+    })
+  );
+  rodMesh.position.copy(center.clone().add(normal.clone().multiplyScalar(rodCenterShiftMm)));
+  rodMesh.quaternion.copy(boltQuat);
+  rodMesh.renderOrder = 36;
+  rodMesh.userData = {
+    ...baseUserData,
+    id: `${baseUserData.id}.rod`,
+    tooltipLines: [
+      ...steelDetailTooltipLines(con, detail, instance, part),
+      `${fastener.type}: M${Math.round(diameterMm)}, upotus ${embedmentMm} mm, ulostulo ${protrusionMm} mm`,
+    ],
+  };
+  g.add(rodMesh);
+  pk.push(rodMesh);
+
+  const washerDiameterMm = Number(fastener.washer_diameter_mm ?? diameterMm * 2);
+  const washerThicknessMm = Number(fastener.washer_thickness_mm ?? 3);
+  if (washerDiameterMm > 0 && washerThicknessMm > 0) {
+    const washerMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(washerDiameterMm / 2, washerDiameterMm / 2, washerThicknessMm, 32),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: Math.min(opacity * 1.8, 1),
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    washerMesh.position.copy(center.clone().add(
+      normal.clone().multiplyScalar(outerSide * (partGeom.thicknessMm / 2 + washerThicknessMm / 2))
+    ));
+    washerMesh.quaternion.copy(boltQuat);
+    washerMesh.renderOrder = 37;
+    washerMesh.userData = {
+      ...baseUserData,
+      id: `${baseUserData.id}.washer`,
+      tooltipLines: [
+        ...steelDetailTooltipLines(con, detail, instance, part),
+        `aluslevy: Ø${washerDiameterMm}×${washerThicknessMm} mm`,
+      ],
+    };
+    g.add(washerMesh);
+    pk.push(washerMesh);
+  }
+
+  const nutAcrossFlatsMm = Number(fastener.nut_across_flats_mm ?? diameterMm * 1.5);
+  const nutHeightMm = Number(fastener.nut_height_mm ?? diameterMm * 0.8);
+  if (nutAcrossFlatsMm > 0 && nutHeightMm > 0) {
+    const nutRadiusMm = nutAcrossFlatsMm / Math.sqrt(3);
+    const nutMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(nutRadiusMm, nutRadiusMm, nutHeightMm, 6),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: Math.min(opacity * 1.9, 1),
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    nutMesh.position.copy(center.clone().add(
+      normal.clone().multiplyScalar(
+        outerSide * (partGeom.thicknessMm / 2 + washerThicknessMm + nutHeightMm / 2)
+      )
+    ));
+    nutMesh.quaternion.copy(boltQuat);
+    nutMesh.renderOrder = 38;
+    nutMesh.userData = {
+      ...baseUserData,
+      id: `${baseUserData.id}.nut`,
+      tooltipLines: [
+        ...steelDetailTooltipLines(con, detail, instance, part),
+        `mutteri: avainväli ${nutAcrossFlatsMm} mm, korkeus ${nutHeightMm} mm`,
+      ],
+    };
+    g.add(nutMesh);
+    pk.push(nutMesh);
+  }
+}
+
+function addSteelDetailHoleOutlines(g, pk, con, detail, instance, part, partGeom, opacity) {
+  const holes = part.holes ?? [];
+  if (!holes.length) return;
+  const radiusSegments = 40;
+  const half = partGeom.thicknessMm / 2 + 1.5;
+  const mat = new THREE.LineBasicMaterial({
+    color: STEEL_DETAIL_HOLE_COLOR,
+    transparent: true,
+    opacity: Math.min(opacity * 2, 1),
+    depthWrite: false,
+    depthTest: false,
+  });
+  for (const hole of holes) {
+    const diameterMm = Number(hole.diameter_mm ?? 0);
+    if (diameterMm <= 0) continue;
+    const holeId = String(hole.id ?? '').toLowerCase();
+    const isBoltHole = diameterMm >= 16 && (
+      holeId.includes('m16') ||
+      holeId.includes('bolt') ||
+      holeId.includes('pultti')
+    );
+    const center = partGeom.origin.clone()
+      .add(partGeom.aAxis.clone().multiplyScalar(Number(hole.center_mm?.[0] ?? 0)))
+      .add(partGeom.bAxis.clone().multiplyScalar(Number(hole.center_mm?.[1] ?? 0)));
+    for (const side of [-1, 1]) {
+      const points = [];
+      const faceCenter = center.clone().add(partGeom.normal.clone().multiplyScalar(side * half));
+      for (let i = 0; i <= radiusSegments; i++) {
+        const a = Math.PI * 2 * i / radiusSegments;
+        points.push(faceCenter.clone()
+          .add(partGeom.aAxis.clone().multiplyScalar(Math.cos(a) * diameterMm / 2))
+          .add(partGeom.bAxis.clone().multiplyScalar(Math.sin(a) * diameterMm / 2)));
+      }
+      const line = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        mat
+      );
+      line.userData = {
+        id: `${con.id}.${instance.detail_ref}.${part.id}.${hole.id}.face${side}`,
+        kind: 'steel_detail / hole',
+        _geoName: g.userData.geoName,
+        _isAlwaysVisibleConnectionDetail: true,
+        tooltipLines: steelDetailTooltipLines(con, detail, instance, part),
+      };
+      line.renderOrder = 34;
+      g.add(line);
+      pk.push(line);
+    }
+    if (hole.fastener || isBoltHole) addSteelDetailFastenerVisual(
+      g,
+      pk,
+      con,
+      detail,
+      instance,
+      part,
+      partGeom,
+      hole,
+      center,
+      opacity,
+      Math.max(0, diameterMm - 2)
+    );
+  }
+}
+
+function steelDetailInstanceOrigin(con, instance) {
+  if (!con.at) return null;
+  const frame = detailAxesFrame(instance);
+  if (!frame) return null;
+  return {
+    frame,
+    origin: localPointFromUvn(pt(con.at), frame, instance.offset_uvn_mm),
+  };
+}
+
+function steelDetailWeldPoints(con, instance, weld) {
+  const resolved = steelDetailInstanceOrigin(con, instance);
+  if (!resolved) return [];
+  const path = weld.path_uvn_mm ?? [];
+  return path.map(uvn => localPointFromUvn(resolved.origin, resolved.frame, uvn));
+}
+
+function addSteelDetailWeldVisuals(g, pk, con, detail, instance, opacity) {
+  const welds = detail.welds ?? [];
+  if (!welds.length) return;
+  for (const weld of welds) {
+    const sizeMm = Number(weld.size_mm ?? 0);
+    const points = steelDetailWeldPoints(con, instance, weld);
+    if (sizeMm <= 0 || points.length < 2) continue;
+    const color = parseRenderColor(weld.render_color, STEEL_DETAIL_WELD_COLOR);
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+    const geom = new THREE.TubeGeometry(curve, Math.max(8, (points.length - 1) * 12), sizeMm / 2, 8, false);
+    const mesh = new THREE.Mesh(
+      geom,
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: Math.min(opacity * 1.6, 1),
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    mesh.renderOrder = 35;
+    mesh.userData = {
+      id: `${con.id}.${instance.detail_ref}.${weld.id}`,
+      kind: 'steel_detail / weld',
+      _geoName: g.userData.geoName,
+      _isAlwaysVisibleConnectionDetail: true,
+      tooltipLines: steelDetailTooltipLines(con, detail, instance, null, weld),
+    };
+    g.add(mesh);
+    pk.push(mesh);
+  }
+}
+
+function addSteelDetailVisuals(g, pk, geo, connections) {
+  const detailsById = new Map((geo.steel_details ?? []).map(detail => [detail.id, detail]));
+  if (!detailsById.size) return;
+  for (const con of connections ?? []) {
+    if (!con.at) continue;
+    for (const instance of con.detail_instances ?? []) {
+      const detail = detailsById.get(instance.detail_ref);
+      if (!detail) continue;
+      const instanceOpacity = instance.existing ? 0.30 : 0.62;
+      for (const part of detail.parts ?? []) {
+        if (part.kind !== 'plate') continue;
+        const partGeom = steelDetailPartGeometry(con, instance, part);
+        if (!partGeom) continue;
+        const color = parseRenderColor(
+          part.render_color ?? instance.render_color ?? detail.render_color,
+          STEEL_DETAIL_COLOR
+        );
+        const mesh = new THREE.Mesh(
+          partGeom.geom,
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: instanceOpacity,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: false,
+          })
+        );
+        mesh.renderOrder = 32;
+        mesh.userData = {
+          id: `${con.id}.${instance.detail_ref}.${part.id}`,
+          kind: 'steel_detail / plate',
+          _geoName: g.userData.geoName,
+          _isAlwaysVisibleConnectionDetail: true,
+          tooltipLines: steelDetailTooltipLines(con, detail, instance, part),
+        };
+        g.add(mesh);
+        pk.push(mesh);
+
+        const edges = new THREE.LineSegments(
+          new THREE.EdgesGeometry(partGeom.geom),
+          new THREE.LineBasicMaterial({
+            color: STEEL_DETAIL_EDGE_COLOR,
+            transparent: true,
+            opacity: Math.min(instanceOpacity * 1.8, 1),
+            depthWrite: false,
+            depthTest: false,
+          })
+        );
+        edges.renderOrder = 33;
+        edges.userData = { ...mesh.userData, id: `${mesh.userData.id}.edges` };
+        g.add(edges);
+        pk.push(edges);
+        addSteelDetailHoleOutlines(g, pk, con, detail, instance, part, partGeom, instanceOpacity);
+      }
+      addSteelDetailWeldVisuals(g, pk, con, detail, instance, instanceOpacity);
+    }
   }
 }
 
@@ -2610,6 +3055,7 @@ async function renderGeoFor(name, resolved, options = {}) {
   addSurfaces(g, pickable, resolved.reference_surfaces, 0.12, memberIndex);
   addFoundations(g, pickable, resolved.foundations, memberIndex);
   const notchCutsMap = addConnections(g, pickable, resolved.connections, memberIndex);
+  addSteelDetailVisuals(g, pickable, resolved, resolved.connections);
   await applyCSGCuts(g, pickable, memberIndex, notchCutsMap);
   setConnectionMarkerVisibility(showConnectionMarkers);
   setAnalysisOverlayVisibility(showAnalysisOverlays);

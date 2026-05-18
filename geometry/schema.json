@@ -31,6 +31,7 @@
       }
     },
     "connections": { "type": "array", "items": { "$ref": "#/$defs/connection" } },
+    "steel_details": { "type": "array", "items": { "$ref": "#/$defs/steel_detail" } },
     "surfaces":    { "type": "array", "items": { "$ref": "#/$defs/surface" } },
     "foundations": { "type": "array", "items": { "$ref": "#/$defs/foundation" } }
   },
@@ -89,6 +90,32 @@
         "y": { "type": "number" },
         "z": { "type": "number" }
       }
+    },
+
+    "axis_ref": {
+      "type": "string",
+      "enum": ["+x", "-x", "+y", "-y", "+z", "-z"]
+    },
+
+    "uvn_vector": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" },
+        { "type": "number" }
+      ]
+    },
+
+    "ab_vector": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        { "type": "number" },
+        { "type": "number" }
+      ]
     },
 
     "named_point": {
@@ -292,6 +319,10 @@
         "analysis":   { "$ref": "#/$defs/connection_analysis" },
         "transfer":   { "$ref": "#/$defs/transfer_link" },
         "detail":     { "$ref": "#/$defs/connection_detail" },
+        "detail_instances": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/detail_instance" }
+        },
         "notch":      { "$ref": "#/$defs/notch" },
         "cuts": {
           "type": "array",
@@ -324,6 +355,14 @@
                 "maxItems": 2
               }
             }
+          }
+        },
+        {
+          "if": {
+            "required": ["detail_instances"]
+          },
+          "then": {
+            "required": ["at"]
           }
         }
       ]
@@ -581,6 +620,156 @@
       "oneOf": [
         { "$ref": "#/$defs/plate_bracket_detail" }
       ]
+    },
+
+    "detail_axes": {
+      "type": "object",
+      "required": ["u", "v", "n"],
+      "additionalProperties": false,
+      "properties": {
+        "u": { "$ref": "#/$defs/axis_ref" },
+        "v": { "$ref": "#/$defs/axis_ref" },
+        "n": { "$ref": "#/$defs/axis_ref" }
+      }
+    },
+
+    "detail_instance": {
+      "type": "object",
+      "required": ["detail_ref", "axes"],
+      "additionalProperties": false,
+      "properties": {
+        "detail_ref": { "type": "string" },
+        "axes": { "$ref": "#/$defs/detail_axes" },
+        "offset_uvn_mm": { "$ref": "#/$defs/uvn_vector" },
+        "existing": { "type": "boolean", "default": false },
+        "render_color": { "type": "string" },
+        "label": { "type": "string" }
+      }
+    },
+
+    "steel_detail_shape": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "width_mm", "height_mm"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "rectangle" },
+            "width_mm": { "type": "number", "exclusiveMinimum": 0 },
+            "height_mm": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "vertices_mm"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "polygon" },
+            "vertices_mm": {
+              "type": "array",
+              "minItems": 3,
+              "items": { "$ref": "#/$defs/ab_vector" }
+            }
+          }
+        }
+      ]
+    },
+
+    "steel_detail_hole": {
+      "type": "object",
+      "required": ["id", "type", "diameter_mm", "center_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "round" },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "center_mm": { "$ref": "#/$defs/ab_vector" },
+        "fastener": { "$ref": "#/$defs/steel_detail_fastener" }
+      }
+    },
+
+    "steel_detail_fastener": {
+      "type": "object",
+      "required": ["type", "diameter_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "enum": ["bolt", "threaded_rod", "chemical_anchor"] },
+        "diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "embedment_mm": { "type": "number", "minimum": 0 },
+        "embed_side": { "type": "string", "enum": ["-normal", "+normal"] },
+        "protrusion_mm": { "type": "number", "minimum": 0 },
+        "washer_diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "washer_thickness_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "nut_across_flats_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "nut_height_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "render_color": { "type": "string" }
+      }
+    },
+
+    "steel_detail_weld": {
+      "type": "object",
+      "required": ["id", "type", "size_mm", "path_uvn_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "fillet" },
+        "description": { "type": "string" },
+        "between": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": { "type": "string" }
+        },
+        "size_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "path_uvn_mm": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/uvn_vector" }
+        },
+        "render_color": { "type": "string" }
+      }
+    },
+
+    "steel_detail_part": {
+      "type": "object",
+      "required": ["id", "kind", "plane", "origin_uvn_mm", "shape", "thickness_mm"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "const": "plate" },
+        "material": { "type": "string" },
+        "render_color": { "type": "string" },
+        "plane": { "type": "string", "enum": ["uv", "un", "vn"] },
+        "origin_uvn_mm": { "$ref": "#/$defs/uvn_vector" },
+        "shape": { "$ref": "#/$defs/steel_detail_shape" },
+        "thickness_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "holes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/steel_detail_hole" }
+        }
+      }
+    },
+
+    "steel_detail": {
+      "type": "object",
+      "required": ["id", "type", "parts"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "const": "plate_assembly" },
+        "description": { "type": "string" },
+        "material": { "type": "string" },
+        "render_color": { "type": "string" },
+        "parts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/steel_detail_part" }
+        },
+        "welds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/steel_detail_weld" }
+        }
+      }
     },
 
     "cut_reference": {

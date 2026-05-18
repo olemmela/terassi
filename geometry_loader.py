@@ -34,6 +34,7 @@ def load(name):
     _resolve_surface_refs(geo)
     _resolve_surface_member_patterns(geo)
     _resolve_polygons(geo)
+    _validate_steel_details(geo)
     return geo
 
 
@@ -319,6 +320,52 @@ def _resolve_polygons(geo):
     for s in geo.get("surfaces", []):
         if "placement" in s:
             s["polygon"] = _compute_polygon(s["placement"], s["local_shape"])
+
+
+def _axis_base(axis_ref):
+    if axis_ref not in _BASE_VEC:
+        raise ValueError(f"tuntematon akseliviittaus: {axis_ref!r}")
+    return axis_ref[1:]
+
+
+def _validate_steel_details(geo):
+    details = geo.get("steel_details", [])
+    if not details:
+        return
+    detail_ids = [detail["id"] for detail in details]
+    duplicate_ids = {detail_id for detail_id in detail_ids if detail_ids.count(detail_id) > 1}
+    if duplicate_ids:
+        raise ValueError(f"duplikaatti steel_details-id: {', '.join(sorted(duplicate_ids))}")
+    details_by_id = set(detail_ids)
+
+    for detail in details:
+        part_ids = [part["id"] for part in detail.get("parts", [])]
+        duplicate_part_ids = {part_id for part_id in part_ids if part_ids.count(part_id) > 1}
+        if duplicate_part_ids:
+            raise ValueError(
+                f"steel_detail/{detail['id']} sisältää duplikaatti osa-id:t: {', '.join(sorted(duplicate_part_ids))}"
+            )
+        parts_by_id = set(part_ids)
+        for weld in detail.get("welds", []):
+            for part_ref in weld.get("between", []):
+                if part_ref not in parts_by_id:
+                    raise KeyError(
+                        f"steel_detail/{detail['id']}/weld/{weld.get('id')} viittaa tuntemattomaan osaan '{part_ref}'"
+                    )
+
+    for connection_obj in geo.get("connections", []):
+        for instance in connection_obj.get("detail_instances", []):
+            detail_ref = instance["detail_ref"]
+            if detail_ref not in details_by_id:
+                raise KeyError(f"connection/{connection_obj.get('id')} viittaa tuntemattomaan steel_detailiin '{detail_ref}'")
+            if "at" not in connection_obj:
+                raise ValueError(f"connection/{connection_obj.get('id')} tarvitsee at-pisteen detail_instances-käyttöön")
+            axes = instance["axes"]
+            base_axes = [_axis_base(axes[key]) for key in ("u", "v", "n")]
+            if len(set(base_axes)) != 3:
+                raise ValueError(
+                    f"connection/{connection_obj.get('id')} detail_axes u/v/n pitää mapata eri pääakseleihin: {axes}"
+                )
 
 
 def member(geo, group, mid):
