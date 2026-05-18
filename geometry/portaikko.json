@@ -289,8 +289,8 @@
       {
         "id": "beam.lp225",
         "profile": "LP225x90",
-        "axis_start": {"x": 7200, "y": 1675, "z": 1970},
-        "axis_end": {"x": 13300, "y": 1675, "z": 1970},
+        "axis_start": {"x": 7200, "y": 1675, "z": 1962},
+        "axis_end": {"x": 13300, "y": 1675, "z": 1962},
         "existing": true
       },
       {
@@ -328,14 +328,14 @@
         "id": "rafter.wall",
         "profile": "175x50",
         "axis_start": {"x": 7320, "y": -1000, "z": 2730},
-        "axis_end": {"x": 7320, "y": 1900, "z": 2060},
+        "axis_end": {"x": 7320, "y": 1900, "z": 2050},
         "existing": false
       },
       {
         "id": "rafter.0",
         "profile": "175x50",
         "axis_start": {"x": 8300, "y": -1000, "z": 2730},
-        "axis_end": {"x": 8300, "y": 1900, "z": 2060},
+        "axis_end": {"x": 8300, "y": 1900, "z": 2050},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -573,18 +573,19 @@
       "id": "surf.roof",
       "type": "roof_covering",
       "material": "teräspeltikate + alusrakenne",
+      "thickness_mm": 100,
       "supported_by": [
         "rafter.0"
       ],
       "placement": {
-        "anchor": {"x": 7200, "y": -1000, "z": 2850},
+        "anchor": {"x": 7200, "y": -1000, "z": 2870},
         "u": {
           "dir": "+x",
           "horizontal_mm": 6100
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 12.5,
+          "slope_deg": 13.1,
           "slope_sense": "-z",
           "slope_length_mm": 3000
         }

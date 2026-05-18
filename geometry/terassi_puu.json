@@ -106,7 +106,7 @@
       "id": "pt.beam.inner.new.axis_start",
       "x": 0,
       "y": 1800,
-      "z": 2800
+      "z": 2850
     }
   ],
   "profiles": [
@@ -238,8 +238,8 @@
       {
         "id": "beam.existing.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1645, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1645, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2705},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4300},
         "existing": true
       },
       {
@@ -258,11 +258,11 @@
       },
       {
         "id": "beam.inner.new",
-        "profile": "LP360x140",
+        "profile": "LP315x140",
         "render_color": "#ffffff",
         "ref": "pt.beam.inner.new.axis_start",
-        "axis_start": {"x": 0, "y": 70, "z": -190},
-        "axis_end": {"x": 7200, "y": 70, "z": -190},
+        "axis_start": {"x": 0, "y": 70, "z": -150},
+        "axis_end": {"x": 7200, "y": 70, "z": -150},
         "existing": false
       },
       {
@@ -277,8 +277,9 @@
       {
         "id": "kattotuoli.0",
         "profile": "223x48",
-        "axis_start": {"x": 754, "y": 1930, "z": 2645},
-        "axis_end": {"x": 754, "y": 5800, "z": 2280},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 754, "y": 130, "z": -155},
+        "axis_end": {"x": 754, "y": 3985, "z": -580},
         "existing": false,
         "pattern": {
           "count": 6,
@@ -289,15 +290,17 @@
       {
         "id": "kattotuoli.vasen",
         "profile": "LP225x140",
-        "axis_start": {"x": 125, "y": 1900, "z": 2550},
-        "axis_end": {"x": 125, "y": 5200, "z": 2230},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 125, "y": 10, "z": -240},
+        "axis_end": {"x": 125, "y": 3455, "z": -625},
         "existing": false
       },
       {
         "id": "kattotuoli.oikea",
         "profile": "LP225x140",
-        "axis_start": {"x": 7075, "y": 1900, "z": 2550},
-        "axis_end": {"x": 7075, "y": 5200, "z": 2230},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 7075, "y": 10, "z": -240},
+        "axis_end": {"x": 7075, "y": 3455, "z": -625},
         "existing": false
       }
     ],
@@ -305,42 +308,46 @@
       {
         "id": "orsi.vasen",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 2130, "z": 2690},
-        "axis_end": {"x": -369, "y": 2130, "z": 2690},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 750, "y": 560, "z": -140},
+        "axis_end": {"x": -369, "y": 560, "z": -140},
         "section_rotation_deg": -6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -56},
+          "offset": {"x": 0, "y": 540, "z": -60},
           "id_template": "orsi.vasen.{i}"
         }
       },
       {
         "id": "orsi.oikea",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 2130, "z": 2690},
-        "axis_end": {"x": 7569, "y": 2130, "z": 2690},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 6450, "y": 560, "z": -140},
+        "axis_end": {"x": 7569, "y": 560, "z": -140},
         "section_rotation_deg": 6.0,
         "existing": false,
         "pattern": {
           "count": 6,
-          "offset": {"x": 0, "y": 580, "z": -56},
+          "offset": {"x": 0, "y": 540, "z": -60},
           "id_template": "orsi.oikea.{i}"
         }
       },
       {
         "id": "orsi.vasen.45",
         "profile": "98x48",
-        "axis_start": {"x": 750, "y": 5090, "z": 2410},
-        "axis_end": {"x": 0, "y": 5800, "z": 2335},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 750, "y": 3280, "z": -445},
+        "axis_end": {"x": -50, "y": 3965, "z": -505},
         "section_rotation_deg": -4,
         "existing": false
       },
       {
         "id": "orsi.oikea.45",
         "profile": "98x48",
-        "axis_start": {"x": 6450, "y": 5090, "z": 2410},
-        "axis_end": {"x": 7200, "y": 5800, "z": 2335},
+        "ref": "pt.beam.inner.new.axis_start",
+        "axis_start": {"x": 6450, "y": 3280, "z": -425},
+        "axis_end": {"x": 7250, "y": 3965, "z": -495},
         "section_rotation_deg": 4,
         "existing": false
       }
@@ -354,7 +361,8 @@
         "kattotuoli.0",
         "beam.inner.new"
       ],
-      "at": {"x": 754, "y": 1845, "z": 2637},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 754, "y": 45, "z": -163},
       "analysis": {
         "support_model": "semi_rigid",
         "support_line_ref": "support_centerline",
@@ -376,7 +384,8 @@
         "kattotuoli.0",
         "beam.outer"
       ],
-      "at": {"x": 754, "y": 5275, "z": 2325},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 754, "y": 3475, "z": -475},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -398,7 +407,8 @@
         "kattotuoli.vasen",
         "beam.inner.new"
       ],
-      "at": {"x": 125, "y": 1900, "z": 2600}
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 125, "y": 100, "z": -200}
     },
     {
       "id": "con.kattotuoli.oikea.on.inner_beam",
@@ -407,7 +417,8 @@
         "kattotuoli.oikea",
         "beam.inner.new"
       ],
-      "at": {"x": 7075, "y": 1900, "z": 2600}
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 7075, "y": 100, "z": -200}
     },
     {
       "id": "con.kattotuoli.vasen.on.outer_beam",
@@ -416,7 +427,8 @@
         "kattotuoli.vasen",
         "beam.outer"
       ],
-      "at": {"x": 125, "y": 5275, "z": 2200}
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 125, "y": 3475, "z": -600}
     },
     {
       "id": "con.kattotuoli.oikea.on.outer_beam",
@@ -425,7 +437,8 @@
         "kattotuoli.oikea",
         "beam.outer"
       ],
-      "at": {"x": 7075, "y": 5275, "z": 2200}
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 7075, "y": 3475, "z": -600}
     },
     {
       "id": "con.orsi.vasen.on.kattotuoli.0",
@@ -434,7 +447,8 @@
         "orsi.vasen",
         "kattotuoli.0"
       ],
-      "at": {"x": 776, "y": 2130, "z": 2639},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 776, "y": 560, "z": -140},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -447,7 +461,8 @@
         "orsi.vasen",
         "kattotuoli.vasen"
       ],
-      "at": {"x": 125, "y": 2130, "z": 2650},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 125, "y": 560, "z": -140},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -469,7 +484,8 @@
         "orsi.oikea",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 2130, "z": 2650},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 6424, "y": 560, "z": -140},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -482,7 +498,8 @@
         "orsi.oikea",
         "kattotuoli.oikea"
       ],
-      "at": {"x": 7075, "y": 2130, "z": 2639},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 7075, "y": 560, "z": -140},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_outer_edge"
@@ -504,7 +521,8 @@
         "orsi.vasen.45",
         "kattotuoli.0"
       ],
-      "at": {"x": 776, "y": 5100, "z": 2300},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 776, "y": 3258, "z": -443},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -517,7 +535,8 @@
         "orsi.vasen.45",
         "beam.outer"
       ],
-      "at": {"x": 530, "y": 5275, "z": 2320},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 522, "y": 3475, "z": -462},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -539,7 +558,8 @@
         "orsi.oikea.45",
         "kattotuoli.5"
       ],
-      "at": {"x": 6424, "y": 5100, "z": 2300},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 6424, "y": 3258, "z": -423},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -552,7 +572,8 @@
         "orsi.oikea.45",
         "beam.outer"
       ],
-      "at": {"x": 6670, "y": 5275, "z": 2320},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 6678, "y": 3475, "z": -445},
       "analysis": {
         "support_model": "pinned",
         "support_line_ref": "support_centerline"
@@ -601,7 +622,8 @@
         "beam.inner.new",
         "col.existing.inner.x7075"
       ],
-      "at": {"x": 7075, "y": 1800, "z": 2650},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 7075, "y": 0, "z": -150},
       "detail_instances": [
         {
           "detail_ref": "detail.inner_beam.anchor_l_bracket",
@@ -626,14 +648,15 @@
         "beam.inner.new",
         "col.existing.inner.x125"
       ],
-      "at": {"x": 200, "y": 1800, "z": 2650},
+      "ref": "pt.beam.inner.new.axis_start",
+      "at": {"x": 200, "y": 0, "z": -150},
       "detail_instances": [
         {
-          "detail_ref": "detail.inner_beam.fork_bracket",
+          "detail_ref": "detail.inner_beam.bolted_web_bracket",
           "axes": {"u": "+x", "v": "-z", "n": "+y"},
           "offset_uvn_mm": [-75, 160, 0],
           "existing": false,
-          "label": "alempi haarukkakannake"
+          "label": "alempi pultattu web-kannake"
         }
       ]
     },
@@ -818,9 +841,9 @@
       ]
     },
     {
-      "id": "detail.inner_beam.fork_bracket",
+      "id": "detail.inner_beam.bolted_web_bracket",
       "type": "plate_assembly",
-      "description": "Pulttihaarukka ja LP315-palkin ylä-/alapintaan ruuvattavat 120x12 mm tukilevyt, joissa 4x4 Ø6 mm ruuviryhmät rotaatiojäykkyyden mallintamiseen.",
+      "description": "LP315-palkin ylä-/alapintaan ruuvattavat 120x12 mm tukilevyt ja pystyweb, joka pultataan pilarin päähän hitsattuun vastalevyyn 2xM12 pystyrivillä.",
       "material": "S355",
       "render_color": "#B6BEC8",
       "parts": [
@@ -832,38 +855,44 @@
           "shape": {
             "type": "rectangle",
             "width_mm": 120,
-            "height_mm": 490
+            "height_mm": 540
           },
-          "thickness_mm": 12
-        },
-        {
-          "id": "plate.fork.left",
-          "kind": "plate",
-          "plane": "vn",
-          "origin_uvn_mm": [-60, 40, -160],
-          "shape": {
-            "type": "rectangle",
-            "width_mm": 100,
-            "height_mm": 100
-          },
-          "thickness_mm": 10,
+          "thickness_mm": 12,
           "holes": [
-            {"id": "hole.fork.left.m16", "type": "round", "diameter_mm": 18, "center_mm": [50, 50]}
-          ]
-        },
-        {
-          "id": "plate.fork.right",
-          "kind": "plate",
-          "plane": "vn",
-          "origin_uvn_mm": [60, 40, -160],
-          "shape": {
-            "type": "rectangle",
-            "width_mm": 100,
-            "height_mm": 100
-          },
-          "thickness_mm": 10,
-          "holes": [
-            {"id": "hole.fork.right.m16", "type": "round", "diameter_mm": 18, "center_mm": [50, 50]}
+            {
+              "id": "hole.web.bolt.m12.upper",
+              "type": "round",
+              "diameter_mm": 14,
+              "center_mm": [60, 430],
+              "fastener": {
+                "type": "bolt",
+                "diameter_mm": 12,
+                "embed_side": "-normal",
+                "embedment_mm": 20,
+                "protrusion_mm": 28,
+                "washer_diameter_mm": 24,
+                "washer_thickness_mm": 3,
+                "nut_across_flats_mm": 0,
+                "nut_height_mm": 0
+              }
+            },
+            {
+              "id": "hole.web.bolt.m12.lower",
+              "type": "round",
+              "diameter_mm": 14,
+              "center_mm": [60, 490],
+              "fastener": {
+                "type": "bolt",
+                "diameter_mm": 12,
+                "embed_side": "-normal",
+                "embedment_mm": 20,
+                "protrusion_mm": 28,
+                "washer_diameter_mm": 24,
+                "washer_thickness_mm": 3,
+                "nut_across_flats_mm": 0,
+                "nut_height_mm": 0
+              }
+            }
           ]
         },
         {
@@ -930,33 +959,11 @@
           "id": "plate.column_seat",
           "kind": "plate",
           "plane": "un",
-          "origin_uvn_mm": [-85, 175, -65],
+          "origin_uvn_mm": [-85, 225, -65],
           "shape": {
             "type": "rectangle",
             "width_mm": 150,
             "height_mm": 60
-          },
-          "thickness_mm": 10
-        },
-        {
-          "id": "gusset.column.left",
-          "kind": "plate",
-          "plane": "vn",
-          "origin_uvn_mm": [-40, 120, -60],
-          "shape": {
-            "type": "polygon",
-            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
-          },
-          "thickness_mm": 10
-        },
-        {
-          "id": "gusset.column.right",
-          "kind": "plate",
-          "plane": "vn",
-          "origin_uvn_mm": [20, 120, -60],
-          "shape": {
-            "type": "polygon",
-            "vertices_mm": [[0, 0], [50, 0], [50, 50]]
           },
           "thickness_mm": 10
         },
@@ -1011,63 +1018,21 @@
           "type": "fillet",
           "between": ["plate.web", "plate.top"],
           "size_mm": 5,
-          "path_uvn_mm": [[-85, -320, -55], [65, -320, -55]]
+          "path_uvn_mm": [[-60, -320, -55], [60, -320, -55]]
         },
         {
           "id": "weld.web.bottom",
           "type": "fillet",
           "between": ["plate.web", "plate.bottom"],
           "size_mm": 5,
-          "path_uvn_mm": [[-50, 0, -55], [50, 0, -55]]
+          "path_uvn_mm": [[-60, 0, -55], [60, 0, -55]]
         },
         {
           "id": "weld.web.column_seat",
           "type": "fillet",
           "between": ["plate.web", "plate.column_seat"],
           "size_mm": 5,
-          "path_uvn_mm": [[-85, 175, -60], [65, 175, -60]]
-        },
-        {
-          "id": "weld.web.fork.left",
-          "type": "fillet",
-          "between": ["plate.web", "plate.fork.left"],
-          "size_mm": 5,
-          "path_uvn_mm": [[-60, 40, -60], [-60, 140, -60]]
-        },
-        {
-          "id": "weld.web.fork.right",
-          "type": "fillet",
-          "between": ["plate.web", "plate.fork.right"],
-          "size_mm": 5,
-          "path_uvn_mm": [[60, 40, -60], [60, 140, -60]]
-        },
-        {
-          "id": "weld.column.left.web",
-          "type": "fillet",
-          "between": ["plate.web", "gusset.column.left"],
-          "size_mm": 4,
-          "path_uvn_mm": [[-40, 120, -60], [-40, 170, -60]]
-        },
-        {
-          "id": "weld.column.left.seat",
-          "type": "fillet",
-          "between": ["plate.column_seat", "gusset.column.left"],
-          "size_mm": 4,
-          "path_uvn_mm": [[-40, 170, -60], [-40, 170, -10]]
-        },
-        {
-          "id": "weld.column.right.web",
-          "type": "fillet",
-          "between": ["plate.web", "gusset.column.right"],
-          "size_mm": 4,
-          "path_uvn_mm": [[20, 120, -60], [20, 170, -60]]
-        },
-        {
-          "id": "weld.column.right.seat",
-          "type": "fillet",
-          "between": ["plate.column_seat", "gusset.column.right"],
-          "size_mm": 4,
-          "path_uvn_mm": [[20, 170, -60], [20, 170, -10]]
+          "path_uvn_mm": [[-60, 225, -60], [60, 225, -60]]
         },
         {
           "id": "weld.bottom.left.web",
@@ -1173,16 +1138,41 @@
       ],
       "ref": "pt.beam.inner.new.axis_start",
       "placement": {
-        "anchor": {"x": -369, "y": 140, "z": -29},
+        "anchor": {"x": -380, "y": 395, "z": -50},
         "u": {
           "dir": "+x",
           "length_mm": 7938
         },
         "v": {
           "dir": "+y",
-          "slope_deg": 5.4,
+          "slope_deg": 6.4,
           "slope_sense": "-z",
-          "slope_length_mm": 3908
+          "slope_length_mm": 3600
+        }
+      },
+      "local_shape": {
+        "type": "rectangle"
+      }
+    },
+    {
+      "id": "surf.surface.inner",
+      "type": "gable_glazing",
+      "material": "lasi",
+      "thickness_mm": 8,
+      "density_kg_m3": 2500,
+      "openable": true,
+      "ref": "pt.beam.inner.new.axis_start",
+      "placement": {
+        "anchor": {"x": -30, "y": 120, "z": 15},
+        "u": {
+          "dir": "+x",
+          "length_mm": 7260
+        },
+        "v": {
+          "dir": "+y",
+          "slope_deg": 10,
+          "slope_sense": "-z",
+          "slope_length_mm": 290
         }
       },
       "local_shape": {
@@ -1195,23 +1185,24 @@
       "material": "lasi",
       "thickness_mm": 8,
       "density_kg_m3": 2500,
+      "ref": "pt.beam.inner.new.axis_start",
       "placement": {
-        "anchor": {"x": 1200, "y": 1800, "z": 2800},
+        "anchor": {"x": 1400, "y": 0, "z": 0},
         "u": {
           "dir": "+x",
-          "length_mm": 5750
+          "length_mm": 5550
         },
         "v": {
           "dir": "+z",
-          "length_mm": 1270
+          "length_mm": 1220
         }
       },
       "local_shape": {
         "type": "polygon",
         "vertices_uv": [
           [0, 0],
-          [5750, 0],
-          [5750, 1270]
+          [5550, 0],
+          [5550, 1220]
         ]
       },
       "supported_by": [
@@ -1450,7 +1441,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 440
+          "length_mm": 390
         }
       },
       "local_shape": {
@@ -1459,8 +1450,7 @@
           [0, 0],
           [3350, 0],
           [3350, 20],
-          [140, 440],
-          [0, 440]
+          [0, 390]
         ]
       }
     },
@@ -1483,7 +1473,7 @@
         },
         "v": {
           "dir": "+z",
-          "length_mm": 440
+          "length_mm": 390
         }
       },
       "local_shape": {
@@ -1492,8 +1482,7 @@
           [0, 0],
           [3350, 0],
           [3350, 20],
-          [140, 440],
-          [0, 440]
+          [0, 390]
         ]
       }
     }

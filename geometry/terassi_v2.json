@@ -243,10 +243,10 @@
     ],
     "beams": [
       {
-        "id": "beam.existing.kp360x2",
+        "id": "beam.kp360x2",
         "profile": "2xKP360x51",
-        "axis_start": {"x": 0, "y": 1645, "z": 2750},
-        "axis_end": {"x": 7200, "y": 1645, "z": 4330},
+        "axis_start": {"x": 0, "y": 1645, "z": 2705},
+        "axis_end": {"x": 7200, "y": 1645, "z": 4300},
         "existing": true
       },
       {

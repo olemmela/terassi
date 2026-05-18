@@ -70,9 +70,10 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
   eli `reference = axis_end`, `offset_mm = -15`)
 - Aurinkopaneelien kinostumatarkistuksen valmistajan etupuolen 5.40 kN/m²
   mekaanista rajaa vasten, nykygeometrian mitoittavalla paneelisarakkeella
-- AIKO Neostar 2S+60 AIKO-A500-MAH60Db -paneelikentän geometrian ja kuormat; paneelit alkavat
-  140 mm seinälinjasta ja jäljelle jäävä kapea täytekaista oletetaan
-  pelliksi/laudaksi, ei rakenteelliseksi lasiksi
+- LONGi LR7-54HVD-475M 475 W -paneelikentän geometrian ja kuormat:
+  7×2 paneelia, 1800×1134×30 mm, 23.5 kg/kpl, sisäreuna y=2195 mm,
+  ulkoreuna y≈5773 mm ja kaltevuus 6.4°; paneelit on siirretty irti
+  talon katosta varjostuksen pienentämiseksi
 - Pystylasitusten omapaino- ja tuulikuormayhteenvedon geometriasta sekä
   alustavan lasipaneelien oman tuulitaivutus-/jännitystarkistuksen
   yksisuuntaisella ylä-/alakiskojen välisellä kaistamallilla
@@ -93,10 +94,12 @@ Laskee lopullisen puuratkaisun kuormat ja mitoitustarkistukset geometriasta
 - Hitsattujen teräsliitosdetailien `steel_details`-kirjasto: liitos voi sijoittaa
   uudelleenkäytettävän levykokoonpanon `detail_instances`-viitteellä
   `connection.at`-pisteeseen ja `u/v/n`-akseleilla; viewer ja Blender renderöivät
-  levypolygoneista pursotetut osat, levyjen `holes`-reiät ja `welds`-pienahitsit;
+  levypolygoneista pursotetut osat, levyjen `holes`-reiät, niihin liitetyt
+  `fastener`-pultit/ankkurit ja `welds`-pienahitsit;
   Blender ohittaa `existing: true` -instanssit
 - Nykygeometrian mukaiset orsien niveltuet, sisäkattotuolien puolijäykkä sisäpään
-  palkkikenkä sekä reunimmaisten kattotuolien puolijäykät `N 48×136` -liitokset
+  palkkikenkä, x125-pään pultattu web-kannake 2×M12-pultilla pilarin
+  päätyvastalevyyn sekä reunimmaisten kattotuolien puolijäykät `N 48×136` -liitokset
 - Orsien, nurkkaorten, sisäkattotuolien ja reunakattotuolien taivutus-, leikkaus- ja taipumatarkistukset
 - Geometriasta luetut lovi-/nettoh-tarkistukset (`birdsmouth_notch`, `bevel_notch`, `rect_notch`)
 - Ulko- ja sisäpalkin pystysuuntainen kuormitus, ulkopalkin sivulasituksen vaakakuorma
@@ -179,7 +182,7 @@ Laskee kuormat ja vertailee rakennevaihtoehtoja suunnitteilla olevalle lasitetul
 ### `portaikko_kuormituslaskenta.py` – Portaikon katoksen kuormituslaskenta
 
 Laskee portaikon yläpuolisen olemassa olevan katoksen kuormat ja mitoitustarkistukset
-geometriasta `geometry/portaikko.json` (leveys 6 100 mm, kaltevuus 12° y-suuntaan,
+geometriasta `geometry/portaikko.json` (leveys 6 100 mm, kaltevuus 13° y-suuntaan,
 7 kpl sahatavarakattotuoleja ja jatkuva `LP225×90`-palkki neljällä tuella).
 
 **Rakennejärjestelmä:**

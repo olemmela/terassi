@@ -3427,10 +3427,14 @@ STEEL_S355_FU_NMM2 = 510.0
 STEEL_GAMMA_M0 = 1.0
 STEEL_GAMMA_M2 = 1.25
 FILLET_WELD_BETA_W = 0.9
+BOLT_8_8_FUB_NMM2 = 800.0
 M16_BOLT_D_MM = 16.0
 M16_BOLT_HOLE_D_MM = 18.0
-M16_8_8_FUB_NMM2 = 800.0
+M16_8_8_FUB_NMM2 = BOLT_8_8_FUB_NMM2
 M16_TENSILE_AREA_MM2 = 157.0
+M12_BOLT_D_MM = 12.0
+M12_BOLT_HOLE_D_MM = 14.0
+M12_TENSILE_AREA_MM2 = 84.3
 CONCRETE_COLUMN_FACE_GRADE = "C20/25-oletus"
 CONCRETE_COLUMN_FACE_FCK_NMM2 = 20.0
 CONCRETE_GAMMA_C = 1.5
@@ -3658,44 +3662,65 @@ def steel_detail_weld_check(detail_obj, part_a_id, part_b_id, force_kN, label):
     }
 
 
-def steel_detail_m16_fork_check(detail_obj, force_kN):
-    fork_part_ids = ("plate.fork.left", "plate.fork.right")
+def steel_detail_plate_bolt_group_check(
+    detail_obj,
+    part_id,
+    force_kN,
+    bolt_d_mm,
+    hole_d_mm,
+    tensile_area_mm2,
+    label,
+    shear_planes=1,
+    expected_count=None,
+):
+    part_obj = steel_detail_part(detail_obj, part_id)
+    shape = part_obj["shape"]
+    if shape["type"] != "rectangle":
+        raise ValueError(f"Unsupported bolt plate shape for check: {part_id}")
+    bolt_holes = [
+        hole_obj
+        for hole_obj in part_obj.get("holes", [])
+        if hole_obj.get("type") == "round" and abs(float(hole_obj["diameter_mm"]) - hole_d_mm) <= 0.5
+    ]
+    if not bolt_holes:
+        raise ValueError(f"{label} bolt holes missing in {part_id}")
+    if expected_count is not None and len(bolt_holes) != expected_count:
+        raise ValueError(f"{label} expected {expected_count} bolt holes in {part_id}, got {len(bolt_holes)}")
+    width_mm = float(shape["width_mm"])
+    height_mm = float(shape["height_mm"])
+    thickness_mm = float(part_obj["thickness_mm"])
     hole_rows = []
     bearing_capacity_kN = 0.0
-    net_tension_capacity_kN = 0.0
-    for part_id in fork_part_ids:
-        part_obj = steel_detail_part(detail_obj, part_id)
-        shape = part_obj["shape"]
-        if shape["type"] != "rectangle":
-            raise ValueError(f"Unsupported fork plate shape for check: {part_id}")
-        bolt_holes = [
-            hole_obj
-            for hole_obj in part_obj.get("holes", [])
-            if hole_obj.get("type") == "round" and abs(float(hole_obj["diameter_mm"]) - M16_BOLT_HOLE_D_MM) <= 0.5
-        ]
-        if len(bolt_holes) != 1:
-            raise ValueError(f"M16 bolt hole missing or ambiguous in {part_id}")
-        hole_obj = bolt_holes[0]
-        center_a_mm = float(hole_obj["center_mm"][0])
-        center_b_mm = float(hole_obj["center_mm"][1])
-        width_mm = float(shape["width_mm"])
-        height_mm = float(shape["height_mm"])
-        thickness_mm = float(part_obj["thickness_mm"])
-        edge_mm = min(center_a_mm, width_mm - center_a_mm, center_b_mm, height_mm - center_b_mm)
-        alpha_b = min(edge_mm / (3.0 * M16_BOLT_HOLE_D_MM), 1.0)
-        bearing_capacity_kN += 2.5 * alpha_b * STEEL_S355_FU_NMM2 * M16_BOLT_D_MM * thickness_mm / STEEL_GAMMA_M2 / 1000.0
-        net_tension_capacity_kN += (min(width_mm, height_mm) - M16_BOLT_HOLE_D_MM) * thickness_mm * STEEL_S355_FY_NMM2 / STEEL_GAMMA_M0 / 1000.0
+    for hole_obj in bolt_holes:
+        center_u_mm = float(hole_obj["center_mm"][0])
+        center_v_mm = float(hole_obj["center_mm"][1])
+        edge_u_mm = min(center_u_mm, width_mm - center_u_mm)
+        edge_v_mm = min(center_v_mm, height_mm - center_v_mm)
+        edge_min_mm = min(edge_u_mm, edge_v_mm)
+        alpha_b = min(edge_min_mm / (3.0 * hole_d_mm), 1.0)
+        bearing_capacity_kN += 2.5 * alpha_b * STEEL_S355_FU_NMM2 * bolt_d_mm * thickness_mm / STEEL_GAMMA_M2 / 1000.0
         hole_rows.append({
-            "part_id": part_id,
-            "edge_mm": edge_mm,
+            "hole_id": hole_obj["id"],
+            "edge_u_mm": edge_u_mm,
+            "edge_v_mm": edge_v_mm,
+            "edge_min_mm": edge_min_mm,
             "alpha_b": alpha_b,
         })
-    bolt_shear_capacity_kN = 2.0 * 0.6 * M16_8_8_FUB_NMM2 * M16_TENSILE_AREA_MM2 / STEEL_GAMMA_M2 / 1000.0
+    bolt_tension_capacity_kN = len(bolt_holes) * 0.9 * BOLT_8_8_FUB_NMM2 * tensile_area_mm2 / STEEL_GAMMA_M2 / 1000.0
+    bolt_shear_capacity_kN = len(bolt_holes) * shear_planes * 0.6 * BOLT_8_8_FUB_NMM2 * tensile_area_mm2 / STEEL_GAMMA_M2 / 1000.0
+    net_tension_capacity_kN = (width_mm - hole_d_mm) * thickness_mm * STEEL_S355_FY_NMM2 / STEEL_GAMMA_M0 / 1000.0
     return {
+        "label": label,
         "force_kN": force_kN,
+        "bolt_count": len(bolt_holes),
+        "bolt_d_mm": bolt_d_mm,
+        "hole_d_mm": hole_d_mm,
+        "shear_planes": shear_planes,
+        "bolt_tension_capacity_kN": bolt_tension_capacity_kN,
         "bolt_shear_capacity_kN": bolt_shear_capacity_kN,
         "bearing_capacity_kN": bearing_capacity_kN,
         "net_tension_capacity_kN": net_tension_capacity_kN,
+        "bolt_tension_eta": force_kN / bolt_tension_capacity_kN * 100.0,
         "bolt_shear_eta": force_kN / bolt_shear_capacity_kN * 100.0,
         "bearing_eta": force_kN / bearing_capacity_kN * 100.0,
         "net_tension_eta": force_kN / net_tension_capacity_kN * 100.0,
@@ -3790,13 +3815,21 @@ def x125_steel_detail_check():
     weld_checks = [
         steel_detail_weld_check(detail_obj, "plate.web", "plate.top", force_kN, "pysty–ylätuki a5"),
         steel_detail_weld_check(detail_obj, "plate.web", "plate.bottom", force_kN, "pysty–alatuki a5"),
-        steel_detail_weld_check(detail_obj, "plate.web", "plate.fork.left", force_kN / 2.0, "pysty–haarukka vasen a5"),
-        steel_detail_weld_check(detail_obj, "plate.web", "plate.fork.right", force_kN / 2.0, "pysty–haarukka oikea a5"),
     ]
-    bolt_check = steel_detail_m16_fork_check(detail_obj, force_kN)
+    bolt_check = steel_detail_plate_bolt_group_check(
+        detail_obj,
+        "plate.web",
+        force_kN,
+        M12_BOLT_D_MM,
+        M12_BOLT_HOLE_D_MM,
+        M12_TENSILE_AREA_MM2,
+        "2×M12 8.8 web-pultit",
+        expected_count=2,
+    )
     eta_values = [
         *(row["eta"] for row in plate_checks if row.get("active")),
         *(row["eta"] for row in weld_checks if row.get("active")),
+        bolt_check["bolt_tension_eta"],
         bolt_check["bolt_shear_eta"],
         bolt_check["bearing_eta"],
         bolt_check["net_tension_eta"],
@@ -4571,10 +4604,16 @@ if x125_detail_steel_check["active"]:
         else:
             print(f"    {row['label']:<24} ei tarkistettu: {row['reason']}")
     bolt = x125_detail_steel_check["bolt_check"]
-    bolt_ok = max(bolt["bolt_shear_eta"], bolt["bearing_eta"], bolt["net_tension_eta"]) <= 100.0
+    bolt_ok = max(
+        bolt["bolt_tension_eta"],
+        bolt["bolt_shear_eta"],
+        bolt["bearing_eta"],
+        bolt["net_tension_eta"],
+    ) <= 100.0
     print(
-        f"    M16 8.8 pulttihaarukka      leikkaus/reunapuristus/netto η = "
-        f"{bolt['bolt_shear_eta']:.1f}%/{bolt['bearing_eta']:.1f}%/{bolt['net_tension_eta']:.1f}%  {format_ok(bolt_ok)}"
+        f"    {bolt['label']:<24} veto/leikkaus/reunapuristus/netto η = "
+        f"{bolt['bolt_tension_eta']:.1f}%/{bolt['bolt_shear_eta']:.1f}%/"
+        f"{bolt['bearing_eta']:.1f}%/{bolt['net_tension_eta']:.1f}%  {format_ok(bolt_ok)}"
     )
     print(
         f"    x125 teräsdetail yhteensä    η_max = {x125_detail_steel_check['eta_max']:.0f}%  "

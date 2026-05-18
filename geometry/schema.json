@@ -314,6 +314,7 @@
           "enum": ["wall_bolted", "supported_on", "supported_by_pattern", "notched_over", "pinned", "rafter_hanger", "column_base", "lateral_brace", "continuous", "transfer_link"]
         },
         "members":    { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "ref":        { "type": "string" },
         "at":         { "$ref": "#/$defs/point" },
         "spacing_mm": { "type": "number" },
         "analysis":   { "$ref": "#/$defs/connection_analysis" },
@@ -698,10 +699,10 @@
         "embedment_mm": { "type": "number", "minimum": 0 },
         "embed_side": { "type": "string", "enum": ["-normal", "+normal"] },
         "protrusion_mm": { "type": "number", "minimum": 0 },
-        "washer_diameter_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "washer_thickness_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "nut_across_flats_mm": { "type": "number", "exclusiveMinimum": 0 },
-        "nut_height_mm": { "type": "number", "exclusiveMinimum": 0 },
+        "washer_diameter_mm": { "type": "number", "minimum": 0 },
+        "washer_thickness_mm": { "type": "number", "minimum": 0 },
+        "nut_across_flats_mm": { "type": "number", "minimum": 0 },
+        "nut_height_mm": { "type": "number", "minimum": 0 },
         "render_color": { "type": "string" }
       }
     },

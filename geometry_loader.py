@@ -32,6 +32,7 @@ def load(name):
     _resolve_named_points(geo)
     _resolve_member_refs(geo)
     _resolve_surface_refs(geo)
+    _resolve_connection_refs(geo)
     _resolve_surface_member_patterns(geo)
     _resolve_polygons(geo)
     _validate_steel_details(geo)
@@ -147,6 +148,21 @@ def _resolve_surface_refs(geo):
             anchor = s.get("placement", {}).get("anchor")
             if anchor is not None:
                 _apply_ref_offset(anchor, (p["x"], p["y"], p["z"]))
+
+
+def _resolve_connection_refs(geo):
+    """Jos liitoksella on 'ref': point-id, tulkitsee at-pisteen offsetiksi."""
+    points = geo.get("_points_by_id", {})
+    for connection_obj in geo.get("connections", []):
+        rid = connection_obj.pop("ref", None)
+        if rid is None:
+            continue
+        if rid not in points:
+            raise KeyError(f"liitos {connection_obj.get('id')} viittaa tuntemattomaan pisteeseen '{rid}'")
+        if "at" not in connection_obj:
+            raise ValueError(f"liitos {connection_obj.get('id')} tarvitsee at-pisteen ref-käyttöön")
+        p = points[rid]
+        _apply_ref_offset(connection_obj["at"], (p["x"], p["y"], p["z"]))
 
 
 def _pattern_ref_alias(id_template):
